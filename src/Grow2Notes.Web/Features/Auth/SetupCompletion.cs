@@ -7,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Grow2Notes.Web.Features.Auth;
 
 /// <summary>
-/// Completion (design.md §8.1 step 5), which both ways to finish setup share once each has checked its method:
-/// <see cref="SetupPasskeyEndpoint"/> and <see cref="SetupPasswordEndpoint"/>. In one transaction, the method is added,
-/// and the user is made Active, with <c>ActivatedAtUtc</c> and <c>EmailConfirmed</c>, the security stamp rotated, which
-/// ends the setup link, and <c>auth.setup_completed</c> written; then the user is signed in, and their
-/// <see cref="Me"/> is the answer.
+/// Completion (design.md §8.1 step 5), which the four ways to finish setup share once each has checked its method:
+/// <see cref="SetupPasskeyEndpoint"/>, <see cref="SetupPasswordEndpoint"/>,
+/// <see cref="SetupPasswordOnlyEndpoint"/> and <see cref="SetupPasswordAndPasskeyEndpoint"/>. In one transaction, the
+/// method is added, and the user is made Active, with <c>ActivatedAtUtc</c> and <c>EmailConfirmed</c>, the security
+/// stamp rotated, which ends the setup link, and <c>auth.setup_completed</c> written; then the user is signed in, and
+/// their <see cref="Me"/> is the answer.
 /// </summary>
 /// <remarks>
 /// The transaction is in the user's organisation, the tenant from the user that the enrolment cookie names, never from

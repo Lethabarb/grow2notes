@@ -75,7 +75,8 @@ public sealed class TotpSignInEndpointTests : IClassFixture<Grow2NotesFactory>, 
 
     // Identity clears its two-factor cookie as it signs the person in, so the code step is over: the same code again
     // names no account. Every other cookie that the sign-in sets is a deletion, so the browser keeps the session
-    // alone: no "remember this device" cookie (A22), with which a later password alone would sign in (design.md §8.1).
+    // alone: no "remember this device" cookie (A22), with which a later password step would skip the code (design.md
+    // §8.1).
     [Fact]
     public async Task The_sign_in_sets_the_session_cookie_and_clears_the_code_step_so_the_same_code_again_gets_a_401()
     {
@@ -240,6 +241,30 @@ public sealed class TotpSignInEndpointTests : IClassFixture<Grow2NotesFactory>, 
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
         Assert.DoesNotContain(response.SetCookies(), cookie => cookie.Name.Value == CookieSignIn.SessionCookie);
         Assert.Empty(await StoredEventsAboutAsync(user.Id));
+    }
+
+    // A person with a password and a passkey takes the passkey as their second step (D97), but the invite stored an
+    // authenticator key for them, and the Email provider is valid for them too, so Identity would accept a code: the
+    // code step refuses them whatever the code, writes nothing and counts nothing towards the lockout.
+    [Fact]
+    public async Task The_code_step_refuses_a_user_with_a_passkey_even_with_the_right_code()
+    {
+        var user = await app.AddPasswordUserAsync(seeded.A);
+        using var authenticator = await TestAuthenticator.RegisterAsync(app.Services, user.Id);
+        using var client = app.CreateHttpsClient();
+        using var passwordStep = await client.SendPasswordAsync(user.Email, PasswordSignIn.Password);
+        Assert.Equal(HttpStatusCode.OK, passwordStep.StatusCode);
+
+        for (var i = 0; i < 2; i++)
+        {
+            using var response = await client.SendCodeAsync(AuthenticatorCodes.Now(user.AuthenticatorKey));
+
+            await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+            Assert.Empty(response.SetCookies());
+        }
+
+        Assert.Empty(await StoredEventsAboutAsync(user.Id));
+        Assert.Equal(0, await AccessFailedCountAsync(user.Id));
     }
 
     // Only an Active user may sign in (design.md §8.2). Identity's two-factor cookie holds only the user's ID and is

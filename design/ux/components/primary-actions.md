@@ -31,7 +31,7 @@ Covers every button and button-like link on the screens below: what each one loo
 
 | Screen | Actions | What differs on this screen |
 |---|---|---|
-| **4.1 Sign-in and account setup** | "Sign in with a passkey"; email and password, then the 6-digit code ("Sign in"); setup: "Use a passkey (recommended)", "Use a password and authenticator app", "Finish setup" | Two sign-in paths on one screen, and each person uses only one (A22). A passkey button starts a device prompt, not a form post. One generic failure message (A25). No back-out actions. |
+| **4.1 Sign-in and account setup** | "Sign in with a passkey"; email and password, then the 6-digit code ("Sign in"); setup: "Use a passkey (recommended)", "Use a password and authenticator app", "Finish setup" | Four sign-in methods (D97), and each person uses only the one they chose (A22). Setup's choices are a passkey (primary), then three secondary links; sign-in has a passkey step with a primary "Sign in with a passkey" and a secondary "Go back". A passkey button starts a device prompt, not a form post. One generic failure message (A25). No back-out actions. |
 | **4.3 Note form and submit confirmation** | "Submit note"; a menu holding "Discard draft"; the confirmation's "Submit note for Jane Citizen" and "Go back"; edit mode "Save changes" and "Cancel"; banner actions "Keep the text on this screen", "Load the other version", "Start again from the latest version" (6.3) | The only screen where the design **disables** a primary button for a reason the user can't see directly (an unsaved change). It has the most-used commit action in the app, a two-step commit (button, then confirmation naming the person), and the only destructive action a worker can take (Discard draft). Used on phones by tired workers. |
 | **4.4 Participant notes and read view** (and the 4.6 review panel) | "Edit"; "Mark reviewed" (with optional comment); "Show older"; managers: "Write past-day note", "Export record", "Edit participant", "Version history"; manager on someone else's draft: Discard | Mostly reading, so most actions are low-emphasis. What shows depends on role and authorship: hide actions this person can never take. Mark reviewed removes itself after it succeeds. |
 | **4.7 Daily report** | "Previous day", "Next day", "Download Word", "Download PDF" | Two equal primary actions (one file in two formats). Downloads, not page changes. The design disables both downloads on an empty day, and Next day on today. |
@@ -185,9 +185,10 @@ Proposed text is marked. Every busy label is proposed.
 | 4.1 | Passkey sign-in | "Sign in with a passkey" | Primary | "Waiting for passkey…" | — |
 | 4.1 | Password step | "Continue" (proposed) | Secondary | "Checking…" | — |
 | 4.1 | Code step | "Sign in" | Primary | "Signing in…" | — |
-| 4.1 | Choose a method (setup) | "Use a passkey (recommended)" / "Use a password and authenticator app" | Primary / Secondary | "Waiting for passkey…" / — | — |
-| 4.1 | After the password is set (setup) | "Continue" (proposed) | Primary | — | — |
+| 4.1 | Choose a method (setup) | "Use a passkey (recommended)" / "Use a password and authenticator app" / "Use a password only" / "Use a password and a passkey" | Primary / Secondary / Secondary / Secondary | "Waiting for passkey…" / — / — / — | — |
+| 4.1 | After the password is set (setup) | "Continue" for a password and an authenticator app; "Finish setup" for a password only and for a password and a passkey (D97) | Primary | "Finishing setup…" for "Finish setup" | — |
 | 4.1 | Finish (password path) | "Finish setup" | Primary | "Finishing setup…" | — |
+| 4.1 | Passkey step (sign-in, password and a passkey) | "Sign in with a passkey" / "Go back" | Primary / Secondary | "Signing in…" / — | — |
 | 4.3 | Submit | "Submit note" | Primary | — (opens a dialog, no request) | Heading "Submit today's note for" + name + date + "Flagged for manager: No"/"Yes" |
 | 4.3 | Confirm submit | "Submit note for Jane Citizen" / "Go back" | Primary / Secondary | "Submitting…" | — |
 | 4.3 | Draft menu trigger | "More actions" (proposed) | Secondary | — | — |
@@ -418,7 +419,7 @@ const unsaved = !save.isLatestSaved;                 // pending, in flight, fail
 - **Code step:** never submit automatically when the sixth digit goes in (SC 3.2.2). The person presses "Sign in".
 - **Failure:** the design's one message, "Sign-in failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes.", goes in an error summary at the top, which takes focus. The button goes back to default and is never disabled during a lockout: the message already explains it.
 - **Passkey cancelled:** if the person dismisses the device prompt (`NotAllowedError`), put the button back quietly with no error. They know they cancelled. [Opinion]
-- **Setup:** "Use a passkey (recommended)" starts the device prompt straight away (design step 3). If passkeys can't be made in this browser, show "Open this link in your browser" under that button. The other button, "Use a password and authenticator app", stays as the alternative. Leave the passkey button available and show the message when it fails. Don't try to detect support up front, because in-app browsers report it unreliably (unverified).
+- **Setup:** "Use a passkey (recommended)" starts the device prompt straight away (design step 3). If passkeys can't be made in this browser, show "Open this link in your browser" under that button. The other three, "Use a password and authenticator app", "Use a password only" and "Use a password and a passkey" (D97), stay as the alternatives; without WebAuthn the last is not offered, because it needs a passkey. Leave the passkey button available and show the message when it fails. Don't try to detect support up front, because in-app browsers report it unreliably (unverified).
 - No Cancel or Back buttons are needed in setup. Each step is a page, and the browser's Back works. [Research, 2000: NN/g Cancel]
 
 ### 4.3 Note form and submit confirmation

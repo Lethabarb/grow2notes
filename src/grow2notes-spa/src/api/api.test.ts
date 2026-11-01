@@ -445,10 +445,13 @@ describe('api', () => {
     it.each([
       '/api/auth/login',
       '/api/auth/login/totp',
+      '/api/auth/login/passkey/options',
       '/api/auth/passkey',
       '/api/auth/passkey/options',
       '/api/auth/setup/start',
       '/api/auth/setup/password',
+      '/api/auth/setup/password-only',
+      '/api/auth/setup/password-and-passkey',
       '/api/auth/logout',
     ])('is not raised by a 401 from %s, which is still thrown', async (path) => {
       const ended = listen();
@@ -510,15 +513,41 @@ describe('api', () => {
   });
 
   describe('the sign-in count', () => {
-    it.each(['/api/auth/login/totp', '/api/auth/passkey', '/api/auth/setup/password', '/api/auth/setup/passkey'])(
-      'goes up by one for a 2xx from %s, as it answers',
-      async (path) => {
+    it.each([
+      '/api/auth/login',
+      '/api/auth/login/totp',
+      '/api/auth/passkey',
+      '/api/auth/setup/password',
+      '/api/auth/setup/passkey',
+      '/api/auth/setup/password-only',
+      '/api/auth/setup/password-and-passkey',
+    ])('goes up by one for a 2xx from %s, as it answers', async (path) => {
+      const before = signInCount();
+      serve(json(200, { userId: '7d1c' }));
+
+      await api(path, { method: 'POST', body: {} });
+
+      expect(signInCount()).toBe(before + 1);
+    });
+
+    it('goes up by one for a password only, whose 2xx from the password step has no body at all', async () => {
+      const before = signInCount();
+      serve(new Response(null, { status: 200 }));
+
+      await expect(api('/api/auth/login', { method: 'POST', body: {} })).resolves.toBeUndefined();
+
+      expect(signInCount()).toBe(before + 1);
+    });
+
+    it.each([{ next: 'totp' }, { next: 'passkey' }])(
+      'stays for the password step\'s second step, %j, which signs no one in',
+      async (answer) => {
         const before = signInCount();
-        serve(json(200, { userId: '7d1c' }));
+        serve(json(200, answer));
 
-        await api(path, { method: 'POST', body: {} });
+        await api('/api/auth/login', { method: 'POST', body: {} });
 
-        expect(signInCount()).toBe(before + 1);
+        expect(signInCount()).toBe(before);
       },
     );
 
@@ -591,7 +620,15 @@ describe('api', () => {
       ]);
     });
 
-    it.each(['/api/auth/login/totp', '/api/auth/passkey', '/api/auth/setup/password', '/api/auth/setup/passkey'])(
+    it.each([
+      '/api/auth/login',
+      '/api/auth/login/totp',
+      '/api/auth/passkey',
+      '/api/auth/setup/password',
+      '/api/auth/setup/passkey',
+      '/api/auth/setup/password-only',
+      '/api/auth/setup/password-and-passkey',
+    ])(
       'is fetched afresh for the change after a 2xx from %s',
       async (path) => {
         serve(json(200, me), done());
@@ -608,7 +645,7 @@ describe('api', () => {
       },
     );
 
-    it.each(['/api/auth/login', '/api/auth/passkey/options', '/api/auth/setup/passkey/options'])(
+    it.each(['/api/auth/passkey/options', '/api/auth/login/passkey/options', '/api/auth/setup/passkey/options'])(
       'is kept after a 2xx from %s',
       async (path) => {
         serve(json(200, {}), done());
@@ -617,6 +654,22 @@ describe('api', () => {
         await api('/api/auth/ping', { method: 'POST' });
 
         expect(trail()).toEqual([tokenRequest, `POST ${path} with token-1`, 'POST /api/auth/ping with token-1']);
+      },
+    );
+
+    it.each([{ next: 'totp' }, { next: 'passkey' }])(
+      'is kept after the password step answers a second step, %j',
+      async (answer) => {
+        serve(json(200, answer), done());
+
+        await api('/api/auth/login', { method: 'POST', body: {} });
+        await api('/api/auth/ping', { method: 'POST' });
+
+        expect(trail()).toEqual([
+          tokenRequest,
+          'POST /api/auth/login with token-1',
+          'POST /api/auth/ping with token-1',
+        ]);
       },
     );
 

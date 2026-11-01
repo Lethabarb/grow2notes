@@ -199,6 +199,22 @@ public sealed class UserDeactivationEndpointsTests : IClassFixture<Grow2NotesFac
         Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
     }
 
+    // S00.06.05's fourth criterion, for a person who set up with a password only (D97): Active again, they sign in
+    // with the password alone.
+    [Fact]
+    public async Task Reactivating_a_person_with_a_password_only_makes_them_Active_and_they_sign_in_with_it_alone()
+    {
+        var worker = await AddUserAsync(
+            a.OrganisationId, UserRole.Worker, UserStatus.Active, passwordAndCode: true, twoFactorEnabled: false);
+
+        await AssertReactivatedAfterDeactivatingAsync(worker.Id, UserStatus.Active);
+
+        using var client = app.CreateHttpsClient();
+        using var signIn = await client.SendPasswordAsync(worker.Email, PasswordSignIn.Password);
+        Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+        Assert.Contains(signIn.SetCookies(), cookie => cookie.Name.Value == CookieSignIn.SessionCookie);
+    }
+
     // S00.06.05's fourth criterion and D75, for a person deactivated before they set up: with no way to sign in, they
     // are Invited, their old link still ended, and Resend invite sends them one that starts setup.
     [Fact]
@@ -436,7 +452,11 @@ public sealed class UserDeactivationEndpointsTests : IClassFixture<Grow2NotesFac
     // authenticator key and two-factor on, as its password path leaves them, unless passwordAndCode is false, for a
     // test that gives them a passkey; and, when Deactivated, the time of it, as a deactivation leaves them.
     private async Task<AddedUser> AddUserAsync(
-        Guid organisationId, UserRole role, UserStatus status, bool passwordAndCode = true)
+        Guid organisationId,
+        UserRole role,
+        UserStatus status,
+        bool passwordAndCode = true,
+        bool twoFactorEnabled = true)
     {
         var email = $"{Guid.NewGuid():N}@example.org";
         var now = clock.GetUtcNow().UtcDateTime;
@@ -459,7 +479,7 @@ public sealed class UserDeactivationEndpointsTests : IClassFixture<Grow2NotesFac
             ? await users.CreateAsync(user, PasswordSignIn.Password)
             : await users.CreateAsync(user));
         AssertSucceeded(await users.ResetAuthenticatorKeyAsync(user));
-        AssertSucceeded(await users.SetTwoFactorEnabledAsync(user, passwordAndCode));
+        AssertSucceeded(await users.SetTwoFactorEnabledAsync(user, passwordAndCode && twoFactorEnabled));
         var key = await users.GetAuthenticatorKeyAsync(user);
         Assert.NotNull(key);
         return new(user.Id, email, key);

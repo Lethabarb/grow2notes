@@ -2,6 +2,7 @@ using System.Reflection;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Auth;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,7 +10,8 @@ namespace Grow2Notes.Tests.Features.Auth;
 
 /// <summary>
 /// Whom the app's sign-in manager lets sign in (design.md §8.1, §8.2): Active users only, none who is locked out,
-/// whichever sign-in brings them, and no one with a password alone. Each test adds its own user to seeded organisation
+/// whichever sign-in brings them, and no one who chose a second step and would be signed in without it; a password
+/// alone signs in a user with two-factor off, who chose it (D97). Each test adds its own user to seeded organisation
 /// A, as tests/README.md's seeded-rows rule asks.
 /// </summary>
 [Collection<SqlServerCollection>]
@@ -56,14 +58,27 @@ public sealed class Grow2NotesSignInManagerTests(Grow2NotesFactory factory, SqlS
         Assert.True(result.IsLockedOut);
     }
 
-    // Identity would sign a password user whom it finds without two-factor straight in, with no code, so the check
-    // fails a sign-in that does not bypass two-factor, as a password's does not (design.md §8.1's invariant). The user
-    // is Active and not locked out, so nothing else refuses them, and a sign-in that went on would throw for want of a
-    // request.
+    // A person who set up with a password only has two-factor off, so Identity signs them straight in (D97). The user
+    // is Active and not locked out, so nothing refuses them, and the sign-in goes on to the session cookie, for which
+    // the scope needs a request.
     [Fact]
-    public async Task The_check_before_signing_in_fails_a_password_user_without_two_factor()
+    public async Task The_check_before_signing_in_signs_in_a_password_user_without_two_factor()
     {
         var userId = await AddUserAsync(UserStatus.Active, password: "Made-up passw0rd");
+
+        var result = await SignInOrTwoFactorAsync(userId, withRequest: true);
+
+        Assert.True(result.Succeeded);
+    }
+
+    // A person who chose a second step never skips it: with two-factor on and no valid provider, which a user with no
+    // authenticator key, no confirmed email and no confirmed phone has, Identity would sign them straight in, so the
+    // check fails the sign-in (design.md §8.1's invariant). A sign-in that went on would throw for want of a request.
+    [Fact]
+    public async Task The_check_before_signing_in_fails_a_user_with_two_factor_on_and_no_second_step()
+    {
+        var userId = await AddUserAsync(
+            UserStatus.Active, password: "Made-up passw0rd", twoFactorEnabled: true, emailConfirmed: false);
 
         var result = await SignInOrTwoFactorAsync(userId);
 
@@ -105,10 +120,16 @@ public sealed class Grow2NotesSignInManagerTests(Grow2NotesFactory factory, SqlS
     // it calls it, and its passkey sign-in does too from ASP.NET Core 10.0.4, which CI runs, so there no sign-in
     // reaches it unchecked, and only a direct call shows that the app's own check in it, for 10.0.0 to 10.0.3, still
     // works (S00.04.04's Notes). It is protected, so the call is by reflection, which runs the app's override. The
-    // scope has no request, so a sign-in that went on would throw for want of one.
-    private async Task<SignInResult> SignInOrTwoFactorAsync(Guid userId)
+    // scope has no request unless the test asks for one, so a sign-in that went on would throw for want of one.
+    private async Task<SignInResult> SignInOrTwoFactorAsync(Guid userId, bool withRequest = false)
     {
         await using var scope = factory.Services.CreateAsyncScope();
+        if (withRequest)
+        {
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext =
+                new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        }
+
         var signInManager = Assert.IsType<Grow2NotesSignInManager>(
             scope.ServiceProvider.GetRequiredService<SignInManager<ApplicationUser>>());
         var loaded = await signInManager.UserManager.FindByIdAsync(userId.ToString());
@@ -122,8 +143,9 @@ public sealed class Grow2NotesSignInManagerTests(Grow2NotesFactory factory, SqlS
 
     // A user as setup completion leaves one (design.md §8.1), except for the status, with an address of its own, which
     // no other test or run of this one uses. A test may give the user a password, which they then hold with two-factor
-    // off, as setup never leaves anyone.
-    private async Task<Guid> AddUserAsync(UserStatus status, string? password = null)
+    // off, as a password only leaves them, or on, with no authenticator key, which setup never leaves anyone with.
+    private async Task<Guid> AddUserAsync(
+        UserStatus status, string? password = null, bool twoFactorEnabled = false, bool emailConfirmed = true)
     {
         var organisation = sqlServer.Seeded.A;
         var email = $"{Guid.NewGuid():N}@example.org";
@@ -138,7 +160,8 @@ public sealed class Grow2NotesSignInManagerTests(Grow2NotesFactory factory, SqlS
             ActivatedAtUtc = TimeUtc,
             UserName = email,
             Email = email,
-            EmailConfirmed = true,
+            EmailConfirmed = emailConfirmed,
+            TwoFactorEnabled = twoFactorEnabled,
         };
         await using var scope = factory.Services.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();

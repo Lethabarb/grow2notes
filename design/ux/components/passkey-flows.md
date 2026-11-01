@@ -1,14 +1,16 @@
 # Passkey setup and sign-in
 
 > **Precedence.** Where a screen spec's "Conflicts resolved" table differs from this file, the screen spec wins.
+> Amended by D97 on 1 November 2026: setup offers four ways to sign in, and a passkey is also the second step after a password (the passkey step, below). The screen spec's wording and states win over this file's.
 > Editorial pass, 1 October 2026. Passkey failures show in the `role="alert"` line above the pressed button, not the error summary (sign-in.md, form-validation.md).
 
 Component key: `passkey-flows`. Covers the passkey parts of design.md §4.1 (Sign-in and account setup), and the passkey
 paths in §4.0 Sessions, §8.1, §8.2, §8.5 and §8.6. It covers:
 
-- the choice between **Use a passkey (recommended)** and **Use a password and authenticator app** at setup
-- creating the passkey
-- **Sign in with a passkey**
+- the choice at setup between **Use a passkey (recommended)**, **Use a password and authenticator app**, **Use a
+  password only** and **Use a password and a passkey** (D97)
+- creating the passkey, alone or after a password
+- **Sign in with a passkey**, alone or as the second step after a password (the passkey step)
 - every error, cancel and fallback state on those paths.
 
 The password field, the authenticator QR code and setup key, and the 6-digit code field are separate components. This
@@ -30,12 +32,13 @@ design.md. Each is marked **[added]** where it appears, so the owner can drop an
 
 | # | Screen (design.md) | What this component does there | What differs |
 |---|---|---|---|
-| 1 | **Set up your account**, steps 2–3 (§4.1, §8.1 step 4) | Explains passkeys, offers the two methods, runs passkey creation, finishes setup. | Uses the enrolment cookie, not a session. Creation (`navigator.credentials.create`). Failures fall back to the password + authenticator path. |
-| 2 | **Set up your account**, opened in a phone email app's in-app browser (§4.1 table) | Swaps the passkey option for the design's "Open this link in your browser" notice. The password + authenticator option stays. | Detected up front where possible. Otherwise the failure message carries the same advice. |
+| 1 | **Set up your account**, steps 2–3 (§4.1, §8.1 step 4) | Explains passkeys, offers the four methods (D97), runs passkey creation, finishes setup. A password and a passkey runs the same creation on view F, after the password. | Uses the enrolment cookie, not a session. Creation (`navigator.credentials.create`). Failures fall back to a password choice. |
+| 2 | **Set up your account**, opened in a phone email app's in-app browser (§4.1 table) | Swaps the passkey option for the design's "Open this link in your browser" notice. The password + authenticator option stays, with "Use a password only"; "Use a password and a passkey" is not offered. | Detected up front where possible. Otherwise the failure message carries the same advice. |
 | 3 | **Sign in** (§4.1 "Signing in", §8.2) | **Sign in with a passkey** button, plus passkey autofill on the email field. | Authentication (`navigator.credentials.get`), discoverable, no email needed. Server rejections use the A25 generic message. |
 | 4 | **Sign in in place** after the 30-minute idle sign-out (§4.0 Sessions, §8.5) | Same as 3. | On success the user goes back to the same route, and unsaved text stays in memory. There is no reload. |
 | 5 | **Set up again** after a manager's Reset sign-in or an email change (§4.11, §8.6) | Same as 1. | The old passkey may still be on the person's phone (see Per-screen notes). |
-| 6 | **Today**, first arrival after setup (§4.1 step 5) | Shows one confirmation line **[added]**. | Held in router state only. It is gone on reload. |
+| 6 | **Sign in, passkey step** (D97, §8.2): a person who chose a password and a passkey | After the password is accepted, shows "Use your passkey" with a "Sign in with a passkey" button and Go back. | Authentication for that account's passkeys only; options from `POST /api/auth/login/passkey/options`; the credential goes to `POST /api/auth/passkey`. |
+| 7 | **Today**, first arrival after setup (§4.1 step 5) | Shows one confirmation line **[added]**. | Held in router state only. It is gone on reload. |
 
 ---
 
@@ -206,6 +209,8 @@ That phone can also sign you in on a computer.
 [ (passkey icon) Use a passkey (recommended) ]        primary button, full width
                        or                             p
 [ Use a password and authenticator app ]              secondary button, full width
+[ Use a password only ]                               secondary button, full width   (D97)
+[ Use a password and a passkey ]                      secondary button, full width   (D97)
 [status line – role="status", empty until busy]
 ```
 
@@ -300,14 +305,14 @@ and **[Convention]** (FIDO's "disorienting" finding).
 | State | When | What shows | Focus | Screen reader hears |
 |---|---|---|---|---|
 | Loading | `setup/start` and capability check in flight | The setup screen's own loading state | — | Screen spec |
-| Default | Passkeys possible | Explanation, then primary "Use a passkey (recommended)", "or", secondary "Use a password and authenticator app" | `h1` on load (screen spec) | — |
+| Default | Passkeys possible | Explanation, then primary "Use a passkey (recommended)", "or", secondary "Use a password and authenticator app", "Use a password only" and "Use a password and a passkey" (D97) | `h1` on load (screen spec) | — |
 | Hover (pointer only) | Mouse over a button | Background one step darker. No movement. | — | — |
 | Focus | Keyboard | 3 px solid outline, 2 px offset, at least 3:1 against both neighbouring colours | — | "Use a passkey (recommended), button" |
 | Active | Pressed | Background two steps darker. No movement. | — | — |
 | Busy | Tap until the server answers | Button keeps its look, with `aria-disabled="true"` and `cursor: progress`. Repeat taps are ignored. Status line: "Setting up your account…" | Stays on the button | Status text (polite) |
 | Not set up | `NotAllowedError`, `AbortError` not started by us, or a `422 validation.failed` with `errors.credentialJson` from completion (A52) | Message above the buttons (see [Copy](#copy)). Both buttons usable. | Stays on the button | Message (assertive, `role="alert"`) |
 | Already on this device | `InvalidStateError` | Should not happen, because Reset sign-in removes server passkeys (§8.6). If it does, treat it as **Not set up**. | — | — |
-| Passkeys unavailable | Capability check fails | A notice replaces the explanation and the passkey button. "Use a password and authenticator app" becomes the **primary** button, because it is now the only action. | `h1` on load | Notice is read in normal order (static, not live) |
+| Passkeys unavailable | Capability check fails | A notice replaces the explanation and the passkey button. "Use a password and authenticator app" becomes the **primary** button and "Use a password only" follows it; "Use a password and a passkey" is not offered, because it needs a passkey. | `h1` on load | Notice is read in normal order (static, not live) |
 | No connection | `fetch` throws `TypeError` | Message: "No connection…". Both buttons usable. | Stays on the button | Alert |
 | Session timed out | `401` from options or completion | The method choice is replaced by the design string. The buttons are removed. | Moves to the message, which has `tabindex="-1"`, so focus is never lost | Read on focus |
 | Link replaced | `410 auth.setup_link_invalid` | Same, with the expired-link design string | Moves to the message | Read on focus |
@@ -363,8 +368,16 @@ start of a sentence.
 | Setup primary button | Use a passkey (recommended) | design.md |
 | Separator | or | added |
 | Setup secondary button | Use a password and authenticator app | design.md |
+| Setup secondary button (D97) | Use a password only | D97 (P) |
+| Setup secondary button (D97) | Use a password and a passkey | D97 (P) |
+| Setup: password only, hint | You'll sign in with your email address and a password, and nothing else. | D97 (P) |
+| Setup: password and a passkey, hint | You'll create a password, then use your face, fingerprint or PIN after it each time you sign in. | D97 (P) |
+| Setup: password and a passkey, on view F | When you select Finish setup, this device asks for your face, fingerprint or PIN to make your passkey. | D97 (P) |
+| Passkey step: heading (D97) | Use your passkey | D97 (P) |
+| Passkey step: hint (D97) | To finish signing in, use your face, fingerprint or PIN, the same way you unlock your device. | D97 (P) |
+| Passkey step: button, and Go back | Sign in with a passkey · Go back | existing words |
 | Setup busy | Setting up your account… | added |
-| Setup: not set up | **Your passkey was not set up.** Try again. If you were not asked for your face, fingerprint or PIN, open this link in your browser, or use a password and authenticator app. To open it in your browser, go back to the email, press and hold the link, and open it in Safari or Chrome. | added, built around the design.md string "Open this link in your browser" |
+| Setup: not set up | **Your passkey was not set up.** Try again. If you were not asked for your face, fingerprint or PIN, open this link in your browser, or use a password and authenticator app. To open it in your browser, go back to the email, press and hold the link, and open it in Safari or Chrome. | added (the screen spec's shorter sentence wins), built around the design.md string "Open this link in your browser" |
 | Setup: passkeys unavailable (notice) | **Passkeys do not work here.** Open this link in your browser, or use a password and authenticator app. To open it in your browser, go back to the email, press and hold the link, and open it in Safari or Chrome. | design.md row "in-app email browser", plus added how-to |
 | Setup: no connection | No connection. Check your internet, then try again. | added (matches "Not saved: no connection" in §4.3) |
 | Setup: session timed out | Your setup session timed out. Open the link from your email again. | design.md |
@@ -577,13 +590,32 @@ Check during M0: SimpleWebAuthn's non-autofill path should reach `navigator.cred
 
 ---
 
+## The passkey step (D97)
+
+For a person who chose **a password and a passkey**, the sign-in page asks for the passkey after the password
+(sign-in.md view H). The same rules hold as for A's button, with these differences:
+
+- The options come from `POST /api/auth/login/passkey/options`, which works only straight after an accepted password
+  and lists only that account's passkeys. They replace the password step in Identity's one two-factor cookie, so they
+  are fetched once, as the step shows, and kept. No anonymous options are fetched while the step shows.
+- The prompt opens straight from the press, as on A, and the credential goes to the same `POST /api/auth/passkey`,
+  which fails another account's credential.
+- A cancelled or timed-out prompt shows nothing and leaves the step as it is: the ceremony is still held, so the next
+  press works. This is the same silent rule as A's button, because the page cannot tell cancel from "no passkey here".
+- A `401` or `429` from either call returns to A with the generic A25 message, as an expired code step does.
+- **Go back** is a secondary button in every state, including a browser without WebAuthn. It returns to A with the email
+  kept and focus on the password field. From A the person can retype the password or use A's own passkey button, which
+  still signs a password-and-passkey person in with the passkey alone (A142).
+- Copy: heading "Use your passkey", the hint "To finish signing in, use your face, fingerprint or PIN, the same way you
+  unlock your device." and the button "Sign in with a passkey" (all in the Copy table above).
+
 ## Per-screen notes
 
 **1. Set up your account, on a phone (main path).**
 
 - The capability check and `setup/start` run together, then the step renders in its final form.
 - The tip line steers people to make the passkey on the phone they'll carry. On Windows, passkeys are not synced out of
-  the box, and A22 allows only one sign-in method, with no way to add a second passkey later.
+  the box, and A22 allows only one sign-in method chosen at setup, with no way to add a second passkey later.
 - After `200 Me`, go to Today and fill the confirmation line from router state (`navigate('/', { state: { setUp:
   'passkey' } })`). Nothing is written to storage.
 - Nothing the person typed is lost on this path, because there is nothing to type.
@@ -597,8 +629,8 @@ Check during M0: SimpleWebAuthn's non-autofill path should reach `navigator.cred
 
 **3. Set up, opened inside an email app's browser.**
 
-- If the capability check fails, the notice replaces the passkey option, and "Use a password and authenticator app"
-  becomes primary.
+- If the capability check fails, the notice replaces the passkey option, "Use a password and authenticator app"
+  becomes primary and "Use a password only" follows it. "Use a password and a passkey" is not offered.
 - If the check passes but creation fails, which is likely in a WKWebView, the "Your passkey was not set up" message
   carries the same advice.
 - Opening `/setup` in a real browser **without** the token and **without** an enrolment cookie is a state design.md
@@ -612,7 +644,7 @@ Check during M0: SimpleWebAuthn's non-autofill path should reach `navigator.cred
 
 - Most passkey users will just tap the button. Anyone who taps the email field out of habit gets their passkey offered
   by autofill.
-- Passkey-only accounts have no password. Without autofill, they would type a password, fail with the A25 message and
+- Accounts set up with a passkey alone have no password. Without autofill, they would type a password, fail with the A25 message and
   count towards the A25 lockout. Autofill and the hint line are the two cues that stop this.
 - Tested on 12 October 2026 (S00.04.04): a lockout also blocks passkey sign-in, and failed passkey sign-ins never
   count towards it. So five wrong passwords typed this way pause the person's passkey too, for 15 minutes. sign-in.md
@@ -675,7 +707,7 @@ Check during M0: SimpleWebAuthn's non-autofill path should reach `navigator.cred
 - **Putting the passkey button inside the password `<form>`** as a submit button.
 - **Two primary buttons** on the sign-in screen.
 - **Nudging password users to "upgrade to a passkey"** after sign-in, or silently creating one (`useAutoRegister`).
-  A22 says one method, chosen at setup.
+  A22 says one method, chosen at setup (D97 adds two, but the person still chooses once, at setup).
 - **Asking the person to name their passkey.** No screen shows it.
 - **Storing anything on the device** to remember the method or pre-fill the email (D22).
 - **A ceremony timeout under 5 minutes**, such as the 3-minute value in Microsoft's sample.
@@ -690,7 +722,7 @@ Check during M0: SimpleWebAuthn's non-autofill path should reach `navigator.cred
 
 ## Tensions with decisions
 
-- **One sign-in method, no self-service passkey management (D23 as specified by A22; recovery by A23).** FIDO lists
+- **One sign-in method, no self-service passkey management (D23 as specified by A22 and D97; recovery by A23).** FIDO lists
   "Create, view, and manage passkeys in Account Settings" as a **required** pattern, and its copy guidance uses "a
   passkey" to allow for several passkeys per account
   (https://www.passkeycentral.org/design-guidelines/required-patterns/create-view-and-manage-passkeys-in-account-settings;
@@ -704,10 +736,12 @@ Check during M0: SimpleWebAuthn's non-autofill path should reach `navigator.cred
     - Reset sign-in (§8.6).
 
   Recorded for information. No change proposed.
-- **A method chooser at setup (D23).** Microsoft's guidance is to avoid authentication-method choosers and go
+- **A method chooser at setup (D23, D97).** Microsoft's guidance is to avoid authentication-method choosers and go
   passkey-first (vendor data). FIDO's "Offer choice" principle and NN/g's advice to keep password options support the
-  design's chooser. Passkey autofill on the sign-in email field gives passkey-first behaviour without a chooser. No
-  change proposed.
+  design's chooser, which D97 widens to four choices. Passkey autofill on the sign-in email field gives passkey-first
+  behaviour without a chooser (the screen spec does not build it, sign-in.md conflict 15). A password and a passkey is
+  no stronger than a passkey alone, because A's own passkey button still signs that person in with the passkey alone
+  (A142). No change proposed.
 
 ---
 

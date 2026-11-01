@@ -140,6 +140,11 @@ export const strings = {
       + 'such as Safari or Chrome.',
     /** The help line (microcopy.md §9), plain text, not a link: recovery is always a manager's Reset sign-in. */
     help: 'If you cannot sign in, ask a manager to reset your sign-in.',
+    /** The passkey step, once a password for a password and a passkey is accepted (D97): its `<h1>` and hint. */
+    passkeyStep: {
+      heading: 'Use your passkey',
+      hint: 'To finish signing in, use your face, fingerprint or PIN, the same way you unlock your device.',
+    },
   },
   /**
    * Sign-in's view C, signed out in place (sign-in.md; app-shell.md component 7): its `<h1>` in place of A's, and the
@@ -248,6 +253,15 @@ export const strings = {
     settingUp: 'Setting up your account…',
     password: 'Use a password and authenticator app',
     passwordHint: 'You’ll create a password and use a free app that shows a 6-digit code each time you sign in.',
+    /** View E's other two password choices (D97), each with its hint, after the one above. */
+    passwordOnly: 'Use a password only',
+    passwordOnlyHint: 'You’ll sign in with your email address and a password, and nothing else.',
+    passwordAndPasskey: 'Use a password and a passkey',
+    passwordAndPasskeyHint:
+      'You’ll create a password, then use your face, fingerprint or PIN after it each time you sign in.',
+    /** Above Finish setup on view F for a password and a passkey. */
+    passkeyNext:
+      'When you select Finish setup, this device asks for your face, fingerprint or PIN to make your passkey.',
     /** Above the passkey button, when the browser made no passkey or the server refused the one it made. */
     passkeyNotSetUp:
       'Your passkey was not set up. Try again, or open the link from your email in your phone’s browser.',
@@ -287,10 +301,11 @@ export const strings = {
       codeHint: 'Find Grow2Notes in the app. If the code changes while you’re typing, you can still use it.',
       /** On the code field, for a code that the server did not take (`422` with `errors.totpCode`, D70). */
       codeRejected: 'That code did not work. Enter the code the app shows for Grow2Notes now.',
-      finishSetup: 'Finish setup',
-      /** Finish setup's busy label. */
-      finishingSetup: 'Finishing setup…',
     },
+    /** Finish setup, the button of view G and, for a password only or a password and a passkey, of view F. */
+    finishSetup: 'Finish setup',
+    /** Finish setup's busy label. */
+    finishingSetup: 'Finishing setup…',
   },
   /**
    * Manage > Guide prompts (guide-prompts.md), whose `<h1>` is its page name, which labels the field: the help text

@@ -39,3 +39,40 @@ export async function setUpWithPassword(page: Page, person: Invite) {
   await expect(main(page).getByRole('heading', { level: 1 })).toContainText('Today');
   return { password, key };
 }
+
+/**
+ * Sets the account that `link` names up with a password only, as sign-in-choices.spec.ts proves, ending on Today,
+ * signed in, and gives the password.
+ */
+export async function setUpWithPasswordOnly(page: Page, link: string) {
+  const password = 'quietharbour';
+  await page.goto(link);
+  await main(page).getByRole('link', { name: 'Use a password only' }).click();
+  await page.getByLabel('Create a password', { exact: true }).fill(password);
+  const finished = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/auth/setup/password-only',
+  );
+  await main(page).getByRole('button', { name: 'Finish setup' }).click();
+  expect((await finished).status()).toBe(200);
+  await expect(main(page).getByRole('heading', { level: 1 })).toContainText('Today');
+  return { password };
+}
+
+/**
+ * Sets the account that `link` names up with a password and a passkey, as sign-in-choices.spec.ts proves, ending on
+ * Today, signed in, and gives the password. The test names the `authenticator` fixture, so that the virtual
+ * authenticator is there to answer the passkey prompt, which Finish setup opens.
+ */
+export async function setUpWithPasswordAndPasskey(page: Page, link: string) {
+  const password = 'quietharbour';
+  await page.goto(link);
+  await main(page).getByRole('link', { name: 'Use a password and a passkey' }).click();
+  await page.getByLabel('Create a password', { exact: true }).fill(password);
+  const finished = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/auth/setup/password-and-passkey',
+  );
+  await main(page).getByRole('button', { name: 'Finish setup' }).click();
+  expect((await finished).status()).toBe(200);
+  await expect(main(page).getByRole('heading', { level: 1 })).toContainText('Today');
+  return { password };
+}

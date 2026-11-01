@@ -243,8 +243,8 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
             manager, $"/api/admin/users/{author.Id}/reactivate", await UserETagAsync(author.Id));
 
         using var again = app.CreateHttpsClient();
-        using var signedIn = await again.SignInWithPasswordAsync(
-            author.Email, PasswordSignIn.Password, AuthenticatorCodes.Now(author.AuthenticatorKey));
+        using var signedIn = await again.SignInWithPasswordAndPasskeyAsync(
+            author.Email, PasswordSignIn.Password, authenticator);
         Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
         var events = await EventTypesAboutAsync(author.Id);
         Assert.Single(events, type => type == AuditEventTypes.User.Deactivated);

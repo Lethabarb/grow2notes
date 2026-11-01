@@ -284,7 +284,7 @@ in normal case. The sketch's capitals (JANE CITIZEN) mean "large type", not uppe
 |---|---|
 | Title | (P) "Reset sign-in for Sam Lee?" |
 | Body line 1 | (P) "Only do this after you have checked, by phone or in person, that Sam Lee is the one asking." (from 4.11: "The manager confirms who is asking … by phone or in person.") |
-| Body line 2 | (P) "Their current way of signing in will be removed, and they will be signed out everywhere. A new setup link will be emailed to sam.lee@example.org." (Each person has one method, a passkey or a password with an authenticator app (A22), so the copy does not list methods they may not have.) |
+| Body line 2 | (P) "Their current way of signing in will be removed, and they will be signed out everywhere. A new setup link will be emailed to sam.lee@example.org." (Each person has one of four methods (A22, D97), so the copy does not list methods they may not have.) |
 | Confirm (warning style) | (P) "Reset sign-in for Sam Lee" |
 | Safe | "Go back" |
 | Busy | (P) "Resetting sign-in…" |

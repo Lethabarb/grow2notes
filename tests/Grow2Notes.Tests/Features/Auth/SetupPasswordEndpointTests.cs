@@ -160,8 +160,8 @@ public sealed class SetupPasswordEndpointTests : IClassFixture<Grow2NotesFactory
         Assert.Equal("auth.setup_link_invalid", problem.RootElement.GetProperty("code").GetString());
     }
 
-    // design.md §8.1's invariant: a password alone signs no one in. The password step (S00.04.05), with the password,
-    // asks for the code, so no session starts.
+    // design.md §8.1's invariant: a person who chose the app never skips its code. The password step (S00.04.05),
+    // with the password, asks for the code, so no session starts.
     [Fact]
     public async Task After_completion_a_password_sign_in_requires_the_code_and_starts_no_session()
     {

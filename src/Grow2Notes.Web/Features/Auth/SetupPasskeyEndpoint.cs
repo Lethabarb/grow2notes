@@ -47,35 +47,51 @@ internal static class SetupPasskeyEndpoint
             return TypedResults.Unauthorized();
         }
 
+        if (await AttestAsync(signInManager, request.CredentialJson, invited) is not { } passkey)
+        {
+            return PasskeyRefused();
+        }
+
+        var me = await completion.CompleteAsync(
+            invited,
+            async user =>
+                SetupCompletion.ThrowIfRefused(await users.AddOrUpdatePasskeyAsync(user, passkey)),
+            cancellationToken);
+        return me is null ? TypedResults.Unauthorized() : TypedResults.Ok(me);
+    }
+
+    /// <summary>
+    /// The passkey, named "Grow2Notes" (D70), that Identity makes from the credential against the creation ceremony in
+    /// its two-factor cookie, ending that ceremony; or null where the credential is not accepted. Every setup path that
+    /// takes a passkey uses it, and it only reads, so it comes before completion's transaction.
+    /// </summary>
+    internal static async Task<UserPasskeyInfo?> AttestAsync(
+        SignInManager<ApplicationUser> signInManager, string credentialJson, ApplicationUser invited)
+    {
         PasskeyAttestationResult attestation;
         try
         {
-            attestation = await signInManager.PerformPasskeyAttestationAsync(request.CredentialJson);
+            attestation = await signInManager.PerformPasskeyAttestationAsync(credentialJson);
         }
         catch (InvalidOperationException)
         {
             // Identity throws, rather than failing, when its two-factor cookie holds no passkey creation: none was
             // started in this browser, its 5 minutes have passed, an earlier attempt used it, or a sign-in replaced it.
-            return PasskeyRefused();
+            return null;
         }
 
         // The user entity is the one the options were made for, which Identity kept with the ceremony; another user's,
         // when the browser started setup with a second link after asking for options with the first.
         if (!attestation.Succeeded || attestation.UserEntity.Id != invited.Id.ToString())
         {
-            return PasskeyRefused();
+            return null;
         }
 
         attestation.Passkey.Name = PasskeyName;
-        var me = await completion.CompleteAsync(
-            invited,
-            async user =>
-                SetupCompletion.ThrowIfRefused(await users.AddOrUpdatePasskeyAsync(user, attestation.Passkey)),
-            cancellationToken);
-        return me is null ? TypedResults.Unauthorized() : TypedResults.Ok(me);
+        return attestation.Passkey;
     }
 
     // The SPA shows its own words for it (sign-in.md's Passkey not set up), not these.
-    private static ProblemHttpResult PasskeyRefused() =>
+    internal static ProblemHttpResult PasskeyRefused() =>
         ValidationProblems.Field(nameof(SetupPasskeyRequest.CredentialJson), "The passkey was not set up.");
 }

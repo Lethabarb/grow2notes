@@ -375,7 +375,7 @@ sprint; a rise shows new scope, not slow work.
 ## R2 Admin MCP server
 
 **Goal:** managers, and the operator's Support person, make the same admin changes as the Manage screens through an AI
-assistant the provider has approved, signing in with their own Grow2Notes account and MFA, under the same rules and
+assistant the provider has approved, signing in with their own Grow2Notes account, by the method they chose (D97), under the same rules and
 audit trail, with no note content ever returned (D48–D51, D55–D59, mcp-server.md).
 
 **Done when:** README §9 *Release* R2: E07 is done, the mcp-server.md §11.1 switch-on checklist in F07.05 is
