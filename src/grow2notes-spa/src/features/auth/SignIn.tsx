@@ -104,9 +104,9 @@ function summaryItems(failed: boolean, errors: FieldErrors, ids: { email: string
  *
  * `inPlace` makes it view C (sign-in.md; app-shell.md component 7), which the shell shows in place of a signed-in
  * screen whose session has ended, with that screen hidden after it: "You’ve been signed out" and its sentence take A's
- * `<h1>`'s place, over A's hint and controls, and stay over the second step, whose heading is then an `<h2>`. The fields have ids of
- * their own, apart from any that the hidden screen holds (A62). Shown as the session clock runs out, it asks for its
- * passkey options only once the server has surely ended the session (A61).
+ * `<h1>`'s place, over A's hint and controls, and stay over the second step, whose heading is then an `<h2>`. The
+ * fields have ids of their own, apart from any that the hidden screen holds (A62). Shown as the session clock runs
+ * out, it asks for its passkey options only once the server has surely ended the session (A61).
  */
 export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
   const ids = inPlace ? fieldIds.signedOut : fieldIds.signIn;
@@ -221,8 +221,8 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
       }
 
       setPasskeyBusy(false);
-      // The second step cancelled the prompt as it showed, or now holds the cookie that the sign-in needed: this attempt
-      // ends with no word, and asks for no options.
+      // The second step cancelled the prompt as it showed, or now holds the cookie that the sign-in needed: this
+      // attempt ends with no word, and asks for no options.
       if (secondStepShows.current) {
         return;
       }

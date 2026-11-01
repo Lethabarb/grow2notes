@@ -545,6 +545,7 @@ describe('the signed-out-in-place view', () => {
   });
 
   it('keeps its <h1> over the passkey step, whose heading is an <h2>, its button focused', async () => {
+    withWebAuthn();
     serve('POST', passwordPath, json({ next: 'passkey' }));
     serve('POST', stepOptionsPath, json({ challenge: 'c3RlcA', userVerification: 'required' }));
     await renderApp('/manage/users/new');

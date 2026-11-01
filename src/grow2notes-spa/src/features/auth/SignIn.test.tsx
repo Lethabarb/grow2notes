@@ -2087,7 +2087,7 @@ describe('the passkey step', () => {
   });
 
   describe('Go back', () => {
-    it('shows view A again with the email, no message, the password field focused and new passkey options', async () => {
+    it('shows view A again with the email, no message, password focused and new passkey options', async () => {
       await renderPasskeyStep();
 
       press(goBackButton());
