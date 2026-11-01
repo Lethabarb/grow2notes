@@ -140,6 +140,11 @@ export const strings = {
       + 'such as Safari or Chrome.',
     /** The help line (microcopy.md §9), plain text, not a link: recovery is always a manager's Reset sign-in. */
     help: 'If you cannot sign in, ask a manager to reset your sign-in.',
+    /** The passkey step, once a password for a password and a passkey is accepted (D97): its `<h1>` and hint. */
+    passkeyStep: {
+      heading: 'Use your passkey',
+      hint: 'To finish signing in, use your face, fingerprint or PIN, the same way you unlock your device.',
+    },
   },
   /**
    * Sign-in's view C, signed out in place (sign-in.md; app-shell.md component 7): its `<h1>` in place of A's, and the
