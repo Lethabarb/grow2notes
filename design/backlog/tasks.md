@@ -11,6 +11,9 @@ come from GitHub environment secrets.
 T41, added on 30 October 2026 (D95), is a Release 2 task in lane A with one new story, S07.06.01: a Claude Code skill
 that leads the owner through onboarding a new provider. T39 waits for it.
 
+T42, added on 1 November 2026 (D97), is a Release 1 task in lane B with two new stories, S00.07.01 and S00.07.02:
+sign in with a password only, or a password and a passkey. It needs no other task.
+
 - **The stories are the acceptance criteria.** An absorbed story keeps its section in its epic folder: its criteria
   and Notes are the task's acceptance criteria, and the task adds no new spec. Each task links its stories under
   *Absorbs*.
@@ -8036,6 +8039,105 @@ Anthropic (Claude) in the provider's texts citing A140. Of the carry-overs T41 t
 
 ---
 
+## T42 Sign in with a password only, or a password and a passkey
+
+```yaml
+id: T42
+status: doing
+release: R1
+lane: B
+size: M
+depends_on: []
+stories: [S00.07.01, S00.07.02]
+```
+
+### Outcome
+
+Setup offers four ways to sign in: a passkey; a password and an authenticator app; a password only; or a password and
+a passkey (D97). A person can choose the new ones at setup and later sign in with them. The first two behave exactly
+as before: same endpoints, bodies, refusals, screens and flow after view E.
+
+### Absorbs
+
+- [S00.07.01][] Set up and sign in with a password only
+- [S00.07.02][] Set up and sign in with a password and a passkey
+- Amends [S00.04.03][] (the invariant that no account has a password without TOTP) and [S00.04.05][] (the criterion
+  that no path signs anyone in with a password alone), each reworded with 'Amended by D97' when the code lands.
+
+### Notes
+
+- Owner request, 1 November 2026 (D97): "we need to have username and password, nothing extra, as an option". Asked
+  three questions, the owner answered: everyone may choose it (workers, managers and Support, no role check); add a
+  passkey as a second step after a password; and amend 'MFA for everyone', having been told once that design.md's
+  privacy table, A34, D23 and ops/security-review.md name it as the reasonable security step for APP 11.1 / HPP 4.1.
+- A new task, planned on 1 November 2026 against `origin/main` at `2d28eef`. Until it merges, this section and the
+  plan are its spec. D96 is taken by open PR #211, which also touches `api.ts`, `SignIn.tsx`, `SetupPage.tsx`,
+  `ux/README.md`, `empty-loading-error.md` and `ops/first-use-in-test.md`; if it merges first, rebase onto it, keep
+  both changes and renumber T42's A-numbers (A142, A143) and first-use steps (from 208) to follow what landed.
+- The method is never stored. It is worked out from three Identity facts: a password, a passkey and two-factor.
+  (a) is no password, a passkey, two-factor off; (b) a password, no passkey, two-factor on; (c) a password only: a
+  password, no passkey, two-factor off; (d) a password and a passkey: both, two-factor on.
+- Where the design is silent, the simplest option: the code step refuses a passkey holder, rather than rotating or
+  removing the invite-time authenticator key (one check that is true whatever key exists, and it covers someone who
+  scanned view G before switching to (d)); a dismissed passkey prompt keeps the step because the ceremony is still
+  held; view F fetches fresh passkey-creation options as the person types and otherwise keeps view E's existing
+  fallback of a first refused press.
+- Why two-factor stays on for (d): Identity's authenticator key (made at every invite) and its Email provider (valid
+  once the email is confirmed) both keep two-factor 'enabled'. Neither is an invariant the design depends on; the
+  code step's refusal of a passkey holder is the only thing that stops a 6-digit code signing a (d) person in.
+- The passkey audit for a credential of another account is written on that credential's account, as POST
+  /api/auth/passkey does today.
+- Assumed defaults the owner may overturn: A142 (view A's passkey button signs a (d) person in with the passkey alone,
+  so (d) is no stronger than (a); the step's 5 minutes run from its options call) and A143 (assistant changes need a
+  sign-in within the last 12 hours, by any method).
+- Owner questions, none blocking: (1) approve the seven new (P) strings (D67); (2) confirm A142 and A143; (3) 12 or 15
+  characters for a password only (the default keeps 12 for every method; NIST SP 800-63B-4 asks 15 for a single
+  factor).
+
+### Plan
+
+Outcome: as above. No new table, column, enum value, migration or audit type. No custom WebAuthn code.
+
+Design approach:
+- (c) needs no new Identity path: with two-factor off, the password step already signs a person in. `POST
+  /api/auth/login` gains a success branch that writes `auth.signin_succeeded` and answers the Me, so no session starts
+  without its event. `Grow2NotesSignInManager` refuses only a user whose two-factor is on but whom Identity would sign
+  in without a second step.
+- (d) answers `{next:'passkey'}` for a user with a passkey. One new endpoint, `POST /api/auth/login/passkey/options`,
+  works only straight after an accepted password (Identity's two-factor cookie), shares the code step's account
+  limit and returns Identity's `MakePasskeyRequestOptionsAsync(user)`; the existing `POST /api/auth/passkey` signs in
+  with the credential and fails another account's credential. `POST /api/auth/login/totp` answers 401 to a passkey
+  holder. One helper, `SecondStep.IsPasskeyAsync`, holds the rule for all three.
+- Two new setup completions beside the untouched ones: `POST /api/auth/setup/password-only` and `POST
+  /api/auth/setup/password-and-passkey`, both through `SetupCompletion`'s one transaction. The password-validator loop
+  and the attestation check are extracted from the existing endpoints, not copied.
+- SPA: view E lists the four choices (passkey primary, three secondary links); the choice lives in setup memory only;
+  view F branches on it (Continue to view G for (b); Finish setup for (c) and (d), where (d) opens the passkey prompt
+  from the press); sign-in reads the password answer (a Me, `totp` or `passkey`) and shows a new `PasskeyStep` with a
+  Go back button; `api.ts` counts the login as a sign-in only when it answers a Me.
+
+Domain changes: none (see Notes). Reuse: Identity's two-factor switch and passkey sign-in, `SetupCompletion`,
+`AccountRateLimiter`, `useOneOptions`, the shared Button and the existing copy.
+
+Tests (CI only): .NET for the login, passkey-step, code-step, both setup endpoints, sign-in manager, reactivation,
+endpoint matrix and rate-limit groups; SPA for `api.ts`, `SignIn`, `PasskeyStep`, view E, view F and `SetupLayout`;
+end to end for (c) from setup to sign-in and (d) with the virtual authenticator. Tests change only where their rule
+changed, and the pull request names each.
+
+### Verticals
+
+- v1: Server: password-only and password-then-passkey sign-in and setup; depends_on none; R07, R08, R09, R12, R13,
+  R14, R24, R26, R27.
+- v2: SPA sign-in: password-only answer, passkey second step and sign-in counting; depends_on v1; R10, R11.
+- v3: SPA setup: four choices on view E, finish on view F, and end-to-end tests; depends_on v1, v2; R01 to R06, R17,
+  R25, R28, R29, R31.
+- v4: D97 and the specs, UX, security and ops records that named MFA for everyone; depends_on none; R18, R19, R20,
+  R22, R23, R33.
+- v5: backlog, assumed defaults (A142, A143), by-hand checks and the feature pull request into main; depends_on v1 to
+  v4; R15, R16, R21, R30, R32, R34, R35.
+
+---
+
 ## Cut stories
 
 Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `status: cut` and a dated Note.
@@ -8268,3 +8370,5 @@ assumed defaults, which the owner may overturn:
 [S07.05.09]: E07-admin-mcp-server/F07.05-hardening-manual-tests-switch-on.md#s070509-switch-on-in-production
 [S07.05.10]: E07-admin-mcp-server/F07.05-hardening-manual-tests-switch-on.md#s070510-name-the-approved-ai-providers-in-the-wording
 [S07.06.01]: E07-admin-mcp-server/F07.06-onboarding-with-claude-code.md#s070601-onboard-a-new-provider-with-claude-code
+[S00.07.01]: E00-skeleton-hosting-sign-in/F00.07-sign-in-choices.md#s000701-set-up-and-sign-in-with-a-password-only
+[S00.07.02]: E00-skeleton-hosting-sign-in/F00.07-sign-in-choices.md#s000702-set-up-and-sign-in-with-a-password-and-a-passkey

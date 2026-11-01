@@ -25,6 +25,7 @@ by-hand step on ops/first-use-in-test.md and holds nothing open.
 - F00.04 Sign-in, account setup and sessions
 - F00.05 App shell
 - F00.06 Users
+- F00.07 Sign-in choices
 
 ## Scope coverage
 This epic's rows are in [coverage.md](../coverage.md), under E00.

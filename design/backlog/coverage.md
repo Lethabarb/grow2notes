@@ -108,7 +108,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 1 | ASP.NET Core on .NET 10 LTS serving the React (Vite, TypeScript) build from the same origin; unknown `/api` paths return 404 | F00.01 | | |
 | 2 | EF Core and Azure SQL in Australia Southeast, Key Vault, the user-assigned identity, Bicep (`bootstrap`, `main`, `locks`) and GitHub Actions deploying to test and prod | F00.02 | S00.03.01 (the EF Core context), S00.01.02 (CI) | Prod built in T22 (25 October 2026): `prod.bicepparam`, the gated prod deploy, `modules/alerts.bicep`, `locks.bicep`; created by hand and checked on `ops/go-live.md` A and B; production is at the default Azure host (D91) |
 | 3 | The Organisation table, `OrganisationId` on every `ITenantOwned` entity with the named query filter, and the `grow2notes_runtime` database role (D3) | F00.03 | | |
-| 4 | Accounts: invite and setup (passkey, or password + TOTP), sign-in and sign-out, cookie sessions validated against the security stamp on every request, 30-minute idle timeout with warning, 12-hour limit | F00.04 | S00.06.02 (sending the invite) | |
+| 4 | Accounts: invite and setup (passkey, or password + TOTP), sign-in and sign-out, cookie sessions validated against the security stamp on every request, 30-minute idle timeout with warning, 12-hour limit | F00.04 | S00.06.02 (sending the invite); F00.07 adds a password only, and a password and a passkey (D97) | |
 | 5 | Manager screen: invite, edit, reset sign-in, deactivate and reactivate users | F00.06 | | |
 | 6 | The audit table, starting with sign-in and user events. The operator commands | F00.03 | F00.04 and F00.06 write the sign-in and user events | |
 | 7 | Telemetry in Australia Southeast that never records request bodies or SQL error text | F00.02 | | |
@@ -118,7 +118,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | A manager and a worker can each accept an invite and sign in with MFA on a phone and a laptop, in test, and sign in again a second time (both setup paths) | F00.04 | S00.06.02 (the worker's invite) | By hand, ops/first-use-in-test.md; holds nothing open |
+| 1 | A manager and a worker can each accept an invite and sign in with MFA on a phone and a laptop, in test, and sign in again a second time (both setup paths) | F00.04 | S00.06.02 (the worker's invite); S00.07.01 and S00.07.02 add the two password choices (D97) | By hand, ops/first-use-in-test.md; holds nothing open |
 | 2 | After deactivation, the user's next request is rejected (tested) | F00.06 | S00.04.01 (the stamp check); S05.03.02 checks it end to end at M5 | Proved end to end in T24 (24 October 2026) by `PastRecordsTests`' third fact; the signed-out view by `signedOutInPlace.test.tsx`; by hand, first-use step 33 |
 | 3 | A test fails the build if any `ITenantOwned` entity lacks the organisation filter; the named exceptions are listed in the test | F00.03 | | |
 | 4 | The 12-hour absolute limit and the `org_id` claim survive the per-request principal rebuild (tested) | F00.04 | | |
