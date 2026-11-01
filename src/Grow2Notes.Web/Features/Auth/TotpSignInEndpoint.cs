@@ -17,7 +17,10 @@ namespace Grow2Notes.Web.Features.Auth;
 /// which the password step set, read before anything else. Without one, because no password step came first, its 5
 /// minutes have passed or a passkey ceremony has replaced it, the answer is the <c>401</c> with nothing written.
 /// Otherwise the account uses a permit of its limit of 10 a minute (design.md §9.9, <see cref="AccountRateLimiter"/>),
-/// and a request over it is a <c>429</c> that writes no event and counts nothing towards the lockout. Then that
+/// and a request over it is a <c>429</c> that writes no event and counts nothing towards the lockout. An account that
+/// holds a passkey (<see cref="SecondStep"/>) is then refused with the <c>401</c>, nothing written or counted: its
+/// invite-time authenticator key and Identity's Email provider both keep two-factor "enabled" for a person who chose a
+/// password and a passkey (D97), so this refusal is what keeps a code from signing them in. Then that
 /// account's organisation is the tenant (§5.9 item 1), and the code is read by the one code check that
 /// setup's code passes too (<see cref="OneTimeCode"/>): a badly formed code is a wrong one that never reaches Identity,
 /// which would read "12345" as the code 012345, so it counts towards no lockout (totp-setup.md <i>Implementation
@@ -57,6 +60,14 @@ internal static class TotpSignInEndpoint
         if (!accounts.TryAcquireCodeStep(user.Id))
         {
             return RateLimits.TooManyRequests(response);
+        }
+
+        // The step of a person with a passkey is the passkey (D97), so no code signs them in, whatever key the invite
+        // stored, and Identity is not asked. It is the answer for no code step under way: nothing is written or counted
+        // and the cookie stays as it is.
+        if (await SecondStep.IsPasskeyAsync(signInManager.UserManager, user))
+        {
+            return TypedResults.Unauthorized();
         }
 
         using (tenant.Use(user.OrganisationId))

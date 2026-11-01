@@ -8,9 +8,9 @@ using Microsoft.Extensions.Options;
 namespace Grow2Notes.Web.Features.Auth;
 
 /// <summary>
-/// The app's sign-in manager (design.md §8.2, §8.4): only an Active user can sign in, never with a password alone,
-/// and every sign-in records when it happened, in <see cref="AuthTimeClaimType"/>, for the 12-hour session limit
-/// (§8.5).
+/// The app's sign-in manager (design.md §8.2, §8.4): only an Active user can sign in, never skipping a second step
+/// they chose (D97), and every sign-in records when it happened, in <see cref="AuthTimeClaimType"/>, for the 12-hour
+/// session limit (§8.5).
 /// </summary>
 internal sealed class Grow2NotesSignInManager(
     UserManager<ApplicationUser> userManager,
@@ -71,16 +71,18 @@ internal sealed class Grow2NotesSignInManager(
     /// runtime, the user is checked twice.
     /// </summary>
     /// <remarks>
-    /// It then fails a sign-in that does not bypass two-factor, as a password's does not, when Identity finds the user
-    /// without two-factor (off, or with no two-factor provider registered), as Identity would then sign them straight
-    /// in; so no password alone signs anyone in (design.md §8.1's invariant). Setup and a sign-in reset keep a password
-    /// and the authenticator app together, so this matters only if a row ever breaks that rule. A passkey sign-in
+    /// It then fails a sign-in that does not bypass two-factor, as a password's does not, when the user chose a second
+    /// step (<c>TwoFactorEnabled</c>) but Identity finds none to ask for (no two-factor provider is valid), as Identity
+    /// would then sign them straight in; so a person who chose a second step never skips it (design.md §8.1's
+    /// invariant). A password alone signs in only a user with two-factor off, who chose it (D97). A passkey sign-in
     /// bypasses two-factor, as a verified passkey is MFA on its own (D23), so it is unchanged.
     /// </remarks>
     protected override async Task<SignInResult> SignInOrTwoFactorAsync(
         ApplicationUser user, bool isPersistent, string? loginProvider = null, bool bypassTwoFactor = false) =>
         await PreSignInCheck(user)
-            ?? (!bypassTwoFactor && !await IsTwoFactorEnabledAsync(user) ? SignInResult.Failed : null)
+            ?? (!bypassTwoFactor && user.TwoFactorEnabled && !await IsTwoFactorEnabledAsync(user)
+                ? SignInResult.Failed
+                : null)
             ?? await base.SignInOrTwoFactorAsync(user, isPersistent, loginProvider, bypassTwoFactor);
 
     // Every sign-in ends here: SignInAsync, as setup completion calls it, and the password, two-factor and passkey
