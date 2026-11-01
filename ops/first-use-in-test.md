@@ -22,10 +22,11 @@ here. Each step ends with what it confirms.
   limit seems to have changed. The email is sent from the address in the `test` environment's `EMAIL_SENDER_ADDRESS`,
   with the key from its `RESEND_API_KEY`, which each deploy writes to `kv-grow2notes-test` (D94). A missing value, a
   missing key in the vault or a missing role answers "Not sent" the same way (step 151).
-- Have ready: a laptop with Chrome, Edge and NVDA, an iPhone with VoiceOver and an authenticator app (such as Google
-  Authenticator or Microsoft Authenticator), the testing mailbox open on both, and the Azure portal signed in with
-  your own account. Let each browser keep the name and email address it already offers on forms of your own, as
-  steps 12, 13 and 18 check that Invite user offers neither.
+- Have ready: a laptop with Chrome, Edge and NVDA, an iPhone with VoiceOver, an Android phone with Chrome and
+  TalkBack (steps 210, 213 and 216), the testing mailbox open on both, and the Azure portal signed in with your own
+  account. An authenticator app (such as Google Authenticator or Microsoft Authenticator) is needed only for the
+  password-and-authenticator-app path (D97), such as step 212. Let each browser keep the name and email address it
+  already offers on forms of your own, as steps 12, 13 and 18 check that Invite user offers neither.
 - In Chrome, open the developer tools on the Network panel, with **Preserve log** on, before each step that names a
   request.
 - Write down each step's time and result (passed, or what you saw) for the developer, who records them in the
@@ -1482,7 +1483,7 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      holds nothing open. (S07.02.01; MA10; A120.)
 172. With a real approved assistant, or the MCP Inspector, registered as in step 162, add test's `/mcp` address as a
      remote server. Look for: it follows the `401` to the sign-in and the Connect screen of step 167 (a manager signs
-     in, with MFA, and chooses **Allow**), connects, and lists two tools, `find_participants` and
+     in, by the method they chose, and chooses **Allow**), connects, and lists two tools, `find_participants` and
      `get_participant` (later tasks add more). Write down which assistant it was, the protocol revision it reports
      (2025-11-25 or 2026-07-28) and, from the browser's Network panel when it runs in a browser, the `Origin` its
      calls carry, or that it sends none. A `403` on its calls means that its `Origin` is not the origin of a redirect
@@ -1494,7 +1495,7 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      out of the app in a browser (Account, then **Sign out**); another manager deactivates the person on the Users
      screen; another manager resets the person's sign-in (the link is sent, not used); another manager changes the
      person's role to Worker. Look for: the assistant's next call fails with `401`, and it can only reconnect by
-     running the Connect screen again, with MFA (a reactivated or reset person reconnects that way; a worker is
+     running the Connect screen again, signing in first (a reactivated or reset person reconnects that way; a worker is
      refused with `access_denied`). Changing a manager to Support does not end the connection. Read the audit rows
      as in step 15, with `EventType IN ('auth.signed_out', 'user.deactivated', 'user.setup_link_sent', 'user.updated')`:
      one row for each change you made. Then set `Mcp__Enabled` to `False` on test's web app in the Azure portal, wait
@@ -1686,8 +1687,8 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      authenticator, a passkey, an app session and a connected assistant, and confirm after the words "This removes
      [Name]'s password, authenticator and passkeys, signs them out everywhere and emails a new setup link to
      [email]. Confirm who is asking first, by phone or in person." Look for: the person's app session and assistant
-     connection end on their next action, the email arrives, and on a real phone with an authenticator app they set
-     up again from the new link; the `user.setup_link_sent` audit row holds `via`, the client ID, the tool's name
+     connection end on their next action, the email arrives, and on a real phone they set up how to sign in
+     again from the new link; the `user.setup_link_sent` audit row holds `via`, the client ID, the tool's name
      and no address. Then ask it to resend an Invited person's invite: the old link no longer works, the new one
      does, and the words are "This sends [Name] a new setup link at [email]. The old link stops working." This
      step holds nothing open. (S07.04.04; A23, A138; MA6.)
@@ -1790,3 +1791,70 @@ is on file (MA1).
      `update_participant` call; and no date of birth, setup link or address appeared in the chat. Wording notes go to
      the developer; the invite email's wording stays step 201's question. This step holds nothing open.
      (S07.06.01; A140.)
+
+### Sign-in choices (T42)
+
+Setup now offers four ways to sign in (D97): a passkey, a password and an authenticator app, a password only, and a
+password and a passkey. Use a new made-up person at a new testing-mailbox `+` tag for each step that sets one up (A27).
+Never write down an email address, a password or a setup link.
+
+208. Set up with a password only, on the laptop. As a manager, invite a made-up worker and open the emailed link in
+     Chrome. Look for: view E has the passkey button marked recommended, then three links, in this order, for a
+     password and authenticator app, a password only, and a password and a passkey, with no "(recommended)" on the new
+     ones. Choosing the password-only link goes to Create a password; its button reads Finish setup; pressing it lands
+     on Today with no authenticator step and no code. Back from Today leaves the app. Sign out, then sign in with the
+     email and password: Today, with no second screen. Sign out and try a wrong password: only the one message of A25
+     shows. The audit rows (step 15) hold `auth.setup_completed`, one `auth.signin_succeeded` (the password sign-in)
+     and one `auth.signin_failed` for the person, and no `auth.mfa_failed`. This step holds nothing open.
+     (S00.07.01; D97.)
+209. Everyone may choose. Repeat the password-only choice of step 208 for a made-up manager and for a made-up Support
+     account (a manager grants it, as step 166 does). Look for: view E offers the same four choices to each, and each
+     finishes setup and signs in again with the password alone. This step holds nothing open. (S00.07.01; D97.)
+210. Set up with a password and a passkey, on a real iPhone in Safari and then on a real Android phone in Chrome, for
+     a new made-up worker on each. Open the link on the phone and choose the password-and-passkey link. Look for:
+     Create a password shows a hint that the device will ask for the face, fingerprint or PIN, and the button reads
+     Finish setup; pressing it opens the device's passkey prompt at once and then lands on Today. If an older iPhone
+     refuses the first press and says the passkey was not set up, pressing again opens the prompt (the accepted
+     behaviour of views A and E). Sign out, enter the email and password: a step headed "Use your passkey" shows with
+     one button; pressing it opens the prompt for that account's passkey and lands on Today. The audit rows hold
+     `auth.setup_completed` and `auth.signin_succeeded`, and no `auth.mfa_failed`. This step holds nothing open.
+     (S00.07.02; A142.)
+211. A passkey still works as before. Set up a made-up worker with a passkey on a phone and sign in again with the
+     passkey button. Look for: the screens, wording and flow after view E are the same as before T42. This step holds
+     nothing open. (S00.07.01; D97.)
+212. A password and an authenticator app still works as before. On the laptop, set up a made-up worker with the
+     authenticator-app link and the authenticator app on the iPhone: view G shows the QR code and key, a wrong code is
+     refused under the code field, and the right code lands on Today. Sign out, then sign in with the email and
+     password and the six-digit code. Look for: nothing differs from the flow before T42, and a person who skips the
+     code is never signed in. This step holds nothing open. (S00.07.01; D97.)
+213. Cancel, retry and Go back at the passkey step. Sign in as the step 210 person on the phone: enter the email and
+     password, then cancel the passkey prompt. Look for: no message, the button back to default and the step still
+     showing; pressing the button opens the prompt again and signing in works. Sign out and repeat to the step, then
+     press Go back: view A with the email kept, the password empty, no message and the focus on the password field.
+     Type the password again to reach the step. Last, leave the step for over 4 minutes and press the button: view A
+     with the message of A25 and the email kept. This step holds nothing open. (S00.07.02; A142.)
+214. The passkey button alone signs the step 210 person in (A142). Sign out, and on view A press Sign in with a
+     passkey without typing the password. Look for: it lands on Today. This is accepted: a password and a passkey is
+     no stronger than a passkey alone (D97), and the owner may overturn it. This step holds nothing open.
+     (S00.07.02; A142.)
+215. A code does not sign a password-and-passkey person in. For a new made-up worker, choose the authenticator-app
+     link, note that view G shows its key, add the key to an authenticator app, then go back to view E, choose the
+     password-and-passkey link and finish setup. Sign out and enter the email and password. Look for: the passkey
+     step, with no field for a code; the authenticator app's six-digit code has no place to go. CI proves the refusal
+     itself (`TotpSignInEndpointTests`). This step holds nothing open. (S00.07.02; D97.)
+216. Keyboard and screen-reader pass over the new screens: NVDA with Chrome on the laptop and VoiceOver on the iPhone
+     (TalkBack on the Android phone) over view E with its four choices, Create a password for a password only and
+     for a password and a passkey, and the passkey step. Use the keyboard alone for the password-only setup. Look for:
+     each choice's hint is read with its name, Finish setup announces its busy label, a dismissed prompt announces
+     nothing, the focus is on the passkey step's button as it shows, Go back follows it in the Tab order, and nothing
+     needs a mouse. This step holds nothing open. (S00.07.01, S00.07.02.)
+217. Reset sign-in and reactivation. As a manager, reset the sign-in of the step 208 person and of the step 210
+     person on the Users screen. Look for: each person's sessions end, each gets a new link and can choose any of the
+     four ways again from it, and the old password does not work; the step 210 person's passkey no longer signs them
+     in. Then deactivate and reactivate the step 208 person: they sign in with the password alone. This step holds
+     nothing open. (S00.07.01; D97.)
+218. In-app browser. Open a setup link in a browser that is inside an app, such as one in a mail or social app, which
+     has no WebAuthn. Look for: view E shows its notice, with the password-and-authenticator-app link first and the
+     password-only link second, and no passkey button and no password-and-passkey link. Then sign in there as the
+     step 210 person: after the password, the passkey step says that passkeys do not work in this browser, and Go back
+     returns to view A. This step holds nothing open. (S00.07.02; A142.)

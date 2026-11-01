@@ -41,7 +41,7 @@ Up to four lanes run at once, each one task at a time:
 
 - **A:** T01, T04, T11, T16, T19, T24 for Release 1, then T30 to T38, then T41, then T39, one after another, because
   each MCP tool edits the shared `tools/list` snapshot and tool matrix.
-- **B:** T02, T05, T06, T07, T15, T17, T21, T25, then T29 beside T30.
+- **B:** T02, T05, T06, T07, T15, T17, T21, T25, then T29 beside T30, then T42.
 - **C:** T03, T08, T09, T10, T12, T13, T14, T18, T20, T26. The note form is one hot spot, so its tasks run back to
   back.
 - **D:** T22 (Q2 and Q13 are answered, D91 and D92) and T23, alongside the note and report work,
@@ -8043,7 +8043,7 @@ Anthropic (Claude) in the provider's texts citing A140. Of the carry-overs T41 t
 
 ```yaml
 id: T42
-status: doing
+status: done
 release: R1
 lane: B
 size: M
@@ -8062,7 +8062,7 @@ as before: same endpoints, bodies, refusals, screens and flow after view E.
 - [S00.07.01][] Set up and sign in with a password only
 - [S00.07.02][] Set up and sign in with a password and a passkey
 - Amends [S00.04.03][] (the invariant that no account has a password without TOTP) and [S00.04.05][] (the criterion
-  that no path signs anyone in with a password alone), each reworded with 'Amended by D97' when the code lands.
+  that no path signs anyone in with a password alone), each reworded with 'Amended by D97'.
 
 ### Notes
 
@@ -8093,6 +8093,14 @@ as before: same endpoints, bodies, refusals, screens and flow after view E.
 - Owner questions, none blocking: (1) approve the seven new (P) strings (D67); (2) confirm A142 and A143; (3) 12 or 15
   characters for a password only (the default keeps 12 for every method; NIST SP 800-63B-4 asks 15 for a single
   factor).
+- Done, 1 November 2026 (v5): both stories are done with `sprint` blank, as T40's and T41's are. In S00.07.01 every
+  criterion is ticked except the second (everyone may choose, no role check), which only a person signing in as each
+  role can prove: it stays unticked, with first-use step 209. In S00.07.02 one criterion is unticked, with a
+  dated Note: the long timeout for the passkey step's calls, which exists only on PR #211. S00.04.03 and S00.04.05 carry 'Amended by D97'.
+- The two setup test classes name their audit-writer test
+  `With_an_audit_writer_that_throws_nothing_commits_and_no_session_starts`, after the older test it copies. It uses a
+  failing writer and asserts a 500, no session and nothing changed. The stories cite it by that name; renaming it is a
+  test change and was left alone.
 
 ### Plan
 
@@ -8135,6 +8143,18 @@ changed, and the pull request names each.
   R22, R23, R33.
 - v5: backlog, assumed defaults (A142, A143), by-hand checks and the feature pull request into main; depends_on v1 to
   v4; R15, R16, R21, R30, R32, R34, R35.
+
+### Steps
+
+- [x] Server (#212; v1): the password-only and password-then-passkey sign-in and setup endpoints, `SecondStep`, the
+      extracted helpers, and the .NET tests.
+- [x] SPA sign-in (#214; v2): the password step's Me answer, `PasskeyStep`, and `api.ts` counting `/api/auth/login`
+      only when it answers a Me.
+- [x] SPA setup (#215; v3): four choices on view E, Finish setup on view F for a password only and a password and a
+      passkey, and the end-to-end tests.
+- [x] Records (#213; v4): D97 and the amended specs, UX, security review and ops pages.
+- [x] Backlog (#216; v5): A142 and A143, F00.07 and its two stories ticked as CI proves
+      them, S00.04.03 and S00.04.05 amended, coverage.md, the T42 Notes, and first-use steps 208 to 218.
 
 ---
 
@@ -8228,6 +8248,8 @@ assumed defaults, which the owner may overturn:
 [S00.02.07]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000207-setup-link-email
 [S00.02.08]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000208-resends-settings-come-from-github-environment-secrets
 [S00.03.06]: E00-skeleton-hosting-sign-in/F00.03-tenancy-audit-operator-commands.md#s000306-break-glass-reset-and-sign-out-of-everyone
+[S00.04.03]: E00-skeleton-hosting-sign-in/F00.04-sign-in-setup-sessions.md#s000403-set-up-my-account-with-a-password-and-authenticator-app
+[S00.04.05]: E00-skeleton-hosting-sign-in/F00.04-sign-in-setup-sessions.md#s000405-sign-in-with-email-password-and-code
 [S00.04.08]: E00-skeleton-hosting-sign-in/F00.04-sign-in-setup-sessions.md#s000408-sign-in-again-where-i-was
 [S00.05.02]: E00-skeleton-hosting-sign-in/F00.05-app-shell.md#s000502-keep-my-place-when-i-move-between-screens
 [S00.06.02]: E00-skeleton-hosting-sign-in/F00.06-users.md#s000602-invite-a-user
