@@ -14,6 +14,12 @@ internal static class PasskeySignIn
     /// <summary>The sign-in endpoint, which takes the credential.</summary>
     public const string Path = "/api/auth/passkey";
 
+    /// <summary>
+    /// The options of the passkey step of a sign-in with a password and a passkey (D97), which name the account of the
+    /// password step's passkeys.
+    /// </summary>
+    public const string StepOptionsPath = "/api/auth/login/passkey/options";
+
     private const string OptionsPath = "/api/auth/passkey/options";
 
     /// <summary>
@@ -41,12 +47,14 @@ internal static class PasskeySignIn
 
     /// <summary>
     /// Asks for passkey request options with <paramref name="token"/>, and returns their challenge. The answer sets the
-    /// ceremony's cookie, which replaces any earlier ceremony of <paramref name="client"/>'s.
+    /// ceremony's cookie, which replaces any earlier ceremony of <paramref name="client"/>'s. They are the anonymous
+    /// options unless <paramref name="optionsPath"/> names the passkey step's, <see cref="StepOptionsPath"/>.
     /// </summary>
-    public static async Task<string> FetchPasskeyChallengeAsync(this HttpClient client, string token)
+    public static async Task<string> FetchPasskeyChallengeAsync(
+        this HttpClient client, string token, string optionsPath = OptionsPath)
     {
         // With no body, as the SPA asks for them.
-        using var response = await client.PostWithTokenAsync(OptionsPath, token);
+        using var response = await client.PostWithTokenAsync(optionsPath, token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var options = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);

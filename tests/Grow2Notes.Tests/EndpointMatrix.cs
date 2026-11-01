@@ -134,6 +134,13 @@ internal static class EndpointMatrix
             Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized),
         new(Post,      "/api/auth/setup/password", Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/setup/password", new { password = "made-up password", totpCode = "123456" })),
+        new(Post,      "/api/auth/setup/password-only",
+            Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+            WithJson("/api/auth/setup/password-only", new { password = "made-up password" })),
+        new(Post,      "/api/auth/setup/password-and-passkey",
+            Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+            WithJson(
+                "/api/auth/setup/password-and-passkey", new { password = "made-up password", credentialJson = "{}" })),
         new(Post,      "/api/auth/setup/passkey/options",
             Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized),
         new(Post,      "/api/auth/setup/passkey", Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
@@ -154,6 +161,11 @@ internal static class EndpointMatrix
         // has, so a made-up code is refused, whoever sends it, with nothing checked or written (§8.2).
         new(Post,      "/api/auth/login/totp", Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/login/totp", new { code = "123456" })),
+
+        // The passkey step's options read their account from the same cookie, which no caller here has, and take no
+        // body (§8.2, D97).
+        new(Post,      "/api/auth/login/passkey/options",
+            Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized),
 
         // The Today list (§6.3), for every signed-in user, each of whom gets their own organisation's active
         // participants: its participants hold the caller's own organisation's seeded participant and not the other's
