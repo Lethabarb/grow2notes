@@ -8154,7 +8154,7 @@ changed, and the pull request names each.
 - [x] SPA setup (#215; v3): four choices on view E, Finish setup on view F for a password only and a password and a
       passkey, and the end-to-end tests.
 - [x] Records (#213; v4): D97 and the amended specs, UX, security review and ops pages.
-- [x] Backlog (v5; the feature pull request into main): A142 and A143, F00.07 and its two stories ticked as CI proves
+- [x] Backlog (#216; v5): A142 and A143, F00.07 and its two stories ticked as CI proves
       them, S00.04.03 and S00.04.05 amended, coverage.md, the T42 Notes, and first-use steps 208 to 218.
 
 ---
