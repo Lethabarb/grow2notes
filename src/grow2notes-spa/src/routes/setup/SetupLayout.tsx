@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, Outlet, useMatch } from 'react-router';
-import { SetupContext, type SetupAccount } from './setupContext.ts';
+import { SetupContext, type PasswordChoice, type SetupAccount } from './setupContext.ts';
 
 /**
  * The layout over `/setup`, `/setup/password` and `/setup/app`, whose state is setup's memory: in React only, never in
@@ -11,6 +11,7 @@ export function SetupLayout() {
   const [account, setAccount] = useState<SetupAccount>();
   const [password, setHeldPassword] = useState<string>();
   const [passwordRefused, setPasswordRefused] = useState(false);
+  const [passwordChoice, setPasswordChoice] = useState<PasswordChoice>('authenticatorApp');
   const [finished, setFinished] = useState(false);
   const atSetup = useMatch('/setup') !== null;
   const setPassword = useCallback((taken: string) => {
@@ -20,6 +21,10 @@ export function SetupLayout() {
   const refusePassword = useCallback(() => {
     setPasswordRefused(true);
   }, []);
+  // Stable, as view E's links hold it.
+  const choosePassword = useCallback((choice: PasswordChoice) => {
+    setPasswordChoice(choice);
+  }, []);
   const finish = useCallback(() => {
     setFinished(true);
   }, []);
@@ -28,13 +33,25 @@ export function SetupLayout() {
     setAccount(undefined);
     setHeldPassword(undefined);
     setPasswordRefused(false);
+    setPasswordChoice('authenticatorApp');
   }, []);
   const setup = useMemo(
-    () => ({ account, setAccount, password, setPassword, passwordRefused, refusePassword, finish, drop }),
-    [account, password, setPassword, passwordRefused, refusePassword, finish, drop],
+    () => ({
+      account,
+      setAccount,
+      password,
+      setPassword,
+      passwordRefused,
+      refusePassword,
+      passwordChoice,
+      choosePassword,
+      finish,
+      drop,
+    }),
+    [account, password, setPassword, passwordRefused, refusePassword, passwordChoice, choosePassword, finish, drop],
   );
 
-  // Back at `/setup`'s entry once view G has finished setup, which F's and G's entries always follow: it becomes
+  // Back at `/setup`'s entry once view F or G has finished setup, which F's and G's entries always follow: it becomes
   // Today's before any page here renders, view E's prompt among them, so that the tab keeps one entry for all of
   // setup, and Back from Today leaves the app (sign-in.md *Interactions* 12). Leaving the layout drops its memory.
   if (finished && atSetup) {
