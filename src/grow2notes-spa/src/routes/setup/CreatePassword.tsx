@@ -122,7 +122,9 @@ function PasswordForm({ account, onTimedOut }: PasswordFormProps) {
 
     return () => {
       mounted.current = false;
-      cancelPasskey();
+      if (withPasskey) {
+        cancelPasskey();
+      }
     };
   }, [withPasskey, prefetch]);
 

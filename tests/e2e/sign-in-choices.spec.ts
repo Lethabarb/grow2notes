@@ -186,7 +186,7 @@ test('a password and a passkey: Go back returns to A with the email kept and the
   await expect(main(page).getByRole('heading', { level: 2, name: 'There is a problem' })).toHaveCount(0);
 });
 
-test('views E and F for each password choice pass axe, and the passkey step does', async ({ page, invite }) => {
+test('views E and F for each password choice pass axe', async ({ page, invite }) => {
   test.slow();
   await page.goto(invite.setupLink);
   await expect(main(page).getByRole('heading', { level: 2, name: 'Choose how you’ll sign in' })).toBeVisible();
