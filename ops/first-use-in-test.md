@@ -25,8 +25,8 @@ here. Each step ends with what it confirms.
 - Have ready: a laptop with Chrome, Edge and NVDA, an iPhone with VoiceOver, an Android phone with Chrome and
   TalkBack (steps 210, 213 and 216), the testing mailbox open on both, and the Azure portal signed in with your own
   account. An authenticator app (such as Google Authenticator or Microsoft Authenticator) is needed only for the
-  password-and-authenticator-app path (D97), such as step 212. Let each browser keep the name and email address it already offers on forms of your own, as
-  steps 12, 13 and 18 check that Invite user offers neither.
+  password-and-authenticator-app path (D97), such as step 212. Let each browser keep the name and email address it
+  already offers on forms of your own, as steps 12, 13 and 18 check that Invite user offers neither.
 - In Chrome, open the developer tools on the Network panel, with **Preserve log** on, before each step that names a
   request.
 - Write down each step's time and result (passed, or what you saw) for the developer, who records them in the
@@ -1804,11 +1804,11 @@ Never write down an email address, a password or a setup link.
      ones. Choosing the password-only link goes to Create a password; its button reads Finish setup; pressing it lands
      on Today with no authenticator step and no code. Back from Today leaves the app. Sign out, then sign in with the
      email and password: Today, with no second screen. Sign out and try a wrong password: only the one message of A25
-     shows. The audit rows (step 15) hold `auth.setup_completed`, two `auth.signin_succeeded` and one
-     `auth.signin_failed` for the person, and no `auth.mfa_failed`. This step holds nothing open.
+     shows. The audit rows (step 15) hold `auth.setup_completed`, one `auth.signin_succeeded` (the password sign-in)
+     and one `auth.signin_failed` for the person, and no `auth.mfa_failed`. This step holds nothing open.
      (S00.07.01; D97.)
 209. Everyone may choose. Repeat the password-only choice of step 208 for a made-up manager and for a made-up Support
-     account (a manager grants it, as step 204 does). Look for: view E offers the same four choices to each, and each
+     account (a manager grants it, as step 166 does). Look for: view E offers the same four choices to each, and each
      finishes setup and signs in again with the password alone. This step holds nothing open. (S00.07.01; D97.)
 210. Set up with a password and a passkey, on a real iPhone in Safari and then on a real Android phone in Chrome, for
      a new made-up worker on each. Open the link on the phone and choose the password-and-passkey link. Look for:
