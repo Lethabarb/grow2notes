@@ -1,10 +1,11 @@
 # Sign-in form and account setup form
 
 > **Precedence.** Where a screen spec's "Conflicts resolved" table differs from this file, the screen spec wins.
+> Amended by D97 on 1 November 2026: setup offers four ways to sign in (a passkey; a password and an authenticator app; a password only; a password and a passkey), and a person with a password and a passkey meets a passkey step (sign-in.md view H) after the password. The code step below is for a password and an authenticator app only.
 > Editorial pass, 1 October 2026. No `/sign-in` route; sign-in renders at the requested URL. Show/Hide only on "Create a password" and no Copy setup key button (the owner declined both extras on 9 October 2026, D68); request failures go in the alert above the pressed button (sign-in.md).
 
 Component key: `sign-in-form`. Screens: design.md 4.1 (Sign-in and account setup), plus the "sign-in in place"
-after a session ends (design.md 4.0 Sessions, 5.6, 8.5). Rules it must keep: D23, D42, A22–A25, §6.2, §8.1–8.6, §9.6–9.9.
+after a session ends (design.md 4.0 Sessions, 5.6, 8.5). Rules it must keep: D23, D42, D97, A22–A25, §6.2, §8.1–8.6, §9.6–9.9.
 
 Evidence tags: **[Research]** measured with users · **[Standard]** WCAG 2.2, NIST, HTML/WebAuthn specs ·
 **[Convention]** established design systems and browser-vendor guidance · **[Opinion]** reasoned judgement, not tested.
@@ -21,7 +22,7 @@ The component is a small kit, not one form: **EmailInput**, **PasswordInput** (w
 | # | View | Where | What's on it | What differs |
 |---|---|---|---|---|
 | 1 | **Sign in** | `/sign-in` | "Sign in with a passkey" button, "or", email + password, Continue | Two sign-in methods on one page; `current-password` |
-| 2 | **Enter your code** | Same route, step 2 (component state, not a new URL) | One 6-digit code field, Sign in, Back | Reached only after a correct password; Identity's two-factor cookie lasts 5 minutes |
+| 2 | **Enter your code** | Same route, step 2 (component state, not a new URL) | One 6-digit code field, Sign in, Back | Reached only after a correct password of a person who chose a password and an authenticator app (D97); Identity's two-factor cookie lasts 5 minutes |
 | 3 | **Sign in again (in place)** | Any route, after a `401` | Views 1–2 plus a notice; the page behind stays mounted but hidden | Must not navigate, so unsaved note text survives in memory (5.6, 8.5) |
 | 4 | **Set up your account** | `/setup` (from `/setup#u=…&t=…`) | Name and email (fixed, shown as text), two method buttons | No inputs; passkey button runs the device prompt directly |
 | 5 | **Create a password** | `/setup/password` | One new-password field with Show/Hide, Continue | `new-password`, hidden username field, 12-character rule |
@@ -48,8 +49,8 @@ The component is a small kit, not one form: **EmailInput**, **PasswordInput** (w
 ### Autocomplete, password managers and paste
 
 - **[Standard]** Password managers and autofill **SHALL** be allowed; paste **SHOULD** be allowed; a "show password"
-  option **SHOULD** be offered until submit. Minimum 8 characters when the password is part of MFA (Grow2Notes asks
-  for 12); maximum of at least 64 **SHOULD** be allowed; no composition rules (**SHALL NOT**); a blocklist check is a
+  option **SHOULD** be offered until submit. Minimum 8 characters when the password is part of MFA and 15 when it is the only factor (Grow2Notes asks
+  for 12 for every method, D97; a password only is the owner's accepted choice); maximum of at least 64 **SHOULD** be allowed; no composition rules (**SHALL NOT**); a blocklist check is a
   **SHALL**. (NIST SP 800-63B-4 §3.1.1.2)
 - **[Standard]** WCAG 3.3.8 Accessible Authentication (AA): a password step passes only if a mechanism helps (paste,
   password manager). For a second-factor code, "it must be possible for a user to at least paste the code". A
@@ -171,6 +172,10 @@ Choose how you'll sign in                   ← h2 (proposed)
 Uses your face, fingerprint or PIN, like unlocking your phone. Nothing to remember.
 [ Use a password and authenticator app ]    ← secondary
 You'll make a password and use an app that shows a 6-digit code each time you sign in.
+[ Use a password only ]                     ← secondary (D97)
+You'll sign in with your email address and a password, and nothing else.
+[ Use a password and a passkey ]            ← secondary (D97)
+You'll create a password, then use your face, fingerprint or PIN after it each time you sign in.
 ```
 
 **View 5: Create a password**: Back · h1/label "Create a password" · hint "Use at least 12 characters." · field +
@@ -257,7 +262,7 @@ groups of 4 · label "Enter the 6-digit code from the app" + hint · code field 
 | Passkey unsupported (sign-in) | "Passkeys don't work in this browser. To use your passkey, open Grow2Notes in your phone's main browser, such as Safari or Chrome." | proposed |
 | Setup h1 | "Set up your account" | design |
 | Setup hints | "If these are wrong, ask a manager." · h2 "Choose how you'll sign in" | proposed |
-| Method buttons | "Use a passkey (recommended)" · "Use a password and authenticator app" | design |
+| Method buttons | "Use a passkey (recommended)" · "Use a password and authenticator app" · "Use a password only" · "Use a password and a passkey" | design; the last two D97 (P) |
 | Method hints | "Uses your face, fingerprint or PIN, like unlocking your phone. Nothing to remember." · "You'll make a password and use an app that shows a 6-digit code each time you sign in." | proposed |
 | Passkey not created | "Your passkey was not set up. Try again, or use a password and authenticator app." | proposed |
 | In-app browser | Heading: **"Open this link in your browser"** (design). Body: "Passkeys can't be set up here. Go back to the email and open the link in your phone's browser, such as Safari or Chrome. Or use a password and authenticator app." | design + proposed body |
