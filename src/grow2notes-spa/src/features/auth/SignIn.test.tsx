@@ -28,6 +28,7 @@ const ceremony = vi.mocked(startAuthentication);
 const mePath = '/api/auth/me';
 const antiforgeryPath = '/api/auth/antiforgery';
 const optionsPath = '/api/auth/passkey/options';
+const stepOptionsPath = '/api/auth/login/passkey/options';
 const passkeyPath = '/api/auth/passkey';
 const passwordPath = '/api/auth/login';
 const codePath = '/api/auth/login/totp';
@@ -55,6 +56,15 @@ const someoneElse: Me = {
 // The made-up worker's made-up sign-in details (A35).
 const workerEmail = 'alex.pham@example.org';
 const workerPassword = 'correct horse battery staple';
+
+// The options for the passkey step, which Identity makes for the account whose password was accepted.
+const stepOptionsAnswer: PublicKeyCredentialRequestOptionsJSON = {
+  challenge: 'c3RlcC1jaGFsbGVuZ2U',
+  timeout: 300_000,
+  rpId: 'localhost',
+  allowCredentials: [{ id: 'Y3JlZGVudGlhbA', type: 'public-key' }],
+  userVerification: 'required',
+};
 
 /** The options of the `n`th request for them, each with a challenge of its own, as Identity makes them. */
 function passkeyOptions(n: number): PublicKeyCredentialRequestOptionsJSON {
@@ -134,6 +144,8 @@ type Server = {
   passkey?: () => Promise<Response>;
   /** The answer to the `n`th request for passkey options, `passkeyOptions(n)` unless given. */
   options?: (n: number) => Promise<Response>;
+  /** The answer to each request for the passkey step's options, `stepOptions` unless given. */
+  stepOptions?: () => Promise<Response>;
   /** Each password step's answer, the `200 {"next":"totp"}` of a right password unless given. */
   password?: () => Promise<Response>;
   /** Each code step's answer, a `200 Me` unless given. */
@@ -148,6 +160,7 @@ function serve({
   me = () => problem(401),
   passkey = () => json(worker),
   options = (n) => json(passkeyOptions(n)),
+  stepOptions = () => json(stepOptionsAnswer),
   password = () => json({ next: 'totp' }),
   code = () => json(worker),
 }: Server = {}) {
@@ -161,6 +174,8 @@ function serve({
       case optionsPath:
         issued += 1;
         return options(issued);
+      case stepOptionsPath:
+        return stepOptions();
       case passkeyPath:
         return passkey();
       case passwordPath:
@@ -1879,5 +1894,274 @@ describe('the code step', () => {
     for (const typed of [workerEmail, workerPassword, '135 790', '135790', '246 801', '246801']) {
       expect(cached).not.toContain(typed);
     }
+  });
+});
+
+/** Renders view A, sends the made-up worker's password, and lets the passkey step show in its place. */
+async function renderPasskeyStep(server: Server = {}, strict = false) {
+  serve({ password: () => json({ next: 'passkey' }), ...server });
+  const rendered = await renderSignedOut('/', strict);
+  fillIn();
+  press(continueButton());
+  await wait(0);
+  return rendered;
+}
+
+/** The passkey step's Go back. */
+function goBackButton() {
+  return screen.getByRole<HTMLButtonElement>('button', { name: 'Go back' });
+}
+
+describe('a password only', () => {
+  it('signs the person in at once, with no second step and no further request', async () => {
+    serve({ password: () => json(worker) });
+    const { queryClient } = await renderSignedOut();
+    fillIn();
+
+    press(continueButton());
+    await wait(0);
+
+    expectTheWorkerSignedIn(queryClient);
+    expect(requestsTo(passwordPath)).toHaveLength(1);
+    expect(requestsTo(codePath)).toHaveLength(0);
+    expect(requestsTo(stepOptionsPath)).toHaveLength(0);
+    expect(requestsTo(passkeyPath)).toHaveLength(0);
+  });
+});
+
+describe('the passkey step', () => {
+  it('shows in view A\'s place, at the same address and with the same title, its button focused', async () => {
+    const { router } = await renderPasskeyStep();
+    const { location } = router.state;
+
+    const main = within(screen.getByRole('main'));
+    const heading = main.getByRole('heading', { level: 1 });
+    expect(heading).toHaveAccessibleName('Use your passkey');
+    expect(passkeyButton()).toHaveFocus();
+    expect(passkeyButton()).toHaveAccessibleDescription(
+      'To finish signing in, use your face, fingerprint or PIN, the same way you unlock your device.',
+    );
+    expectInOrder(
+      heading,
+      main.getByText(/To finish signing in/),
+      alertAbove(passkeyButton()),
+      passkeyButton(),
+      goBackButton(),
+      main.getByText(help),
+    );
+    // Nothing of A's is left.
+    expect(main.getAllByRole('heading')).toEqual([heading]);
+    expect(main.queryByRole('textbox', { name: 'Email address' })).not.toBeInTheDocument();
+    expect(main.queryByText('or')).not.toBeInTheDocument();
+    expect(summary()).toBeNull();
+    expect(alertAbove(passkeyButton())).toBeEmptyDOMElement();
+    expect(document.title).toBe('Grow2Notes – Sign in');
+    expect(router.state.location).toBe(location);
+    expect(requestsTo(stepOptionsPath)).toHaveLength(1);
+  });
+
+  it('asks for no anonymous passkey options while it shows', async () => {
+    await renderPasskeyStep();
+
+    await wait(290_000);
+
+    expect(requestsTo(optionsPath)).toHaveLength(1);
+    expect(requestsTo(stepOptionsPath)).toHaveLength(1);
+  });
+
+  it('is not the code step: it asks for no code', async () => {
+    await renderPasskeyStep();
+
+    expect(screen.queryByRole('textbox', { name: codeLabel })).not.toBeInTheDocument();
+    expect(requestsTo(codePath)).toHaveLength(0);
+  });
+
+  it('keeps the code step as it was for a password that answers the code', async () => {
+    serve();
+    await renderSignedOut();
+    fillIn();
+
+    press(continueButton());
+    await wait(0);
+
+    expect(codeField()).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Go back' })).not.toBeInTheDocument();
+    expect(requestsTo(stepOptionsPath)).toHaveLength(0);
+  });
+
+  it('opens the prompt with its options on the press, then signs in with the credential', async () => {
+    const { queryClient } = await renderPasskeyStep();
+
+    press(passkeyButton());
+
+    expect(ceremony).toHaveBeenCalledExactlyOnceWith({ optionsJSON: stepOptionsAnswer });
+    await wait(0);
+
+    const [init] = requestsTo(passkeyPath);
+    expect(JSON.parse(init?.body as string)).toEqual({ credentialJson: JSON.stringify(credential) });
+    expectTheWorkerSignedIn(queryClient);
+  });
+
+  describe.each([401, 429])('given a %i for the credential', (status) => {
+    it('shows view A again, with the email, the summary focused and new passkey options', async () => {
+      await renderPasskeyStep({ passkey: () => problem(status) });
+
+      press(passkeyButton());
+      await wait(0);
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+      expect(summary()).toHaveFocus();
+      expect(summaryItems()).toEqual([{ text: failedMessage }]);
+      expect(document.title).toBe('Error: Grow2Notes – Sign in');
+      expect(emailField()).toHaveValue(workerEmail);
+      expect(passwordField()).toHaveValue('');
+      expect(requestsTo(optionsPath)).toHaveLength(2);
+    });
+  });
+
+  it.each([401, 429])('shows view A again for a %i for its options, with the A25 message', async (status) => {
+    await renderPasskeyStep({ stepOptions: () => problem(status) });
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(summary()).toHaveFocus();
+    expect(summaryItems()).toEqual([{ text: failedMessage }]);
+    expect(emailField()).toHaveValue(workerEmail);
+    expect(passwordField()).toHaveValue('');
+    expect(requestsTo(optionsPath)).toHaveLength(2);
+  });
+
+  it('asks again on a press when the options are older than 4 minutes, and ends for the refusal', async () => {
+    const stepOptions = vi
+      .fn<() => Promise<Response>>()
+      .mockImplementationOnce(() => json(stepOptionsAnswer))
+      .mockImplementationOnce(() => problem(401));
+    await renderPasskeyStep({ stepOptions });
+    await wait(4 * 60_000);
+
+    press(passkeyButton());
+    await wait(0);
+
+    expect(stepOptions).toHaveBeenCalledTimes(2);
+    expect(ceremony).not.toHaveBeenCalled();
+    expect(summaryItems()).toEqual([{ text: failedMessage }]);
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('says and does nothing for a dismissed prompt, and the next press uses the options it holds', async () => {
+    await renderPasskeyStep();
+    ceremony.mockRejectedValueOnce(dismissal());
+
+    press(passkeyButton());
+    await wait(0);
+
+    expect(alertAbove(passkeyButton())).toBeEmptyDOMElement();
+    expect(summary()).toBeNull();
+    expect(passkeyButton()).not.toHaveAttribute('aria-disabled');
+    expect(passkeyButton()).toHaveFocus();
+    expect(requestsTo(passkeyPath)).toHaveLength(0);
+
+    press(passkeyButton());
+    await wait(0);
+
+    expect(ceremony).toHaveBeenCalledTimes(2);
+    expect(ceremony).toHaveBeenLastCalledWith({ optionsJSON: stepOptionsAnswer });
+    expect(requestsTo(stepOptionsPath)).toHaveLength(1);
+    expect(requestsTo(passkeyPath)).toHaveLength(1);
+  });
+
+  describe.each([
+    { failure: 'no connection', answer: noConnection, message: 'Not signed in: no connection. Try again.' },
+    { failure: 'a 503', answer: () => problem(503), message: 'Not signed in: something went wrong. Try again.' },
+  ])('given $failure for the credential', ({ answer, message }) => {
+    it('says so above the button, where focus stays, and the step stays', async () => {
+      await renderPasskeyStep({ passkey: answer });
+
+      press(passkeyButton());
+      await wait(0);
+
+      expect(alertAbove(passkeyButton())).toHaveTextContent(message);
+      expect(passkeyButton()).toHaveFocus();
+      expect(summary()).toBeNull();
+      expect(screen.getByRole('heading', { level: 1, name: 'Use your passkey' })).toBeInTheDocument();
+    });
+  });
+
+  describe('Go back', () => {
+    it('shows view A again with the email, no message, password focused and new passkey options', async () => {
+      await renderPasskeyStep();
+
+      press(goBackButton());
+      await wait(0);
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+      expect(summary()).toBeNull();
+      expect(document.title).toBe('Grow2Notes – Sign in');
+      expect(emailField()).toHaveValue(workerEmail);
+      expect(passwordField()).toHaveValue('');
+      expect(passwordField()).toHaveFocus();
+      expect(requestsTo(optionsPath)).toHaveLength(2);
+    });
+
+    it('works while the prompt is open, which it cancels', async () => {
+      const signals = promptUntilCancelled();
+      await renderPasskeyStep();
+      press(passkeyButton());
+      await wait(0);
+
+      press(goBackButton());
+      await wait(0);
+
+      expect(signals[0].aborted).toBe(true);
+      expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+      expect(summary()).toBeNull();
+      expect(passkeyButton()).not.toHaveAttribute('aria-disabled');
+    });
+
+    it('lets the person sign in with the password again', async () => {
+      const { queryClient } = await renderPasskeyStep();
+      press(goBackButton());
+      await wait(0);
+      serve({ password: () => json(worker) });
+
+      type(passwordField(), workerPassword);
+      press(continueButton());
+      await wait(0);
+
+      expectTheWorkerSignedIn(queryClient);
+    });
+  });
+
+  it('sends one request for the options under StrictMode', async () => {
+    await renderPasskeyStep({}, true);
+
+    expect(requestsTo(stepOptionsPath)).toHaveLength(1);
+    expect(passkeyButton()).toHaveFocus();
+  });
+
+  it('cancels a prompt still open when the view goes', async () => {
+    const signals = promptUntilCancelled();
+    const { unmount } = await renderPasskeyStep();
+    press(passkeyButton());
+    await wait(0);
+
+    unmount();
+
+    expect(signals[0].aborted).toBe(true);
+  });
+
+  it('shows the notice and Go back in a browser with no WebAuthn, and fetches nothing', async () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal('fetch', fetchMock);
+    serve({ password: () => json({ next: 'passkey' }) });
+    await renderSignedOut();
+    fillIn();
+    press(continueButton());
+    await wait(0);
+
+    const main = within(screen.getByRole('main'));
+    expect(main.getByText(notice)).toBeInTheDocument();
+    expect(main.queryByRole('button', { name: 'Sign in with a passkey' })).not.toBeInTheDocument();
+    expect(requestsTo(stepOptionsPath)).toHaveLength(0);
+    expect(goBackButton()).toBeInTheDocument();
   });
 });
