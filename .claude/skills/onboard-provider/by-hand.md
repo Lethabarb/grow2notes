@@ -85,7 +85,7 @@ a call, never by chat. Never paste the setup link into the chat, a file or a tra
 2. The skill reads the block under break-glass.md, admin bootstrap, Running it, and shows it exactly as written. Run
    it in test's console. Type made-up values only, and only at its prompts: an organisation name, a made-up first
    manager and a made-up address, as break-glass.md's When to run it says.
-3. The made-up first manager opens the link the console printed in a private window and finishes setup, with MFA.
+3. The made-up first manager opens the link the console printed in a private window and finishes setup, choosing how to sign in.
 
 ### In production
 
@@ -99,7 +99,7 @@ production: row-level security is deferred (D94), so the skill stops if asked.
 
 The first manager signs in, opens Users, and invites you with the role Support (IT operator). In test, use a second
 testing-mailbox plus-tag address that differs from the made-up manager's, because one email is one account (A27).
-Set up from the email, with MFA.
+Set up from the email, choosing how to sign in.
 
 ### C2. Register Claude Code as an approved assistant (by hand, at the operator console)
 

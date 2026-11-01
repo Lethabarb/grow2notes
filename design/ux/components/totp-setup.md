@@ -1,6 +1,7 @@
 # Authenticator app setup and one-time code entry
 
 > **Precedence.** Where a screen spec's "Conflicts resolved" table differs from this file, the screen spec wins.
+> Amended by D97 on 1 November 2026: the authenticator app is one of four ways to sign in, so this component serves only the people who chose a password and an authenticator app. A password only and a password and a passkey never see the setup block or the code step.
 > Editorial pass, 1 October 2026. No Copy setup key button (clipboard concern, sign-in.md; the owner declined it on 9 October 2026, D68); request failures go in the alert above Finish setup.
 
 Component key: `totp-setup`. Covers two pieces that share one input: the **authenticator app setup block**
@@ -17,11 +18,11 @@ Sources) and are facts about the product, not graded evidence.
 
 | # | Screen (design.md) | What the component does | What differs from the other uses |
 |---|---|---|---|
-| 1 | **Account setup**, "Use a password and authenticator app" path (4.1 step 4, 8.1 step 4) | Shows the pre-generated key as a QR code and as a typed **setup key**, then asks for one **6-digit code**. Sent with the password in one `POST /api/auth/setup/password {password, totpCode}`. | The person is already identified by the setup link and the 30-minute enrolment cookie, so errors can say exactly what is wrong. If the code is checked with `UserManager.VerifyTwoFactorTokenAsync` (as Identity's own template does), a wrong code does **not** count towards lockout. Rate limit: 30 a minute per IP (9.9). Primary action **Finish setup**. |
-| 2 | **Sign-in, code step** after the password (4.1 "Signing in", 8.2) | Code field only. `POST /api/auth/login/totp {code}` → `200 Me` or `401`. | Every failure shows the design's one generic message (A25). Each wrong code counts towards the 5-attempt lockout, shared with password failures (9.9). The pending two-factor session lasts **5 minutes** (Identity's default for the two-factor cookie). Rate limit: 10 a minute per account. Primary action **Sign in**. |
+| 1 | **Account setup**, "Use a password and authenticator app" path (one of four, D97) (4.1 step 4, 8.1 step 4) | Shows the pre-generated key as a QR code and as a typed **setup key**, then asks for one **6-digit code**. Sent with the password in one `POST /api/auth/setup/password {password, totpCode}`. | The person is already identified by the setup link and the 30-minute enrolment cookie, so errors can say exactly what is wrong. If the code is checked with `UserManager.VerifyTwoFactorTokenAsync` (as Identity's own template does), a wrong code does **not** count towards lockout. Rate limit: 30 a minute per IP (9.9). Primary action **Finish setup**. |
+| 2 | **Sign-in, code step** after the password (4.1 "Signing in", 8.2), for a person who chose a password and an authenticator app (D97) | Code field only. `POST /api/auth/login/totp {code}` → `200 Me` or `401`. | Every failure shows the design's one generic message (A25). Each wrong code counts towards the 5-attempt lockout, shared with password failures (9.9). The pending two-factor session lasts **5 minutes** (Identity's default for the two-factor cookie). Rate limit: 10 a minute per account. Primary action **Sign in**. |
 | 3 | **Sign-in shown in place** after the session ends (4.0 Sessions, 8.5) | Same as 2. | Rendered over the route the person was on, so the label is not the page's `<h1>`. On success it returns to the same route and retries the save; it does not go to Today. |
 
-**Not used for:** passkey setup or sign-in. There is no "change authenticator" screen, no recovery codes and no
+**Not used for:** passkey setup or sign-in, a password only, or a password and a passkey (their second step is a passkey, and the code step answers `401` to them). There is no "change authenticator" screen, no recovery codes and no
 "remember this device" (A22). A lost phone or forgotten password goes through a manager's **Reset sign-in** (4.11, 8.6).
 
 ---
@@ -260,7 +261,7 @@ negative contractions, and they use the design's terms "6-digit code", "setup ke
 
 | Where | Element | Copy | Source |
 |---|---|---|---|
-| Setup choice | Option | Use a password and authenticator app | design |
+| Setup choice | Option | Use a password and authenticator app | design (one of four choices, D97) |
 | Setup | Heading | Set up your authenticator app | proposed |
 | Setup | Intro | An authenticator app is a free app on your phone. It shows a new 6-digit code every 30 seconds. You enter the code after your password each time you sign in. | proposed |
 | Setup | Step 1 | Get an authenticator app on your phone if you do not have one, for example Google Authenticator or Microsoft Authenticator. Any authenticator app works. | proposed |

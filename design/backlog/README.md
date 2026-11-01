@@ -120,7 +120,7 @@ R2  Admin MCP server                                          release   D48–D5
 └─ E07  Admin MCP server                                      epic      mcp-server.md §1.4
    ├─ F07.01  Support role, sign-in and Connect an AI assistant   feature   slice 1
    │  ├─ S07.01.01  Add the Support role                     story · 3
-   │  └─ S07.01.02  Connect an AI assistant with a Grow2Notes account and MFA   story · 5
+   │  └─ S07.01.02  Connect an AI assistant with a Grow2Notes account, by any sign-in method   story · 5
    ├─ F07.02  MCP endpoint, look-ups and audit                feature   slice 2
    ├─ F07.03  Setup tools                                     feature   slice 3
    ├─ F07.04  User tools with preview and confirm             feature   slice 4
@@ -401,7 +401,7 @@ so that I can add staff without opening Grow2Notes.
 
 ## Acceptance criteria
 Already specified elsewhere (linked, not copied):
-- design.md §8.1: the invite and MFA enrolment work as in the app.
+- design.md §8.1: the invite and the choice of how to sign in work as in the app (D97).
 - mcp-server.md §5.3: preview, then confirm, with the Invite preview wording (P).
 
 Specific to this story:
