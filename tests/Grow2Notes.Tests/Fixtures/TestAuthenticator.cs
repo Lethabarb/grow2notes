@@ -107,6 +107,9 @@ internal sealed class TestAuthenticator : IDisposable
         return authenticator;
     }
 
+    /// <summary>The passkey's credential ID, as base64url, as the passkey request options list it.</summary>
+    public string CredentialId => Base64Url.EncodeToString(credentialId);
+
     /// <summary>
     /// An authenticator that gives this one's passkey, by its ID and user handle, with its next signature count, but
     /// signs with a key of its own, as one would that had copied the passkey's ID but not its private key.

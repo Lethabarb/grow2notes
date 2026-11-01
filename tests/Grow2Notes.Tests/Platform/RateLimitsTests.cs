@@ -27,6 +27,8 @@ public sealed class RateLimitsTests(Grow2NotesFactory factory, SqlServerFixture 
 
     private const string SetupKeyPath = "/api/auth/setup/authenticator";
 
+    private const string PasskeyStepOptionsPath = "/api/auth/login/passkey/options";
+
     private const string NoSuchDay = "2026-01-01";
 
     // A bad format, which the daily export refuses with a 400 before it reads a note or writes an event.
@@ -49,11 +51,16 @@ public sealed class RateLimitsTests(Grow2NotesFactory factory, SqlServerFixture 
 
         for (var i = 0; i < 30; i++)
         {
-            using var response = await SendAsync(client, "203.0.113.7", token, (i % 4) switch
+            using var response = await SendAsync(client, "203.0.113.7", token, (i % 7) switch
             {
                 0 => Post("/api/auth/login", new { email = $"{Guid.NewGuid():N}@example.org", password = "made-up" }),
                 1 => Post(PasskeyOptionsPath),
                 2 => Post(SetupStartPath, new { userId = Guid.NewGuid(), token = "made-up" }),
+                3 => Post(PasskeyStepOptionsPath),
+                4 => Post("/api/auth/setup/password-only", new { password = "made-up password" }),
+                5 => Post(
+                    "/api/auth/setup/password-and-passkey",
+                    new { password = "made-up password", credentialJson = "{}" }),
                 _ => new(HttpMethod.Get, SetupKeyPath),
             });
             Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
@@ -160,6 +167,29 @@ public sealed class RateLimitsTests(Grow2NotesFactory factory, SqlServerFixture 
         Assert.Equal(HttpStatusCode.OK, otherPasswordStep.StatusCode);
         using var otherCode = await other.SendCodeAsync("abcdef");
         Assert.Equal(HttpStatusCode.Unauthorized, otherCode.StatusCode);
+    }
+
+    // Both second steps of a password sign-in use the account's one permit: the code step's refusals of a person with
+    // a passkey, each of which took a permit, leave none for the passkey step's options (D97).
+    [Fact]
+    public async Task The_passkey_step_s_options_share_the_code_step_s_10_a_minute_for_each_pending_user()
+    {
+        await using var host = Limited();
+        var user = await host.AddPasswordUserAsync(sqlServer.Seeded.A);
+        using var authenticator = await TestAuthenticator.RegisterAsync(host.Services, user.Id);
+        using var client = host.CreateHttpsClient();
+        client.DefaultRequestHeaders.Add(ClientAddressHeader.Name, "198.51.100.4");
+        using var passwordStep = await client.SendPasswordAsync(user.Email, PasswordSignIn.Password);
+        Assert.Equal(HttpStatusCode.OK, passwordStep.StatusCode);
+
+        for (var i = 0; i < 10; i++)
+        {
+            using var code = await client.SendCodeAsync("123456");
+            Assert.Equal(HttpStatusCode.Unauthorized, code.StatusCode);
+        }
+
+        using var options = await client.PostWithTokenAsync(PasskeyStepOptionsPath, await client.FetchTokenAsync());
+        await AssertRefusedAsync(options);
     }
 
     [Fact]

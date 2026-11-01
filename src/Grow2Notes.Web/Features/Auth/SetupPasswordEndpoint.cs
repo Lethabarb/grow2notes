@@ -18,9 +18,10 @@ namespace Grow2Notes.Web.Features.Auth;
 /// one get the same <c>422 validation.failed</c> for <c>totpCode</c> (D70) and change nothing. Then Identity's password
 /// validators check the password, and one that they refuse gets <c>422 validation.failed</c> for <c>password</c> and
 /// changes nothing. Both checks come before completion's transaction, as they only read. In the transaction
-/// (<see cref="SetupCompletion"/>), the password is added and two-factor sign-in turned on, so no password ever signs
-/// anyone in alone (§8.1's invariant); a refusal there, such as the concurrency failure of a completion that another
-/// device committed first, throws, as the passkey path's does. No recovery codes are made (A22).
+/// (<see cref="SetupCompletion"/>), the password is added and two-factor sign-in turned on, so this person never signs
+/// in with the password alone (§8.1's invariant, D97); a refusal there, such as the concurrency failure of a
+/// completion that another device committed first, throws, as the passkey path's does. No recovery codes are made
+/// (A22).
 /// </remarks>
 internal static class SetupPasswordEndpoint
 {
@@ -51,20 +52,9 @@ internal static class SetupPasswordEndpoint
             return ValidationProblems.Field(nameof(SetupPasswordRequest.TotpCode), "The code did not work.");
         }
 
-        // UserManager's own check, which AddPasswordAsync makes again in the transaction, is protected, so its
-        // validators run here as it runs them. Only their refusal is the password's: AddPasswordAsync's others, such as
-        // another completion committed since the transaction loaded the user, are no reason to ask for a new password.
-        List<IdentityResult> checks = [];
-        foreach (var validator in users.PasswordValidators)
+        if (await PasswordRefusalAsync(users, invited, request.Password) is { } refusal)
         {
-            checks.Add(await validator.ValidateAsync(users, invited, request.Password));
-        }
-
-        if (!checks.TrueForAll(check => check.Succeeded))
-        {
-            return ValidationProblems.Field(
-                nameof(SetupPasswordRequest.Password),
-                string.Join(" ", checks.SelectMany(check => check.Errors).Select(error => error.Description)));
+            return refusal;
         }
 
         var me = await completion.CompleteAsync(
@@ -76,5 +66,28 @@ internal static class SetupPasswordEndpoint
             },
             cancellationToken);
         return me is null ? TypedResults.Unauthorized() : TypedResults.Ok(me);
+    }
+
+    /// <summary>
+    /// The <c>422 validation.failed</c> for <c>password</c> that Identity's password validators give a password they
+    /// refuse, or null where they accept it; it changes nothing. Every setup path that takes a password uses it.
+    /// </summary>
+    internal static async Task<ProblemHttpResult?> PasswordRefusalAsync(
+        UserManager<ApplicationUser> users, ApplicationUser invited, string password)
+    {
+        // UserManager's own check, which AddPasswordAsync makes again in the transaction, is protected, so its
+        // validators run here as it runs them. Only their refusal is the password's: AddPasswordAsync's others, such as
+        // another completion committed since the transaction loaded the user, are no reason to ask for a new password.
+        List<IdentityResult> checks = [];
+        foreach (var validator in users.PasswordValidators)
+        {
+            checks.Add(await validator.ValidateAsync(users, invited, password));
+        }
+
+        return checks.TrueForAll(check => check.Succeeded)
+            ? null
+            : ValidationProblems.Field(
+                nameof(SetupPasswordRequest.Password),
+                string.Join(" ", checks.SelectMany(check => check.Errors).Select(error => error.Description)));
     }
 }
