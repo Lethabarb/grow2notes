@@ -186,8 +186,9 @@ Proposed text is marked. Every busy label is proposed.
 | 4.1 | Password step | "Continue" (proposed) | Secondary | "Checking…" | — |
 | 4.1 | Code step | "Sign in" | Primary | "Signing in…" | — |
 | 4.1 | Choose a method (setup) | "Use a passkey (recommended)" / "Use a password and authenticator app" / "Use a password only" / "Use a password and a passkey" | Primary / Secondary / Secondary / Secondary | "Waiting for passkey…" / — / — / — | — |
-| 4.1 | After the password is set (setup) | "Continue" (proposed) | Primary | — | — |
+| 4.1 | After the password is set (setup) | "Continue" for a password and an authenticator app; "Finish setup" for a password only and for a password and a passkey (D97) | Primary | "Finishing setup…" for "Finish setup" | — |
 | 4.1 | Finish (password path) | "Finish setup" | Primary | "Finishing setup…" | — |
+| 4.1 | Passkey step (sign-in, password and a passkey) | "Sign in with a passkey" / "Go back" | Primary / Secondary | "Signing in…" / — | — |
 | 4.3 | Submit | "Submit note" | Primary | — (opens a dialog, no request) | Heading "Submit today's note for" + name + date + "Flagged for manager: No"/"Yes" |
 | 4.3 | Confirm submit | "Submit note for Jane Citizen" / "Go back" | Primary / Secondary | "Submitting…" | — |
 | 4.3 | Draft menu trigger | "More actions" (proposed) | Secondary | — | — |

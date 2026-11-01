@@ -32,7 +32,7 @@ Evidence grades: **[Research]** studies, usability or assistive-technology testi
 |---|---|---|---|
 | **4.3 Note form** (submit and Save changes) | Guided notes, Flag for manager + Reason | Guided notes empty; flag ticked with no reason; text over its length limit (Guided notes 20,000, Reason 200, A6) | Design requires "an error next to the field, plus a summary at the top when Submit is tapped". Checks run **before** the submit confirmation dialog opens. Autosave keeps running, so a length error blocks saving as well as submitting. Submit is disabled while the latest change is unsaved (§3.4). |
 | **4.1 Sign-in** | Email + password, then the 6-digit code | Empty fields; wrong details, locked or deactivated account | Server failures always show **one generic message** that never says which part was wrong (A25). The code step is a one-field form. |
-| **4.1 Account setup** (password path) | Password + 6-digit code, sent together | Empty fields; password under 12 characters; wrong code; enrolment cookie expired | The person is already identified by the setup link, so a wrong code can be named specifically. The passkey path has no fields. |
+| **4.1 Account setup** (password and authenticator app) | Password + 6-digit code, sent together | Empty fields; password under 12 characters; wrong code; enrolment cookie expired | The person is already identified by the setup link, so a wrong code can be named specifically. The passkey path has no fields. A password only and a password and a passkey (D97) have the password field alone, with the password rules below. |
 | **4.8 Participant detail** | Details (given name, family name, date of birth); Add goal / Edit goal; Write past-day note (a date) | Empty, too long, impossible or future date of birth; past-day date not in the past | Several independent forms on one page. Details has three fields. Goal and past-day forms have one field each. |
 | **4.9 Common items** | Add item / Edit item (text, plus the Group radios); New group / Group name (rename) | Empty; over 200 characters | One-field pattern only. The item Edit form's Group radios can't be in error (one is always selected), so only its text is validated. |
 | **4.11 Users** | Invite user; Edit user (name, email, role) | Empty, too long, malformed email; email already used (`409 user.email_in_use`); last active manager (`409 user.last_manager`); stale edit (`412`) | Most of the server-only rules in the app live here. |
@@ -203,7 +203,7 @@ Unticking Flag for manager removes the Reason field and its error together.
 
 Empty-field messages reveal nothing about the account, so they are compatible with A25. [Opinion]
 
-**Account setup, password path (4.1)**
+**Account setup, password and authenticator app (4.1)** (a password only and a password and a passkey use the Password rows alone)
 
 | Field | Rule | Message |
 |---|---|---|

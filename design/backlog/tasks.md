@@ -6333,7 +6333,7 @@ stories: [S06.05.02]
 ### Outcome
 
 Once the security review has no high or critical finding open and production has passed its check, the operator runs
-`admin bootstrap` with the provider's name, and the first manager sets up with MFA. The provider then has about three
+`admin bootstrap` with the provider's name, and the first manager sets up, choosing how to sign in (D97). The provider then has about three
 weeks in production to invite staff and enter its configuration before cut-over.
 
 ### Absorbs
@@ -6417,7 +6417,7 @@ date, on a build that passed CI and was deployed to test.
 ### Keeps
 
 - Cut-over waits until every line of the design.md §14 go-live checklist has an owner and evidence: privacy policy,
-  collection notice, breach plan naming the operator, signed hosting agreement, all staff set up with MFA and at least
+  collection notice, breach plan naming the operator, signed hosting agreement, all staff set up how they sign in and at least
   two active managers, onboarding, configuration checked by a second manager, the restore test, and Word notes gathered,
   removed from laptops and their location recorded.
 
@@ -6681,7 +6681,7 @@ stories: [S07.01.01, S07.01.02, S07.01.06, S07.01.07, S07.01.08]
 
 ### Outcome
 
-A manager invites a Support (IT operator) account, which signs in with MFA and sees only the connect page. A manager or
+A manager invites a Support (IT operator) account, which signs in by the method they chose (D97) and sees only the connect page. A manager or
 Support person connects an approved assistant on the Connect screen and stays connected within the app's limits (30
 minutes unused, 12 hours at most). Workers are refused, and a refresh after deactivation, reset or a change to worker is
 refused.

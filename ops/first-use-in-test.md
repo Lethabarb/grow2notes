@@ -1161,8 +1161,8 @@ Record the results in T21's Notes (S05.01.04).
      for the request answering `429` with `Retry-After: 60`. While that is showing, open the same made-up link on the
      phone on mobile data and look for "This link has expired", not "Too many tries". A minute later the laptop shows
      "This link has expired" again. People on one network share one count of 30 a minute, by design, so a shared office
-     is the case to watch: about 3 requests for each password sign-in means about 10 sign-ins a minute from one office
-     address (design.md A96). Write down no link. (S06.01.05; design.md §9.9, A95, A96.)
+     is the case to watch: about 3 requests for each password sign-in (4 for a password and a passkey) means about 7 to
+     10 sign-ins a minute from one office address (design.md A96). Write down no link. (S06.01.05; design.md §9.9, A95, A96.)
 
 Record the results in T25's Notes (S06.01.01, S06.01.02, S06.01.03 and S06.01.05).
 
