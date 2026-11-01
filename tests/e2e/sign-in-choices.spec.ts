@@ -221,7 +221,8 @@ test('a password only can be set up with the keyboard alone', async ({ page, inv
   await page.keyboard.press('Enter');
   await expect(createPasswordField(page)).toBeVisible();
 
-  expect(await tabTo(page, createPasswordField(page))).toEqual(['Set up your account']);
+  // The field's label is view F's h1, which has focus, and the back link comes before it in the page.
+  expect(await tabTo(page, createPasswordField(page))).toEqual([]);
   await page.keyboard.type('quietharbour');
   const finished = page.waitForResponse(isTo('/api/auth/setup/password-only'));
   // Enter in the field presses Finish setup, F's only action.

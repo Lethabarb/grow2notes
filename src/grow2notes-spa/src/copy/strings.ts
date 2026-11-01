@@ -260,7 +260,8 @@ export const strings = {
     passwordAndPasskeyHint:
       'You’ll create a password, then use your face, fingerprint or PIN after it each time you sign in.',
     /** Above Finish setup on view F for a password and a passkey. */
-    passkeyNext: 'When you select Finish setup, this device asks for your face, fingerprint or PIN to make your passkey.',
+    passkeyNext:
+      'When you select Finish setup, this device asks for your face, fingerprint or PIN to make your passkey.',
     /** Above the passkey button, when the browser made no passkey or the server refused the one it made. */
     passkeyNotSetUp:
       'Your passkey was not set up. Try again, or open the link from your email in your phone’s browser.',
