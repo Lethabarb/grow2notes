@@ -6,7 +6,7 @@ import {
 } from '@simplewebauthn/browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { api } from '../../api/api.ts';
+import { api, signInTimeoutMs } from '../../api/api.ts';
 import { setMe, type Me } from '../../api/me.ts';
 import { untilSessionSurelyEnded } from '../../api/session.ts';
 import { Button } from '../../components/Button.tsx';
@@ -213,6 +213,7 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
       const me = await api<Me>('/api/auth/passkey', {
         method: 'POST',
         body: { credentialJson: JSON.stringify(credential) },
+        timeoutMs: signInTimeoutMs,
       });
       await setMe(queryClient, me);
     } catch (error) {
@@ -275,6 +276,7 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
       answer = await api<PasswordStepAnswer>('/api/auth/login', {
         method: 'POST',
         body: { email: sentEmail, password },
+        timeoutMs: signInTimeoutMs,
       });
     } catch (error) {
       if (!mounted.current) {
