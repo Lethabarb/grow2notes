@@ -49,8 +49,9 @@ The component is a small kit, not one form: **EmailInput**, **PasswordInput** (w
 ### Autocomplete, password managers and paste
 
 - **[Standard]** Password managers and autofill **SHALL** be allowed; paste **SHOULD** be allowed; a "show password"
-  option **SHOULD** be offered until submit. Minimum 8 characters when the password is part of MFA and 15 when it is the only factor (Grow2Notes asks
-  for 12 for every method, D97; a password only is the owner's accepted choice); maximum of at least 64 **SHOULD** be allowed; no composition rules (**SHALL NOT**); a blocklist check is a
+  option **SHOULD** be offered until submit. Minimum 8 characters when the password is part of MFA and 15 when it is
+  the only factor (Grow2Notes asks for 8 for every method, D98; a password only is the owner's accepted choice, D97);
+  maximum of at least 64 **SHOULD** be allowed; no composition rules (**SHALL NOT**); a blocklist check is a
   **SHALL**. (NIST SP 800-63B-4 §3.1.1.2)
 - **[Standard]** WCAG 3.3.8 Accessible Authentication (AA): a password step passes only if a mechanism helps (paste,
   password manager). For a second-factor code, "it must be possible for a user to at least paste the code". A
@@ -359,7 +360,7 @@ survives `forced-colors: active`.
 - **Setup key:** render groups of 4 as `<span>`s spaced by CSS (no space characters), with `user-select: all`, so a copy
   gives the bare key. In a dark theme, put the QR code on a white panel with a quiet margin.
 - **Fields:** email `type="email" autoComplete="username" spellCheck={false} autoCapitalize="none" autoCorrect="off"`,
-  trimmed before sending. Passwords: never trimmed, no `maxLength`. New password `minLength={12}`, which guides
+  trimmed before sending. Passwords: never trimmed, no `maxLength`. New password `minLength={8}`, which guides
   password generators; `noValidate` stops it from blocking. Code: `type="text" inputMode="numeric"
   autoComplete="one-time-code"`, no `maxLength` (a pasted "123 456" is 7 characters).
 - **Hidden username** on view 5: `<input type="email" name="username" autoComplete="username" value={email} readOnly
