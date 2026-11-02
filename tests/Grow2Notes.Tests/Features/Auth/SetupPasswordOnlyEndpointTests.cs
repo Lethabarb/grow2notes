@@ -232,7 +232,7 @@ public sealed class SetupPasswordOnlyEndpointTests : IClassFixture<Grow2NotesFac
     public async Task No_log_entry_holds_the_password()
     {
         var link = await InviteAsync();
-        const string refused = "too short";
+        const string refused = "2-short";
         using var client = app.CreateHttpsClient();
         var (token, _) = await client.StartSetupAsync(link);
         using (var refusal = await CompleteAsync(client, token, refused))
