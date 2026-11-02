@@ -67,7 +67,7 @@ const credential: SimpleWebAuthn.RegistrationResponseJSON = {
   clientExtensionResults: {},
 };
 
-type Answer = () => Promise<Response>;
+type Answer = (init?: RequestInit) => Promise<Response>;
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -116,6 +116,16 @@ function noConnection(): Promise<Response> {
 /** A request that no answer ever comes to. */
 function noAnswer(): Promise<Response> {
   return new Promise(() => undefined);
+}
+
+/** Like `fetch` to a server that has not answered yet: it rejects only when its signal aborts. */
+function noAnswerUntilAborted(init?: RequestInit): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    const signal = init?.signal;
+    signal?.addEventListener('abort', () => {
+      reject(signal.reason as Error);
+    });
+  });
 }
 
 /** A WebAuthn error as the browser raises it, which the page never names to the person. */
@@ -291,7 +301,7 @@ beforeEach(() => {
   webAuthn.supported = true;
   // A prompt still open, unless a test answers it.
   webAuthn.startRegistration.mockReturnValue(new Promise(() => undefined));
-  fetchMock.mockImplementation((path) => {
+  fetchMock.mockImplementation((path, init) => {
     if (path === antiforgeryPath) {
       return Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'made-up' } }));
     }
@@ -318,7 +328,7 @@ beforeEach(() => {
 
     const answer = answers[path as string]?.shift();
     if (answer !== undefined) {
-      return answer();
+      return answer(init);
     }
 
     // New options are served whenever the test gives no other answer for them.
@@ -736,6 +746,24 @@ describe('CreatePassword (view F)', () => {
       expect(screen.getByTestId('setup-choice')).toHaveTextContent('authenticatorApp');
     });
 
+    // One that the server completes after the SPA has stopped waiting has used the link, so it waits as long as
+    // sign-in (D99).
+    it('waits 3 minutes, busy, before it says there is no connection', async () => {
+      serve(passwordOnlyPath, noAnswerUntilAborted);
+      await openViewF(passwordOnlyLink);
+
+      const button = finishWith(longPassword);
+      await wait(179_999);
+
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(alert()).toBeEmptyDOMElement();
+
+      await wait(1);
+
+      expect(alert()).toHaveTextContent('Not set up: no connection. Try again.');
+      expect(button).not.toHaveAttribute('aria-disabled');
+    });
+
     it('sends nothing more for a second submit while the first is on its way', async () => {
       serve(passwordOnlyPath, noAnswer);
       await openViewF(passwordOnlyLink);
@@ -898,6 +926,25 @@ describe('CreatePassword (view F)', () => {
 
       expect(alert().textContent).toBe(sentence);
       expect(field()).toHaveValue(longPassword);
+    });
+
+    // One that the server completes after the SPA has stopped waiting has used the link, so it waits as long as
+    // sign-in (D99).
+    it('waits 3 minutes for the password and the passkey, busy, before it says there is no connection', async () => {
+      webAuthn.startRegistration.mockResolvedValueOnce(credential);
+      serve(passwordAndPasskeyPath, noAnswerUntilAborted);
+      await openViewF(passwordAndPasskeyLink);
+
+      const button = finishWith(longPassword);
+      await wait(179_999);
+
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(alert()).toBeEmptyDOMElement();
+
+      await wait(1);
+
+      expect(alert()).toHaveTextContent('Not set up: no connection. Try again.');
+      expect(button).not.toHaveAttribute('aria-disabled');
     });
 
     it('shows the timed-out page for a 401 from the creation options', async () => {

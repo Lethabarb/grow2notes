@@ -80,6 +80,16 @@ function noConnection(): Promise<Response> {
   return Promise.reject(new TypeError('Failed to fetch'));
 }
 
+/** Like `fetch` to a server that has not answered yet: it rejects only when its signal aborts. */
+function noAnswerUntilAborted(init?: RequestInit): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    const signal = init?.signal;
+    signal?.addEventListener('abort', () => {
+      reject(signal.reason as Error);
+    });
+  });
+}
+
 /** The error that SimpleWebAuthn gives for a prompt that the person dismissed, or that found no passkey. */
 function dismissal(): WebAuthnError {
   return new WebAuthnError({
@@ -91,21 +101,21 @@ function dismissal(): WebAuthnError {
 
 type Server = {
   /** Each request for the step's options, `200` with `options` unless given. */
-  options?: () => Promise<Response>;
+  options?: (init?: RequestInit) => Promise<Response>;
   /** Each passkey sign-in's answer, a `200 Me` unless given. */
-  passkey?: () => Promise<Response>;
+  passkey?: (init?: RequestInit) => Promise<Response>;
 };
 
 /** Stubs `fetch` as the server: the antiforgery endpoint gives a token, and the step's two calls answer as given. */
 function serve({ options: optionsAnswer = () => json(options), passkey = () => json(worker) }: Server = {}) {
-  fetchMock.mockImplementation((path) => {
+  fetchMock.mockImplementation((path, init) => {
     switch (path) {
       case antiforgeryPath:
         return Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } }));
       case optionsPath:
-        return optionsAnswer();
+        return optionsAnswer(init);
       case passkeyPath:
-        return passkey();
+        return passkey(init);
       default:
         throw new Error('The test gave no answer for this request.');
     }
@@ -324,6 +334,38 @@ describe('the passkey step', () => {
       expect(ceremony).not.toHaveBeenCalled();
       expect(onRefused).not.toHaveBeenCalled();
     });
+  });
+
+  // A call that the server completes after the SPA has stopped waiting has used the password step, so both wait as
+  // long as sign-in (D99).
+  it('waits 3 minutes for the credential, busy, before it says there is no connection', async () => {
+    await renderStep({ passkey: noAnswerUntilAborted });
+
+    const button = signInButton();
+    press(button);
+    await wait(179_999);
+
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(alert()).toBeEmptyDOMElement();
+
+    await wait(1);
+
+    expect(alert()).toHaveTextContent('Not signed in: no connection. Try again.');
+    expect(button).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('waits 3 minutes for its options before a press that awaits them says there is no connection', async () => {
+    await renderStep({ options: noAnswerUntilAborted });
+
+    press(signInButton());
+    await wait(179_999);
+
+    expect(alert()).toBeEmptyDOMElement();
+    expect(ceremony).not.toHaveBeenCalled();
+
+    await wait(1);
+
+    expect(alert()).toHaveTextContent('Not signed in: no connection. Try again.');
   });
 
   describe('Go back', () => {
