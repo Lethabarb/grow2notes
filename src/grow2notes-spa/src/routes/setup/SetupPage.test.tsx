@@ -277,9 +277,9 @@ describe('SetupPage', () => {
         sentence: 'Your setup link was not checked: no connection. Try again.',
       },
       {
-        failure: 'no answer in 10 s',
+        failure: 'no answer in 3 minutes',
         answer: noAnswer,
-        failsAfter: 10_000,
+        failsAfter: 180_000,
         sentence: 'Your setup link was not checked: no connection. Try again.',
       },
       {
@@ -310,6 +310,21 @@ describe('SetupPage', () => {
       expect(line().compareDocumentPosition(tryAgain)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(document.title).toBe(`Error: ${title}`);
       expectNothingStored();
+    });
+
+    // The first check after test's free database has paused waits while it resumes (D96).
+    it('keeps checking for 3 minutes with no answer, and says so only then', async () => {
+      answers.push(noAnswer);
+      open(setupLink);
+
+      await wait(179_999);
+
+      expect(line()).toHaveTextContent('Checking your link…');
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+
+      await wait(1);
+
+      expect(line().textContent).toBe('Your setup link was not checked: no connection. Try again.');
     });
 
     it('sends the link in memory again on Try again, busy "Checking…", and shows view E when it checks', async () => {

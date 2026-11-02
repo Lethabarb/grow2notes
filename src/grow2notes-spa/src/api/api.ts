@@ -63,6 +63,15 @@ export type ApiOptions = {
 // The same 10 seconds as autosave and the session ping (empty-loading-error.md *Timing*).
 const defaultTimeoutMs = 10_000;
 
+/**
+ * 3 minutes in place of the default 10 seconds, for the anonymous calls that are the first to read the database:
+ * `POST /api/auth/login`, `/api/auth/passkey` and `/api/auth/setup/start` (D96). Test's free database pauses when idle,
+ * and the first call after a pause waits while it resumes: each connection attempt runs to SqlClient's 15 s timeout,
+ * and `EnableRetryOnFailure` makes 7 of them, with waits of up to 30 s between, about 2¾ minutes in all. This outlasts
+ * that, so the call gets the server's answer, and stays under the 230 s at which App Service's front end ends a request.
+ */
+export const signInTimeoutMs = 180_000;
+
 // The antiforgery endpoint, and the header in which its token comes and goes back with each change (design.md §9.8
 // item 2).
 const antiforgeryPath = '/api/auth/antiforgery';
