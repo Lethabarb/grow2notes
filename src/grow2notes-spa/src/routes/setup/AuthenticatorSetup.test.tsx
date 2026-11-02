@@ -747,7 +747,7 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(field).toHaveFocus();
     expect(field).toHaveAttribute('aria-invalid', 'true');
     expect(field).toHaveAccessibleDescription(
-      'Use at least 12 characters. Error: Password must be 12 characters or more',
+      'Use at least 8 characters. Error: Password must be 8 characters or more',
     );
     expect(document.title).toBe(`Error: ${title}`);
 

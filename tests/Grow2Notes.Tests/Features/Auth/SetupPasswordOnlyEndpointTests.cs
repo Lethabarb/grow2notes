@@ -120,11 +120,11 @@ public sealed class SetupPasswordOnlyEndpointTests : IClassFixture<Grow2NotesFac
         await AssertNothingChangedAsync(link, stamp);
     }
 
-    // Twelve characters is the minimum for every method; twelve spaces is a password of only whitespace, which the
+    // Eight characters is the minimum for every method; eight spaces is a password of only whitespace, which the
     // built-in validation refuses as [Required] before Identity would; and a body without the password is refused too.
     [Theory]
-    [InlineData("elevenchars")]
-    [InlineData("            ")]
+    [InlineData("sevench")]
+    [InlineData("        ")]
     [InlineData(null)]
     public async Task A_short_whitespace_or_missing_password_gets_422_for_the_password_and_changes_nothing(
         string? password)
@@ -232,7 +232,7 @@ public sealed class SetupPasswordOnlyEndpointTests : IClassFixture<Grow2NotesFac
     public async Task No_log_entry_holds_the_password()
     {
         var link = await InviteAsync();
-        const string refused = "too short";
+        const string refused = "2-short";
         using var client = app.CreateHttpsClient();
         var (token, _) = await client.StartSetupAsync(link);
         using (var refusal = await CompleteAsync(client, token, refused))

@@ -100,7 +100,7 @@ builder.Services.AddDataProtection()
 // invisible character in it would be another address to Identity and to the index, and so a second account for the
 // same mailbox.
 //
-// A password is at least 12 characters, with no composition rules (A22, §8.4), so Identity's defaults, which want a
+// A password is at least 8 characters, with no composition rules (A22, §8.4), so Identity's defaults, which want a
 // digit, a capital, a lowercase letter and a symbol, are turned off; its default of one unique character stays.
 //
 // A25's lockout: 5 failed attempts lock sign-in for 15 minutes, where Identity's default is 5 minutes. Identity counts

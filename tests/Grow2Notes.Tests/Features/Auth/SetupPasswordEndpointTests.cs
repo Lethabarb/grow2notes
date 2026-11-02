@@ -55,14 +55,14 @@ public sealed class SetupPasswordEndpointTests : IClassFixture<Grow2NotesFactory
 
     // Identity's composition rules count only ASCII letters and digits as letters and digits, so an accented letter is
     // a symbol to them. So with the password above, which has no digit or capital, these pin the other two rules off:
-    // twelve ASCII lowercase letters, which the symbol rule would refuse, and twelve accented ones, "éèêëàâîïôûùü",
+    // eight ASCII lowercase letters, which the symbol rule would refuse, and eight accented ones, "éèêëàâîï",
     // which the lowercase rule would.
     public static TheoryData<string> OtherAcceptedPasswords { get; } =
-        new("applecrumble", "\u00E9\u00E8\u00EA\u00EB\u00E0\u00E2\u00EE\u00EF\u00F4\u00FB\u00F9\u00FC");
+        new("applecru", "\u00E9\u00E8\u00EA\u00EB\u00E0\u00E2\u00EE\u00EF");
 
-    // Its first 11 letters, which pin RequiredLength at 12, and twelve spaces, a password of only whitespace, which the
+    // Its first 7 letters, which pin RequiredLength at 8, and eight spaces, a password of only whitespace, which the
     // built-in validation refuses as [Required] before Identity would.
-    public static TheoryData<string> RefusedPasswords { get; } = new(Password[..11], new string(' ', 12));
+    public static TheoryData<string> RefusedPasswords { get; } = new(Password[..7], new string(' ', 8));
 
     // The clock starts at 13:30 UTC on 9 October, which is half past midnight on 10 October in Melbourne.
     [Fact]
@@ -185,7 +185,7 @@ public sealed class SetupPasswordEndpointTests : IClassFixture<Grow2NotesFactory
 
     [Theory]
     [MemberData(nameof(OtherAcceptedPasswords))]
-    public async Task A_password_of_any_12_letters_is_accepted(string password)
+    public async Task A_password_of_any_8_letters_is_accepted(string password)
     {
         var link = await InviteAsync();
         using var client = app.CreateHttpsClient();

@@ -129,8 +129,8 @@ public sealed class SetupPasswordAndPasskeyEndpointTests : IClassFixture<Grow2No
     // The password is checked before the credential, which only reads too, so a refused password leaves the ceremony
     // unused: the same options still serve a completion with a password that is accepted.
     [Theory]
-    [InlineData("elevenchars")]
-    [InlineData("            ")]
+    [InlineData("sevench")]
+    [InlineData("        ")]
     public async Task A_short_or_whitespace_password_gets_422_for_the_password_with_the_ceremony_unused(
         string password)
     {

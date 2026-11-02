@@ -4,7 +4,7 @@
  * every value here against its constant. Each limit is added by the story that first checks it (form-validation.md).
  */
 export const limits = {
-  passwordMinLength: 12,
+  passwordMinLength: 8,
   guidePrompts: 1_000,
   displayName: 100,
   participantName: 100,

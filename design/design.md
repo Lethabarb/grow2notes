@@ -4,7 +4,7 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D97 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D23 and D51 by D97, D28 and D31 by D48, D60 by D65, D61 by D63, and D92 by D94. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A143), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D98 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D23 and D51 by D97, D28 and D31 by D48, D60 by D65, D61 by D63, and D92 by D94. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A143), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 
@@ -215,7 +215,7 @@ Draft --Discard (author or manager)--> Discarded (kept, hidden, audited; frees t
 1. "Set up your account": name (from the invite) and email (fixed).
 2. Choose **Use a passkey (recommended)**, **Use a password and authenticator app**, **Use a password only** or **Use a password and a passkey** (D97).
 3. Passkey: the device's passkey prompt (Face ID, fingerprint or device PIN), then done.
-4. Any password choice: set a password of at least 12 characters, with show/hide. Then:
+4. Any password choice: set a password of at least 8 characters, with show/hide. Then:
    - **Password and authenticator app:** scan the QR code, or type the setup key, into an authenticator app, then enter the 6-digit code.
    - **Password only:** nothing more; the person selects Finish setup.
    - **Password and a passkey:** the person selects Finish setup and the device's passkey prompt opens to make the passkey.
@@ -1554,7 +1554,7 @@ Accounts are created only by a manager's invitation; there is no self-registrati
 
 | Setting | Value |
 |---|---|
-| Sign-in methods | Four, chosen once at setup and never stored (A22, D97): a passkey (user verification required); a password (at least 12 characters, no composition rules) and an authenticator app; a password only; or a password and a passkey |
+| Sign-in methods | Four, chosen once at setup and never stored (A22, D97): a passkey (user verification required); a password (at least 8 characters, no composition rules, D98) and an authenticator app; a password only; or a password and a passkey |
 | Setup link (invite or reset) | Single use, valid 7 days (A23) |
 | Enrolment cookie | 30 minutes, valid only on `/api/auth/setup/*` |
 | Idle timeout | 30 minutes; warning at 28 minutes (A24) |
@@ -1611,7 +1611,7 @@ builder.Services
     {
         o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;   // adds AspNetUserPasskeys
         o.User.RequireUniqueEmail = true;
-        o.Password.RequiredLength = 12;
+        o.Password.RequiredLength = 8;
         o.Password.RequireDigit = false;
         o.Password.RequireLowercase = false;
         o.Password.RequireUppercase = false;
@@ -2137,7 +2137,7 @@ Small decisions the design had to make that decisions.md does not cover. The own
 | A19 | Export files | Generated on request and not stored on the server. A4 portrait. File names contain dates only. Every page footer says the copy is confidential and the app's record is authoritative. |
 | A20 | Participant export | Submitted notes in a date range, as current versions; earlier versions optional, off by default. Includes flag reasons and review comments. Anything withheld is redacted on the exported copy, never in the app. |
 | A21 | Refused correction | The participant's statement is added to the end of the note's Guided notes as a new, labelled version. No new field. |
-| A22 | Sign-in methods | Amended by D97 on 1 November 2026. One method chosen at setup and never stored: a passkey (biometric or device PIN required); a password of at least 12 characters plus an authenticator app; a password only; or a password and a passkey. No recovery codes, no "remember this device", and no self-service changes to sign-in methods. |
+| A22 | Sign-in methods | Amended by D97 on 1 November 2026 and D98 on 2 November 2026. One method chosen at setup and never stored: a passkey (biometric or device PIN required); a password of at least 8 characters plus an authenticator app; a password only; or a password and a passkey. No recovery codes, no "remember this device", and no self-service changes to sign-in methods. |
 | A23 | Setup links and recovery | Invites and sign-in resets use the same setup link: single use, valid 7 days. A lost phone or forgotten password is fixed only by a manager's Reset sign-in, after confirming who is asking. Setup links are the only emails the app sends, through Resend, and they are never tracked (D92, A100). |
 | A24 | Sessions | 30 minutes idle, with a warning at 28 minutes; 12 hours absolute; no "keep me signed in". Deactivation, reset and Sign out (A99) take effect on the next request. |
 | A25 | Lockout | 5 failed attempts lock sign-in for 15 minutes. |

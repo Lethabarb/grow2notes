@@ -41,9 +41,9 @@ const nbsp = ' ';
 const passkeyNotSetUp =
   'Your passkey was not set up. Try again, or open the link from your email in your phone’s browser.';
 const title = 'Grow2Notes – Set up your account';
-const hint = 'Use at least 12 characters.';
+const hint = 'Use at least 8 characters.';
 const enterPassword = 'Enter a password';
-const tooShort = 'Password must be 12 characters or more';
+const tooShort = 'Password must be 8 characters or more';
 
 // A made-up person and link (A35).
 const account = { email: 'sam.lee@example.org', displayName: 'Sam Lee' };
@@ -365,7 +365,7 @@ describe('CreatePassword (view F)', () => {
     expect(field()).not.toHaveAttribute('data-route-focus');
     expect(field()).toHaveAttribute('type', 'password');
     expect(field()).toHaveAttribute('autocomplete', 'new-password');
-    expect(field()).toHaveAttribute('minlength', '12');
+    expect(field()).toHaveAttribute('minlength', '8');
     expect(field()).toHaveAttribute('spellcheck', 'false');
     expect(field()).toHaveAttribute('autocapitalize', 'none');
     expect(field()).toHaveAttribute('autocorrect', 'off');
@@ -454,7 +454,7 @@ describe('CreatePassword (view F)', () => {
       { value: ' '.repeat(12), kind: 'twelve spaces', message: enterPassword },
       { value: '\t', kind: 'a tab', message: enterPassword },
       { value: ' '.repeat(12), kind: 'twelve no-break spaces', message: enterPassword },
-      { value: 'abcdefghijk', kind: '11 characters', message: tooShort },
+      { value: 'abcdefg', kind: '7 characters', message: tooShort },
     ])('says "$message" for $kind, on the field, with focus there, and sends nothing', async ({ value, message }) => {
       const router = await openViewF();
       const requests = pageRequests().length;
@@ -488,10 +488,10 @@ describe('CreatePassword (view F)', () => {
     });
 
     it.each([
-      { value: 'abcdefghijkl', kind: '12 lowercase letters' },
-      { value: 'éàüøçñåßîôûë', kind: '12 accented letters' },
-      { value: ' abcdefghij ', kind: '12 characters with spaces round them, kept' },
-      { value: 'abcdefghijk ', kind: '11 letters and a space' },
+      { value: 'abcdefgh', kind: '8 lowercase letters' },
+      { value: 'éàüøçñåß', kind: '8 accented letters' },
+      { value: ' abcdef ', kind: '8 characters with spaces round them, kept' },
+      { value: 'abcdefg ', kind: '7 letters and a space' },
     ])('puts $kind in setup\'s memory as typed and pushes /setup/app, sending nothing', async ({ value }) => {
       const router = await openViewF();
       const requests = pageRequests();
@@ -570,7 +570,7 @@ describe('CreatePassword (view F)', () => {
       fireEvent.click(toggle());
       expect(field()).toHaveAttribute('type', 'text');
 
-      submit('abcdefghijk');
+      submit('abcdefg');
       await wait(0);
 
       expect(field()).toHaveAttribute('type', 'password');
@@ -670,7 +670,7 @@ describe('CreatePassword (view F)', () => {
 
     it.each([
       { value: '', message: enterPassword },
-      { value: 'abcdefghijk', message: tooShort },
+      { value: 'abcdefg', message: tooShort },
     ])('sends nothing when the check finds "$message", and shows it on the field', async ({ value, message }) => {
       await openViewF(passwordOnlyLink);
 
@@ -915,7 +915,7 @@ describe('CreatePassword (view F)', () => {
     it('never opens the prompt when the check finds the password wrong, and sends nothing', async () => {
       await openViewF(passwordAndPasskeyLink);
 
-      finishWith('abcdefghijk');
+      finishWith('abcdefg');
       await wait(0);
 
       expect(webAuthn.startRegistration).not.toHaveBeenCalled();
