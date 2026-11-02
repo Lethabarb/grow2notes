@@ -25,7 +25,7 @@ The component is a small kit, not one form: **EmailInput**, **PasswordInput** (w
 | 2 | **Enter your code** | Same route, step 2 (component state, not a new URL) | One 6-digit code field, Sign in, Back | Reached only after a correct password of a person who chose a password and an authenticator app (D97); Identity's two-factor cookie lasts 5 minutes |
 | 3 | **Sign in again (in place)** | Any route, after a `401` | Views 1–2 plus a notice; the page behind stays mounted but hidden | Must not navigate, so unsaved note text survives in memory (5.6, 8.5) |
 | 4 | **Set up your account** | `/setup` (from `/setup#u=…&t=…`) | Name and email (fixed, shown as text), two method buttons | No inputs; passkey button runs the device prompt directly |
-| 5 | **Create a password** | `/setup/password` | One new-password field with Show/Hide, Continue | `new-password`, hidden username field, 12-character rule |
+| 5 | **Create a password** | `/setup/password` | One new-password field with Show/Hide, Continue | `new-password`, hidden username field, 8-character rule |
 | 6 | **Set up your authenticator app** | `/setup/app` | Steps, QR code, setup key, 6-digit code, Finish setup | Code entry for enrolment, not sign-in; specific error allowed |
 | 7 | **Setup messages** | `/setup*` | Heading + one sentence, no form | Link expired; setup session timed out; in-app browser; no link in memory |
 
@@ -178,7 +178,7 @@ You'll sign in with your email address and a password, and nothing else.
 You'll create a password, then use your face, fingerprint or PIN after it each time you sign in.
 ```
 
-**View 5: Create a password**: Back · h1/label "Create a password" · hint "Use at least 12 characters." · field +
+**View 5: Create a password**: Back · h1/label "Create a password" · hint "Use at least 8 characters." · field +
 Show/Hide · hidden `username` field holding the email · Continue.
 
 **View 6: Set up your authenticator app**: Back · h1 · 3-step ordered list · QR code (200 × 200) · "Setup key" in
@@ -269,7 +269,7 @@ groups of 4 · label "Enter the 6-digit code from the app" + hint · code field 
 | Link expired | h1 "This link has expired" · "Ask a manager to send a new one." | design (split into heading + sentence) |
 | Setup timed out | h1 "Your setup session timed out" · "Open the link from your email again." | design (split) |
 | No link in memory | h1 "Set up your account" · "To set up your account, open the link from your email again." | proposed |
-| Create password | h1/label "Create a password" · hint "Use at least 12 characters." · errors "Enter a password" · "Password must be 12 characters or more" | GOV.UK wording; 12 from A22 |
+| Create password | h1/label "Create a password" · hint "Use at least 8 characters." · errors "Enter a password" · "Password must be 8 characters or more" | GOV.UK wording; 8 from A22 (D98) |
 | Authenticator steps | 1 "Open your authenticator app and add an account." 2 "Scan the QR code, or enter the setup key. If the app asks for an account name, use Grow2Notes." 3 "Enter the 6-digit code the app shows." | proposed |
 | QR alt | "QR code for your authenticator app" | proposed |
 | Key label | "Setup key" | design ("setup key") |
@@ -479,7 +479,7 @@ async function onPasskey() {
   menu opens `/setup` with **no** token. That is why the copy says "Go back to the email and open the link…", and why
   the "no link in memory" message exists. Show this message when WebAuthn is missing, or when `startRegistration` fails
   with anything other than `NotAllowedError`.
-- **View 5, Create a password.** One field, no confirm field, no strength meter, no rules list beyond "at least 12
+- **View 5, Create a password.** One field, no confirm field, no strength meter, no rules list beyond "at least 8
   characters" (A22). Hidden by default. Phone keychains will offer a strong password because of `new-password` plus the
   hidden username. The password manager may offer to save on Continue, before setup finishes. That is acceptable: the
   password is the one the person chose.

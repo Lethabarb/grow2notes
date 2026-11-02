@@ -299,7 +299,7 @@ test('a link check with no connection says so, and Try again checks the link hel
 // The password path (sign-in.md views F and G), with a password of 12 lowercase letters, which design.md §8.4's
 // options take, though it has no digit, capital or symbol.
 const password = 'quietharbour';
-const passwordHint = 'Use at least 12 characters.';
+const passwordHint = 'Use at least 8 characters.';
 const codeHint = 'Find Grow2Notes in the app. If the code changes while you’re typing, you can still use it.';
 
 const passwordField = (page: Page) => page.getByLabel('Create a password', { exact: true });
@@ -335,7 +335,7 @@ async function continueToViewG(page: Page): Promise<string> {
   return key.innerText();
 }
 
-test('view F refuses an empty password, one of only spaces and one of 11 characters, and shows and hides it', async ({
+test('view F refuses an empty password, one of only spaces and one of 7 characters, and shows and hides it', async ({
   page,
   invite,
 }) => {
@@ -355,7 +355,7 @@ test('view F refuses an empty password, one of only spaces and one of 11 charact
   for (const [typed, message] of [
     ['', 'Enter a password'],
     [' '.repeat(12), 'Enter a password'],
-    [password.slice(0, 11), 'Password must be 12 characters or more'],
+    [password.slice(0, 7), 'Password must be 8 characters or more'],
   ]) {
     await field.fill(typed);
     await continueButton(page).click();

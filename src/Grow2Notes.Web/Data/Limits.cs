@@ -70,7 +70,7 @@ internal static class Limits
     public const int IpAddress = 45;
 
     /// <summary>The shortest password Identity accepts (A22, §8.4): a minimum, where the others are maximums.</summary>
-    public const int PasswordMinLength = 12;
+    public const int PasswordMinLength = 8;
 
     /// <summary>
     /// <c>OpenIddictApplications.ClientId</c>, the client ID or metadata-document URL of an approved assistant

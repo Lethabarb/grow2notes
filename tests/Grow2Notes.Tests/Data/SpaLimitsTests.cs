@@ -33,7 +33,7 @@ public sealed partial class SpaLimitsTests
             /** The limits. */
             export const limits = {
               /** A minimum. */
-              passwordMinLength: 12,
+              passwordMinLength: 8,
               // A maximum, its digits grouped as JavaScript allows.
               guidedNotes: 20_000,
               reviewComment: 500 // with no comma after the last
@@ -47,8 +47,8 @@ public sealed partial class SpaLimitsTests
     public void A_limit_that_differs_from_its_constant_fails()
     {
         Assert.Equal(
-            ["passwordMinLength is 11, where Limits.PasswordMinLength is 12."],
-            Problems(Sample("passwordMinLength: 11,")));
+            ["passwordMinLength is 7, where Limits.PasswordMinLength is 8."],
+            Problems(Sample("passwordMinLength: 7,")));
     }
 
     [Theory]
@@ -58,32 +58,32 @@ public sealed partial class SpaLimitsTests
     {
         Assert.Equal(
             [$"{key}: Limits has no constant {constant}."],
-            Problems(Sample("passwordMinLength: 12,", $"{key}: 12,")));
+            Problems(Sample("passwordMinLength: 8,", $"{key}: 12,")));
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("// No limit yet.\n")]
     [InlineData("export const limits = {} as const;\n")]
-    [InlineData("export const limits = {\n  // passwordMinLength: 12,\n} as const;\n")]
-    [InlineData("export const LIMITS = {\n  passwordMinLength: 12,\n} as const;\n")]
-    [InlineData("export const limits = {\n  passwordMinLength: 12,\n};\n")]
+    [InlineData("export const limits = {\n  // passwordMinLength: 8,\n} as const;\n")]
+    [InlineData("export const LIMITS = {\n  passwordMinLength: 8,\n} as const;\n")]
+    [InlineData("export const limits = {\n  passwordMinLength: 8,\n};\n")]
     public void A_file_with_no_limit_fails(string sample)
     {
         Assert.Equal([NoLimit], Problems(sample));
     }
 
     [Theory]
-    [InlineData("PasswordMinLength: 12")]
-    [InlineData("passwordMinLength: 6 * 2")]
-    [InlineData("passwordMinLength: '12'")]
+    [InlineData("PasswordMinLength: 8")]
+    [InlineData("passwordMinLength: 4 * 2")]
+    [InlineData("passwordMinLength: '8'")]
     [InlineData("passwordMinLength")]
     [InlineData("...serverLimits")]
     public void A_limit_written_another_way_fails(string entry)
     {
         Assert.Equal(
             [$"Cannot read \"{entry}\" in limits.ts, where each limit is name: number."],
-            Problems(Sample("passwordMinLength: 12,", $"{entry},")));
+            Problems(Sample("passwordMinLength: 8,", $"{entry},")));
     }
 
     /// <summary>

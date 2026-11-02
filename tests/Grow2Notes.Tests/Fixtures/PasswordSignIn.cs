@@ -22,7 +22,7 @@ internal static class PasswordSignIn
     /// <summary>
     /// The password of every user that <see cref="AddPasswordUserAsync"/> adds: made up (A35), and allowed by
     /// Identity's default password rules, which want 6 characters, a digit, a capital, a lowercase letter and a symbol,
-    /// and by design.md §8.4's, which want 12 characters and nothing else.
+    /// and by design.md §8.4's, which want 8 characters and nothing else.
     /// </summary>
     public const string Password = "Made-up passw0rd";
 

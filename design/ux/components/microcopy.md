@@ -594,7 +594,7 @@ NHS App; [Research] NN/g, https://www.nngroup.com/articles/error-message-guideli
   one.", "Your setup session timed out. Open the link from your email again.", "Open this link in your browser".
 - The failure message is fixed by A25: "Sign-in failed. Check your details and try again. After 5 failed attempts,
   sign-in pauses for 15 minutes." It is the one error that deliberately does not name the field.
-- Field labels "Email address", "Password", "Create a password" with hint "Use at least 12 characters." (sign-in-form.md).
+- Field labels "Email address", "Password", "Create a password" with hint "Use at least 8 characters." (sign-in-form.md).
 - This is where unfamiliar words cluster (passkey, authenticator app, setup key, QR code). Each is explained once, in
   one sentence, where it first appears (sign-in-form.md and totp-setup.md hints); never with jargon such as MFA or OTP.
 - D97 adds seven (P) strings, awaiting the owner's approval (D67): "Use a password only" and its hint "You'll sign in

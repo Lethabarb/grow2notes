@@ -60,9 +60,9 @@ public sealed class SetupPasswordEndpointTests : IClassFixture<Grow2NotesFactory
     public static TheoryData<string> OtherAcceptedPasswords { get; } =
         new("applecrumble", "\u00E9\u00E8\u00EA\u00EB\u00E0\u00E2\u00EE\u00EF\u00F4\u00FB\u00F9\u00FC");
 
-    // Its first 11 letters, which pin RequiredLength at 12, and twelve spaces, a password of only whitespace, which the
+    // Its first 7 letters, which pin RequiredLength at 8, and eight spaces, a password of only whitespace, which the
     // built-in validation refuses as [Required] before Identity would.
-    public static TheoryData<string> RefusedPasswords { get; } = new(Password[..11], new string(' ', 12));
+    public static TheoryData<string> RefusedPasswords { get; } = new(Password[..7], new string(' ', 8));
 
     // The clock starts at 13:30 UTC on 9 October, which is half past midnight on 10 October in Melbourne.
     [Fact]
