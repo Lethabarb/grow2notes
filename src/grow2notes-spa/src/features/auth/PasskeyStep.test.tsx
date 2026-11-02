@@ -166,9 +166,12 @@ function press(button: HTMLElement) {
   fireEvent.click(button);
 }
 
-/** The alert line directly above the button, where its request's failures show. */
-function alert() {
-  const line = signInButton().previousElementSibling;
+/**
+ * The alert line directly above the button, where its request's failures show. A test that holds the button past
+ * the 400 ms at which its busy label takes over its name passes it in, as it can no longer be found by that name.
+ */
+function alert(button: HTMLElement = signInButton()) {
+  const line = button.previousElementSibling;
   if (!(line instanceof HTMLElement) || line.getAttribute('role') !== 'alert') {
     throw new Error('No alert line comes directly before the button.');
   }
@@ -346,26 +349,27 @@ describe('the passkey step', () => {
     await wait(179_999);
 
     expect(button).toHaveAttribute('aria-disabled', 'true');
-    expect(alert()).toBeEmptyDOMElement();
+    expect(alert(button)).toBeEmptyDOMElement();
 
     await wait(1);
 
-    expect(alert()).toHaveTextContent('Not signed in: no connection. Try again.');
+    expect(alert(button)).toHaveTextContent('Not signed in: no connection. Try again.');
     expect(button).not.toHaveAttribute('aria-disabled');
   });
 
   it('waits 3 minutes for its options before a press that awaits them says there is no connection', async () => {
     await renderStep({ options: noAnswerUntilAborted });
 
-    press(signInButton());
+    const button = signInButton();
+    press(button);
     await wait(179_999);
 
-    expect(alert()).toBeEmptyDOMElement();
+    expect(alert(button)).toBeEmptyDOMElement();
     expect(ceremony).not.toHaveBeenCalled();
 
     await wait(1);
 
-    expect(alert()).toHaveTextContent('Not signed in: no connection. Try again.');
+    expect(alert(button)).toHaveTextContent('Not signed in: no connection. Try again.');
   });
 
   describe('Go back', () => {

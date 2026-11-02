@@ -32,8 +32,8 @@ here. Each step ends with what it confirms.
 - Write down each step's time and result (passed, or what you saw) for the developer, who records them in the
   stories' Notes. Never write down a setup link, a token, a password, a code, an IP address or an email address.
 - The test database pauses after about 20 quiet minutes and takes a minute or two to wake. Signing in, opening a
-  setup link and finishing setup wait for it, for up to 3 minutes (D96, D99). If any other step says "no
-  connection" after a quiet spell, the database is waking up: wait a minute and try again.
+  setup link and finishing setup wait up to 3 minutes for it, or for a slow first answer (D96, D99). If any other
+  step says "no connection" after a quiet spell, the database is waking up: wait a minute and try again.
 
 ## Steps
 

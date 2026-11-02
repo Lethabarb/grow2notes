@@ -410,7 +410,7 @@ export const isTransient = (e: unknown) =>
 
 // api/client.ts (excerpt): 401 never reaches a screen
 // timeoutMs: per-call override of the 10 s default; the file downloads pass 30_000 (daily-report.md, record-export.md),
-// and the sign-in calls and those that start or finish setup 180_000 (D96, D99).
+// and the password and passkey sign-in calls and those that start or finish setup 180_000 (D96, D99).
 // signal: the caller's own AbortSignal (leaving the page); its abort is passed on, and rethrown as it came.
 export async function api<T>(
   path: string,
