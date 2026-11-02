@@ -8096,7 +8096,8 @@ as before: same endpoints, bodies, refusals, screens and flow after view E.
 - Done, 1 November 2026 (v5): both stories are done with `sprint` blank, as T40's and T41's are. In S00.07.01 every
   criterion is ticked except the second (everyone may choose, no role check), which only a person signing in as each
   role can prove: it stays unticked, with first-use step 209. In S00.07.02 one criterion is unticked, with a
-  dated Note: the long timeout for the passkey step's calls, which exists only on PR #211. S00.04.03 and S00.04.05 carry 'Amended by D97'.
+  dated Note: the long timeout for the passkey step's calls, which exists only on PR #211 (ticked on
+  2 November 2026, D99). S00.04.03 and S00.04.05 carry 'Amended by D97'.
 - The two setup test classes name their audit-writer test
   `With_an_audit_writer_that_throws_nothing_commits_and_no_session_starts`, after the older test it copies. It uses a
   failing writer and asserts a 500, no session and nothing changed. The stories cite it by that name; renaming it is a

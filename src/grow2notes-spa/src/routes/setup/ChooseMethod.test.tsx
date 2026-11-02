@@ -111,6 +111,16 @@ function later<T>() {
   return { value, give, fail };
 }
 
+/** Like `fetch` to a server that has not answered yet: it rejects only when its signal aborts. */
+function noAnswerUntilAborted(init?: RequestInit): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    const signal = init?.signal;
+    signal?.addEventListener('abort', () => {
+      reject(signal.reason as Error);
+    });
+  });
+}
+
 /** A WebAuthn error as the browser raises it, which the page never names to the person. */
 function browserError(name: string): DOMException {
   return new DOMException(`A made-up ${name}.`, name);
@@ -447,6 +457,25 @@ describe('ChooseMethod (view E)', () => {
     expect(screen.queryByText('Signed in as Riley Ng')).not.toBeInTheDocument();
     // A worker's nav, not the manager's.
     expect(within(screen.getByRole('navigation', { name: 'Main' })).getAllByRole('link')).toHaveLength(1);
+  });
+
+  // One that the server completes after the SPA has stopped waiting has used the link, so it waits as long as
+  // sign-in (D99).
+  it('waits 3 minutes for the passkey to finish setup, busy, before it says there is no connection', async () => {
+    webAuthn.startRegistration.mockResolvedValueOnce(credential);
+    answers[passkeyPath].push(noAnswerUntilAborted);
+    await openViewE();
+
+    const button = pressPasskey();
+    await wait(179_999);
+
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(alert()).toBeEmptyDOMElement();
+
+    await wait(1);
+
+    expect(alert()).toHaveTextContent('Not set up: no connection. Try again.');
+    expect(button).not.toHaveAttribute('aria-disabled');
   });
 
   describe('when the passkey is not set up', () => {

@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
-import { api, ApiError, classify } from '../../api/api.ts';
+import { api, ApiError, classify, signInTimeoutMs } from '../../api/api.ts';
 import { setMe, type Me } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
@@ -82,6 +82,7 @@ export function FinishSetup({ password, onTimedOut }: FinishSetupProps) {
       const me = await api<Me>('/api/auth/setup/password', {
         method: 'POST',
         body: { password, totpCode: normaliseCode(code) },
+        timeoutMs: signInTimeoutMs,
       });
       // Into `['me']` before the page goes to `/`, so that Today shows at once for the person now signed in, not what
       // the shell's `/me` got before setup, a `401` and so sign-in, until the new location's refresh answers

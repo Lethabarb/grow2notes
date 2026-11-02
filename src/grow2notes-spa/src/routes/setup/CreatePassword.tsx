@@ -2,7 +2,7 @@ import { startRegistration, type RegistrationResponseJSON } from '@simplewebauth
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { api, ApiError, classify } from '../../api/api.ts';
+import { api, ApiError, classify, signInTimeoutMs } from '../../api/api.ts';
 import { setMe, type Me } from '../../api/me.ts';
 import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
@@ -190,9 +190,14 @@ function PasswordForm({ account, onTimedOut }: PasswordFormProps) {
         me = await api<Me>('/api/auth/setup/password-and-passkey', {
           method: 'POST',
           body: { password, credentialJson: JSON.stringify(credential) },
+          timeoutMs: signInTimeoutMs,
         });
       } else {
-        me = await api<Me>('/api/auth/setup/password-only', { method: 'POST', body: { password } });
+        me = await api<Me>('/api/auth/setup/password-only', {
+          method: 'POST',
+          body: { password },
+          timeoutMs: signInTimeoutMs,
+        });
       }
 
       // Into `['me']` before the page goes to `/`, so that Today shows at once for the person now signed in, not what

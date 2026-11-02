@@ -2,7 +2,7 @@ import { browserSupportsWebAuthn, startRegistration, type RegistrationResponseJS
 import { useQueryClient } from '@tanstack/react-query';
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { api, classify } from '../../api/api.ts';
+import { api, classify, signInTimeoutMs } from '../../api/api.ts';
 import { setMe, type Me } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { buttonClass } from '../../components/buttonClass.ts';
@@ -110,6 +110,7 @@ export function ChooseMethod({ account, onTimedOut }: ChooseMethodProps) {
       const me = await api<Me>('/api/auth/setup/passkey', {
         method: 'POST',
         body: { credentialJson: JSON.stringify(credential), name: passkeyName },
+        timeoutMs: signInTimeoutMs,
       });
       // Into `['me']` before the page goes to `/`, so that Today shows at once for the person now signed in, not what
       // the shell's `/me` got before setup, a `401` and so sign-in, until the new location's refresh answers

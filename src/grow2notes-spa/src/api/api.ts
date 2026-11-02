@@ -69,6 +69,8 @@ const defaultTimeoutMs = 10_000;
  * and the first call after a pause waits while it resumes: each connection attempt runs to SqlClient's 15 s timeout,
  * and `EnableRetryOnFailure` makes 7 of them, with waits of up to 30 s between, about 2¾ minutes in all. This outlasts
  * that, so the call gets the server's answer, and stays under the 230 s at which App Service's front end ends a request.
+ * The calls that finish setup and the passkey step's two calls wait as long (D99): one that the server completes after
+ * the SPA has stopped waiting has used the setup link, or the password step, so pressing again cannot work.
  */
 export const signInTimeoutMs = 180_000;
 

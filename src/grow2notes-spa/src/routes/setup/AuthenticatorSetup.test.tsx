@@ -826,6 +826,25 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(document.title).toBe(title);
   });
 
+  // One that the server completes after the SPA has stopped waiting has used the link, so it waits as long as
+  // sign-in (D99).
+  it('waits 3 minutes, busy, before it says there is no connection', async () => {
+    serve(passwordPath, noAnswer);
+    await openViewG();
+    await settle();
+
+    const button = finishWith('123456');
+    await wait(179_999);
+
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(alert()).toBeEmptyDOMElement();
+
+    await wait(1);
+
+    expect(alert()).toHaveTextContent('Not set up: no connection. Try again.');
+    expect(button).not.toHaveAttribute('aria-disabled');
+  });
+
   it('shows the busy label at 400 ms, not before, and sends nothing more for a second press while busy', async () => {
     serve(passwordPath, noAnswer);
     await openViewG();

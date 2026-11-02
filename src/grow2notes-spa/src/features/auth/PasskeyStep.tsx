@@ -6,7 +6,7 @@ import {
 } from '@simplewebauthn/browser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { api } from '../../api/api.ts';
+import { api, signInTimeoutMs } from '../../api/api.ts';
 import { setMe, type Me } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { pageHeadingId } from '../../components/focusPageHeading.ts';
@@ -20,7 +20,10 @@ import { isDismissal, isRefusal, notSignedIn } from './signInFailure.ts';
 // Identity's options JSON, which startAuthentication takes as it comes (design.md §6.2). Made for the account whose
 // password was just accepted, so that only its passkeys are offered and a credential of another account is refused.
 const requestOptions = () =>
-  api<PublicKeyCredentialRequestOptionsJSON>('/api/auth/login/passkey/options', { method: 'POST' });
+  api<PublicKeyCredentialRequestOptionsJSON>('/api/auth/login/passkey/options', {
+    method: 'POST',
+    timeoutMs: signInTimeoutMs,
+  });
 
 type PasskeyStepProps = {
   /**
@@ -119,6 +122,7 @@ export function PasskeyStep({ heading, onRefused, onBack }: PasskeyStepProps) {
       const me = await api<Me>('/api/auth/passkey', {
         method: 'POST',
         body: { credentialJson: JSON.stringify(credential) },
+        timeoutMs: signInTimeoutMs,
       });
       await setMe(queryClient, me);
     } catch (error) {
