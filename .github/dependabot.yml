@@ -12,6 +12,10 @@ updates:
       nuget:
         patterns: ['*']
         update-types: [minor, patch]
+    ignore:
+      # 6.5.0 throws PdfSharpLicenseException on every render without a licence; held until one is decided.
+      - dependency-name: PDFsharp-MigraDoc
+        versions: ['>= 6.5.0']
     commit-message:
       prefix: chore
       include: scope
@@ -24,6 +28,13 @@ updates:
       spa:
         patterns: ['*']
         update-types: [minor, patch]
+    ignore:
+      # 5.104.5 sends an extra autosave as the browser comes online while the page is hidden (useAutosave.test.tsx).
+      - dependency-name: '@tanstack/react-query'
+        versions: ['>= 5.104.5']
+      # The types' major follows the Node that ci.yml runs; lift this with that version.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     commit-message:
       prefix: chore
       include: scope
@@ -36,6 +47,10 @@ updates:
       e2e:
         patterns: ['*']
         update-types: [minor, patch]
+    ignore:
+      # The types' major follows the Node that ci.yml runs; lift this with that version.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     commit-message:
       prefix: chore
       include: scope
