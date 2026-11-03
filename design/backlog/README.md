@@ -131,7 +131,7 @@ R2  Admin MCP server                                          release   D48–D5
    │  ├─ S07.04.02  Deactivate a user                         story · 2
    │  └─ S07.04.03  Reset a user's sign-in                    story · 2
    ├─ F07.05  Hardening, manual tests and switch-on           feature   slice 5
-   └─ F07.06  Onboarding with Claude Code                     feature   D95
+   └─ F07.06  Onboarding with Claude Code                     feature   D95, D101
 ```
 
 ## 3. Writing items

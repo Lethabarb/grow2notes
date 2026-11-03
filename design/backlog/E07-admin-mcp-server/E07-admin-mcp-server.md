@@ -29,7 +29,7 @@ The release is done when the
 - F07.06 Onboarding with Claude Code
 
 F07.06 is the one feature outside the five slices: the operator's Claude Code onboarding skill (D95, T41), which uses
-the tools and adds none.
+the tools and adds none. S07.06.02 (D101, T43) adds an agent step that runs `admin bootstrap`.
 
 The other features follow the five build slices in [mcp-server.md §1.4](../../mcp-server.md#14-timing-and-build-slices)
 one to one ([README §3.4](../README.md#34-how-far-ahead-to-write)). Two placements need saying:
