@@ -352,7 +352,9 @@ describe('Invite user', () => {
     expect(managerRadio()).toHaveAccessibleDescription(
       'Can also review flagged notes, download reports, and set up participants and users',
     );
-    expect(supportRadio()).toHaveAccessibleDescription('Only connects an AI assistant. Sees no participants or notes.');
+    expect(supportRadio()).toHaveAccessibleDescription(
+      'Your IT operator. Sets things up for you through an AI assistant, such as Claude. Never sees notes.',
+    );
     expect(supportRadio()).toHaveAttribute('id', 'role-support');
     expect(workerRadio()).toHaveAttribute('name', 'role');
     expect(managerRadio()).toHaveAttribute('name', 'role');
