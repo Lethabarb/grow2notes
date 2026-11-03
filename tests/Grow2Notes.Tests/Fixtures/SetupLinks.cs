@@ -52,8 +52,8 @@ internal static class SetupLinks
         email.To);
 
     /// <summary>
-    /// <paramref name="setupLink"/>, a link as the app makes it, such as one that an operator command printed, for the
-    /// user whose address is <paramref name="email"/>: its user ID and token, read with <c>ParseQuery</c>, which
+    /// <paramref name="setupLink"/>, a link as the app makes it, for the user whose address is
+    /// <paramref name="email"/>: its user ID and token, read with <c>ParseQuery</c>, which
     /// matches the SPA's <c>URLSearchParams</c>: + is a space, then %XX is decoded.
     /// </summary>
     public static SetupLink Read(string setupLink, string email)

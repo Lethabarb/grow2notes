@@ -37,12 +37,4 @@ internal static class AdminCommandRuns
 }
 
 /// <summary>An operator command's exit code, and what it wrote on the output and error writers.</summary>
-internal sealed record AdminCommandRun(int ExitCode, string Output, string Error)
-{
-    /// <summary>The one line written on the output writer, which must end with a line break.</summary>
-    public string SingleOutputLine()
-    {
-        Assert.EndsWith(Environment.NewLine, Output, StringComparison.Ordinal);
-        return Assert.Single(Output.Split(Environment.NewLine)[..^1]);
-    }
-}
+internal sealed record AdminCommandRun(int ExitCode, string Output, string Error);

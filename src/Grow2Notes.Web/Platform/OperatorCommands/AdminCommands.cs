@@ -19,6 +19,9 @@ internal sealed class AdminCommands(
     /// <summary>The exit code of a command that was refused, which has written nothing.</summary>
     public const int Refused = 1;
 
+    /// <summary>Why a command whose setup-link email was not sent is refused, as a refusal's reason.</summary>
+    public const string EmailNotSent = "The setup-link email could not be sent.";
+
     /// <summary>How each command is used, one to a line, for a run that names no command or an unknown one.</summary>
     public static readonly string Usage = string.Join(
         Environment.NewLine,
@@ -32,7 +35,7 @@ internal sealed class AdminCommands(
     /// <paramref name="error"/>.
     /// </summary>
     /// <param name="arguments">The command's name and then its options, as typed after <c>admin</c>.</param>
-    /// <param name="output">Where the command writes its result, such as a setup link, and nothing else.</param>
+    /// <param name="output">Where mcp-client writes its listing; the other commands write nothing there.</param>
     /// <param name="error">Where the command says why it was refused.</param>
     /// <param name="cancellationToken">Cancels the command's database work.</param>
     /// <returns><see cref="Done"/>, or <see cref="Refused"/>.</returns>
@@ -42,9 +45,9 @@ internal sealed class AdminCommands(
         arguments switch
         {
             [BootstrapCommand.Name, ..] =>
-                await bootstrap.RunAsync([.. arguments.Skip(1)], output, error, cancellationToken),
+                await bootstrap.RunAsync([.. arguments.Skip(1)], error, cancellationToken),
             [ResetSignInCommand.Name, ..] =>
-                await resetSignIn.RunAsync([.. arguments.Skip(1)], output, error, cancellationToken),
+                await resetSignIn.RunAsync([.. arguments.Skip(1)], error, cancellationToken),
             [SignOutAllCommand.Name, ..] =>
                 await signOutAll.RunAsync([.. arguments.Skip(1)], error, cancellationToken),
             [McpClientCommand.Name, ..] =>

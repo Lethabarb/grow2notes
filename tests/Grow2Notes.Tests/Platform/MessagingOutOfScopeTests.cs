@@ -28,7 +28,8 @@ public sealed partial class MessagingOutOfScopeTests
     private static readonly string[] SenderNames = ["IEmailSender", .. MailLibraries];
 
     // Relative to src/Grow2Notes.Web: every source file that names the email sender or a mail library. The send of the
-    // setup link is the sender's one use, in the three handlers that issue a link, through SetupLinkEmail.
+    // setup link is the sender's one use, in the three handlers and the two operator commands that issue a link,
+    // through SetupLinkEmail.
     private static readonly string[] SenderFiles =
     [
         "Features/Users/SetupLinkEmail.cs",
@@ -41,6 +42,8 @@ public sealed partial class MessagingOutOfScopeTests
         "Platform/Email/IEmailSender.cs",
         "Platform/Email/NotConfiguredEmailSender.cs",
         "Platform/Email/ResendEmailSender.cs",
+        "Platform/OperatorCommands/BootstrapCommand.cs",
+        "Platform/OperatorCommands/ResetSignInCommand.cs",
     ];
 
     private static readonly string[] IgnoredFolders = ["bin", "obj", "node_modules", ".git"];
@@ -82,13 +85,15 @@ public sealed partial class MessagingOutOfScopeTests
         Assert.All(named, path => Assert.StartsWith("Platform/Email/", path, StringComparison.Ordinal));
     }
 
-    // The three handlers take the sender and hand it to SetupLinkEmail.SendAsync, as its first argument, and do nothing
-    // else with it, so each message they send is the setup link's.
+    // The three handlers and the two operator commands take the sender and hand it to SetupLinkEmail.SendAsync, as its
+    // first argument, and do nothing else with it, so each message they send is the setup link's.
     [Theory]
     [InlineData("Features/Users/UserInvite.cs")]
     [InlineData("Features/Users/UserEdit.cs")]
     [InlineData("Features/Users/UserSetupLink.cs")]
-    public void A_handler_uses_the_email_sender_only_as_the_first_argument_of_SetupLinkEmail_SendAsync(string file)
+    [InlineData("Platform/OperatorCommands/BootstrapCommand.cs")]
+    [InlineData("Platform/OperatorCommands/ResetSignInCommand.cs")]
+    public void A_sender_of_the_setup_link_uses_the_email_sender_only_as_the_first_argument_of_SetupLinkEmail_SendAsync(string file)
     {
         var text = File.ReadAllText(Path.Combine(WebRoot(), file));
 

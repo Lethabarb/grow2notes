@@ -29,8 +29,13 @@ string[]? operatorCommand = args is ["admin", .. var command] ? command : null;
 var builder = WebApplication.CreateBuilder(operatorCommand is null ? args : []);
 
 // Server telemetry goes to Application Insights only where it is configured, as in Azure (design.md §9.5). Its
-// settings are read here, as the services are registered, for the same reasons as the Key Vault settings below.
-builder.Services.AddTelemetryWhenConfigured(builder.Configuration);
+// settings are read here, as the services are registered, for the same reasons as the Key Vault settings below. An
+// operator command sends none, because it holds the operator's values, a name and an address, which the text of an
+// exception can carry.
+if (operatorCommand is null)
+{
+    builder.Services.AddTelemetryWhenConfigured(builder.Configuration);
+}
 
 // The setup-link email goes through the email service where it is configured, as in Azure, to the console where
 // Email:UseConsole says so, and otherwise nowhere, with every send answering Not sent (design.md §10.3 and §10.4).
@@ -78,7 +83,7 @@ builder.Services.AddDbContext<KeysDbContext>(UseGrow2NotesDatabase);
 
 // The key ring that protects the sign-in cookie and setup links lives in the database, so a restart or a deploy does
 // not sign everyone out (design.md §9.3). The application name replaces the default, the content root path, which
-// follows the working directory: setup links that the operator commands print from the SSH console (§7.4) must open in
+// follows the working directory: setup links that the operator commands email from the SSH console (§7.4) must open in
 // the app.
 //
 // In Azure the Key Vault key also wraps each key. Unlike the connection string, its settings are read here, as the

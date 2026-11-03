@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Auth;
+using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.OperatorCommands;
 using Microsoft.AspNetCore.Hosting;
@@ -20,7 +21,9 @@ namespace Grow2Notes.Tests.Platform.OperatorCommands;
 /// console runs it from <c>/home/site/wwwroot</c>, with the shared database's connection string and an
 /// <c>App__Origin</c> in its environment, as App Service gives the app its settings. Each run has made-up names and an
 /// address of its own; <c>admin signout-all</c>, which gives every user a new security stamp, the seeded users' too,
-/// runs on a migrated database of its own.
+/// runs on a migrated database of its own. The binary has no email settings here, so a command that emails a setup
+/// link runs with <c>Email__UseConsole</c> true, which writes the email to standard output, as development and CI's
+/// end-to-end run do.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -30,8 +33,18 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
     // start on a busy CI runner.
     private static readonly TimeSpan TimeLimit = TimeSpan.FromMinutes(1);
 
+    private static readonly Dictionary<string, string> ConsoleEmail = new() { ["Email__UseConsole"] = "true" };
+
+    // A command registers no telemetry (design.md §9.5): with a connection string set and no
+    // ManagedIdentity__ClientId, registering it would throw, so a command that exits 0 has not.
+    private static readonly Dictionary<string, string> ConsoleEmailAndTelemetry = new()
+    {
+        ["Email__UseConsole"] = "true",
+        ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = "InstrumentationKey=not-a-real-key",
+    };
+
     [Fact]
-    public async Task Admin_bootstrap_exits_with_0_and_prints_only_the_link_whose_token_the_web_app_verifies()
+    public async Task Admin_bootstrap_exits_with_0_registers_no_telemetry_and_emails_a_link_the_web_app_verifies()
     {
         // Data Protection loads the key ring as the app starts, and makes a key if there is none. Starting the web app
         // first leaves a key in the shared database for the command to protect the token with, as in test, where the
@@ -39,7 +52,8 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
         _ = factory.Services;
         var email = $"sam.taylor.{Guid.NewGuid():N}@example.org";
 
-        var run = await RunAsync(
+        var run = await RunWithAsync(
+            ConsoleEmailAndTelemetry,
             "admin", "bootstrap", "--organisation", "Riverside Supports", "--manager-name", "Sam Taylor",
             "--manager-email", email);
 
@@ -48,7 +62,28 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var manager = await users.FindByEmailAsync(email);
         Assert.NotNull(manager);
-        await AssertPrintsOnlyALinkTheWebAppVerifiesAsync(run.Output, users, manager);
+        await AssertEmailsALinkTheWebAppVerifiesAsync(run.Output, users, manager);
+    }
+
+    // The binary has no email settings, so its sender is the not-configured one, whose every send fails.
+    [Fact]
+    public async Task Admin_bootstrap_without_the_email_settings_exits_with_1_and_writes_nothing()
+    {
+        _ = factory.Services;
+        var email = $"sam.taylor.{Guid.NewGuid():N}@example.org";
+
+        // Pinned off, so that a Development environment in the test runner cannot choose the console sender.
+        var run = await RunWithAsync(
+            new() { ["Email__UseConsole"] = "false" },
+            "admin", "bootstrap", "--organisation", "Riverside Supports", "--manager-name", "Sam Taylor",
+            "--manager-email", email);
+
+        Assert.Equal(
+            (1, "", $"Refused: The setup-link email could not be sent. Nothing was written.{Environment.NewLine}"),
+            (run.ExitCode, run.Output, run.Error));
+        await using var scope = factory.Services.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        Assert.Null(await users.FindByEmailAsync(email));
     }
 
     [Fact]
@@ -63,13 +98,13 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
     }
 
     [Fact]
-    public async Task Admin_reset_signin_exits_with_0_and_prints_only_the_link_whose_token_the_web_app_verifies()
+    public async Task Admin_reset_signin_exits_with_0_and_emails_a_link_the_web_app_verifies()
     {
         // Adding the worker starts the web app, which leaves a key in the shared database, as for admin bootstrap.
         var email = $"sam.taylor.{Guid.NewGuid():N}@example.org";
         await AddActiveWorkerAsync(factory, sqlServer.Seeded.A.OrganisationId, email);
 
-        var run = await RunAsync("admin", "reset-signin", email);
+        var run = await RunWithAsync(ConsoleEmail, "admin", "reset-signin", email);
 
         Assert.Equal((0, ""), (run.ExitCode, run.Error));
         await using var scope = factory.Services.CreateAsyncScope();
@@ -77,7 +112,7 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
         var worker = await users.FindByEmailAsync(email);
         Assert.NotNull(worker);
         Assert.Equal(UserStatus.Invited, worker.Status);
-        await AssertPrintsOnlyALinkTheWebAppVerifiesAsync(run.Output, users, worker);
+        await AssertEmailsALinkTheWebAppVerifiesAsync(run.Output, users, worker);
     }
 
     [Fact]
@@ -101,7 +136,7 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
         var organisationId = await AddOrganisationAsync(app);
         var worker = await AddActiveWorkerAsync(app, organisationId, $"sam.taylor.{Guid.NewGuid():N}@example.org");
 
-        var run = await RunOnAsync(connectionString, "admin", "signout-all");
+        var run = await RunOnAsync(connectionString, [], "admin", "signout-all");
 
         Assert.Equal((0, "", ""), (run.ExitCode, run.Output, run.Error));
         await using var scope = app.Services.CreateAsyncScope();
@@ -130,16 +165,19 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
             (run.ExitCode, run.Output, run.Error));
     }
 
-    // The link alone: with no Email settings the binary has the not-configured sender, whose warning is a hosted
-    // service that an operator command never starts, so standard output holds only the link, and an email sent would
-    // fail the command. The web app's content root is the web project's folder and the command's is the
-    // folder it ran from, so the two share one key ring only because Program.cs names the application for both, with
-    // SetApplicationName.
-    private static async Task AssertPrintsOnlyALinkTheWebAppVerifiesAsync(
+    // One console email to the person, with the setup-link subject and one link, and nothing else. The web app's
+    // content root is the web project's folder and the command's is the folder it ran from, so the two share one key
+    // ring only because Program.cs names the application for both, with SetApplicationName.
+    private static async Task AssertEmailsALinkTheWebAppVerifiesAsync(
         string output, UserManager<ApplicationUser> users, ApplicationUser user)
     {
-        Assert.EndsWith(Environment.NewLine, output, StringComparison.Ordinal);
-        var setupLink = Assert.Single(output.Split(Environment.NewLine)[..^1]);
+        var lines = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(
+            $"To: {user.Email}", Assert.Single(lines, line => line.StartsWith("To: ", StringComparison.Ordinal)));
+        Assert.Equal(
+            $"Subject: {SetupLinkEmail.Subject}",
+            Assert.Single(lines, line => line.StartsWith("Subject: ", StringComparison.Ordinal)));
+        var setupLink = Assert.Single(lines, line => line.StartsWith("https://", StringComparison.Ordinal));
         Assert.StartsWith($"{Grow2NotesFactory.Origin}/setup#u={user.Id:D}&t=", setupLink, StringComparison.Ordinal);
         var token = QueryHelpers.ParseQuery(setupLink[(setupLink.IndexOf('#', StringComparison.Ordinal) + 1)..])["t"];
         Assert.True(await users.VerifyUserTokenAsync(
@@ -179,11 +217,15 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
         return user;
     }
 
-    private Task<Run> RunAsync(params string[] arguments) => RunOnAsync(sqlServer.ConnectionString, arguments);
+    private Task<Run> RunAsync(params string[] arguments) => RunWithAsync([], arguments);
 
-    // Starts dotnet Grow2Notes.Web.dll on the database at connectionString with the arguments, and waits for it to
-    // exit, up to the time limit.
-    private static async Task<Run> RunOnAsync(string connectionString, params string[] arguments)
+    private Task<Run> RunWithAsync(Dictionary<string, string> environment, params string[] arguments) =>
+        RunOnAsync(sqlServer.ConnectionString, environment, arguments);
+
+    // Starts dotnet Grow2Notes.Web.dll on the database at connectionString with the arguments, and the settings in
+    // environment besides, and waits for it to exit, up to the time limit.
+    private static async Task<Run> RunOnAsync(
+        string connectionString, Dictionary<string, string> environment, params string[] arguments)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var web = typeof(Program).Assembly.Location;
@@ -202,6 +244,11 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
                 },
             },
         };
+        foreach (var (name, value) in environment)
+        {
+            process.StartInfo.Environment[name] = value;
+        }
+
         process.Start();
         try
         {

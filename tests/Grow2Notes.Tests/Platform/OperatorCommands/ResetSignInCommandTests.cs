@@ -1,17 +1,21 @@
 using System.Net;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.Email;
 using Grow2Notes.Web.Platform.OperatorCommands;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
+using OpenIddict.Abstractions;
+using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Grow2Notes.Tests.Platform.OperatorCommands;
 
@@ -73,7 +77,7 @@ public sealed class ResetSignInCommandTests : IClassFixture<Grow2NotesFactory>, 
     [Theory]
     [InlineData(true, 0)]
     [InlineData(false, 2)]
-    public async Task For_the_only_active_manager_it_resets_their_sign_in_prints_only_a_link_and_ends_their_sessions(
+    public async Task For_the_only_active_manager_it_resets_their_sign_in_emails_a_link_and_ends_their_sessions(
         bool passwordAndCode, int passkeys)
     {
         var organisationId = await AddOrganisationAsync();
@@ -86,10 +90,12 @@ public sealed class ResetSignInCommandTests : IClassFixture<Grow2NotesFactory>, 
 
         var run = await app.RunAdminCommandAsync(["reset-signin", manager.Email]);
 
-        Assert.Equal((0, ""), (run.ExitCode, run.Error));
-        var setupLink = run.SingleOutputLine();
-        Assert.StartsWith(
-            $"{Grow2NotesFactory.Origin}/setup#u={manager.Id:D}&t=", setupLink, StringComparison.Ordinal);
+        // Nothing is printed: the link is in the email alone, which goes to the address the account holds.
+        Assert.Equal((0, "", ""), (run.ExitCode, run.Output, run.Error));
+        var message = Assert.Single(Sent(app));
+        Assert.Equal((manager.Email, SetupLinkEmail.Subject), (message.To, message.Subject));
+        var setupLink = SetupLinks.FromEmail(message);
+        Assert.Equal(manager.Id.ToString("D"), setupLink.UserId);
 
         var after = await StoredAsync(manager.Id);
         Assert.NotEqual(before.SecurityStamp, after.SecurityStamp);
@@ -117,47 +123,49 @@ public sealed class ResetSignInCommandTests : IClassFixture<Grow2NotesFactory>, 
             ],
             await StoredEventsAboutAsync(manager.Id));
 
-        // The operator gives the person the printed link, so no email is sent.
-        Assert.Empty(Sent(app));
         await devices.AssertNextRequestsAsync(
             HttpStatusCode.Unauthorized, SignedInDevices.Me, SignedInDevices.Ping);
         using var client = app.CreateHttpsClient();
-        await client.StartSetupAsync(SetupLinks.Read(setupLink, manager.Email));
+        await client.StartSetupAsync(setupLink);
     }
 
-    // The case of a lost bootstrap link (ops/break-glass.md): the new key ends the link printed before.
+    // The case of a lost bootstrap link (ops/break-glass.md): the new key ends the link emailed before.
     [Fact]
-    public async Task For_an_Invited_user_it_prints_a_new_link_and_the_old_one_gets_410()
+    public async Task For_an_Invited_user_it_emails_a_new_link_and_the_old_one_gets_410()
     {
         var oldLink = await app.InviteAsync(a);
         var userId = Guid.Parse(oldLink.UserId);
 
         var run = await app.RunAdminCommandAsync(["reset-signin", oldLink.Email]);
 
-        Assert.Equal((0, ""), (run.ExitCode, run.Error));
-        var setupLink = run.SingleOutputLine();
-        Assert.StartsWith($"{Grow2NotesFactory.Origin}/setup#u={userId:D}&t=", setupLink, StringComparison.Ordinal);
+        Assert.Equal((0, "", ""), (run.ExitCode, run.Output, run.Error));
+        var message = Assert.Single(Sent(app));
+        Assert.Equal((oldLink.Email, SetupLinkEmail.Subject), (message.To, message.Subject));
+        var setupLink = SetupLinks.FromEmail(message);
+        Assert.Equal(userId.ToString("D"), setupLink.UserId);
         Assert.Equal(UserStatus.Invited, (await StoredAsync(userId)).Status);
         var written = Assert.Single(await StoredEventsAboutAsync(userId));
         Assert.Equal((null, AuditEventTypes.Admin.SignInReset), (written.ActorUserId, written.EventType));
-        Assert.Empty(Sent(app));
 
         using var client = app.CreateHttpsClient();
         await client.AssertSetupLinkEndedAsync(oldLink);
-        await client.StartSetupAsync(SetupLinks.Read(setupLink, oldLink.Email));
+        await client.StartSetupAsync(setupLink);
     }
 
-    // Identity finds an account by its normalised address, as sign-in does (A27).
+    // Identity finds an account by its normalised address, as sign-in does (A27). The email goes to the address as the
+    // account stores it, not as it was typed.
     [Fact]
-    public async Task The_address_in_another_letter_case_finds_the_user()
+    public async Task The_address_in_another_letter_case_finds_the_user_and_the_email_goes_to_the_stored_address()
     {
         var worker = await AddUserAsync(a.OrganisationId, UserRole.Worker, UserStatus.Active);
+        Assert.NotEqual(worker.Email, worker.Email.ToUpperInvariant());
 
         var run = await app.RunAdminCommandAsync(["reset-signin", worker.Email.ToUpperInvariant()]);
 
-        Assert.Equal((0, ""), (run.ExitCode, run.Error));
-        Assert.StartsWith(
-            $"{Grow2NotesFactory.Origin}/setup#u={worker.Id:D}&t=", run.SingleOutputLine(), StringComparison.Ordinal);
+        Assert.Equal((0, "", ""), (run.ExitCode, run.Output, run.Error));
+        var message = Assert.Single(Sent(app));
+        Assert.Equal(worker.Email, message.To);
+        Assert.Equal(worker.Id.ToString("D"), SetupLinks.FromEmail(message).UserId);
         Assert.Equal(UserStatus.Invited, (await StoredAsync(worker.Id)).Status);
         Assert.Equal(
             AuditEventTypes.Admin.SignInReset, Assert.Single(await StoredEventsAboutAsync(worker.Id)).EventType);
@@ -209,6 +217,32 @@ public sealed class ResetSignInCommandTests : IClassFixture<Grow2NotesFactory>, 
             (1, "", Refusal($"{reason}, so no setup link can be made.")), (run.ExitCode, run.Output, run.Error));
         Assert.Equal(counts, await CountRowsAsync());
         Assert.Equal(before, await ReadUserAsync(worker.Id));
+        Assert.Empty(Sent(withOrigin));
+    }
+
+    // The email goes before the commit, so a send that fails rolls back the reset, with the revoking of the user's
+    // assistant authorisations (T01's Notes): the user's row, password, passkeys and key are as they were.
+    [Fact]
+    public async Task When_the_email_is_not_sent_it_exits_with_1_and_the_sign_in_is_as_it_was()
+    {
+        var manager = await AddUserAsync(a.OrganisationId, UserRole.Manager, UserStatus.Active, passkeys: 1);
+        await AddAuthorisationAsync(manager.Id);
+        var before = await StoredAsync(manager.Id);
+        Assert.True(before is { PasswordHash: not null, TwoFactorEnabled: true, Passkeys: 1 });
+        var row = await ReadUserAsync(manager.Id);
+        var counts = await CountRowsAsync();
+        await using var failing = app.WithWebHostBuilder(
+            builder => builder.ConfigureTestServices(FailingEmailSender.ReplaceAppSender));
+
+        var run = await failing.RunAdminCommandAsync(["reset-signin", manager.Email]);
+
+        Assert.Equal(
+            (1, "", Refusal("The setup-link email could not be sent.")), (run.ExitCode, run.Output, run.Error));
+        Assert.Equal(before, await StoredAsync(manager.Id));
+        Assert.Equal(row, await ReadUserAsync(manager.Id));
+        Assert.Equal([Statuses.Valid], await AuthorisationStatusesAsync(manager.Id));
+        Assert.Equal(counts, await CountRowsAsync());
+        Assert.Empty(await StoredEventsAboutAsync(manager.Id));
     }
 
     // A manager changes the worker in the app while the command's first save is held, after it loaded them: that save
@@ -240,29 +274,40 @@ public sealed class ResetSignInCommandTests : IClassFixture<Grow2NotesFactory>, 
             (run.ExitCode, run.Output, run.Error));
         Assert.Equal(changed, await ReadUserAsync(worker.Id));
         Assert.Empty(await StoredEventsAboutAsync(worker.Id));
+        Assert.Empty(Sent(gated));
     }
 
     // The link holds the setup token, and the address is personal (design.md §9.5). The token is looked for as the link
-    // holds it too, escaped, since its base64 almost always has a +, / or = in it, which the link has as %XX.
+    // holds it too, escaped, since its base64 almost always has a +, / or = in it, which the link has as %XX. A send
+    // that fails throws an exception whose message holds the address and the link, which must not reach the logs
+    // either.
     [Fact]
-    public async Task Neither_a_run_nor_a_refused_one_logs_the_address_or_the_link()
+    public async Task Neither_a_run_nor_a_refused_or_failed_one_logs_the_address_or_the_link()
     {
         var logs = new RecordingLoggerProvider();
         await using var logged = app.WithWebHostBuilder(
             builder => builder.ConfigureLogging(logging => logging.AddProvider(logs)));
+        await using var failing = logged.WithWebHostBuilder(
+            builder => builder.ConfigureTestServices(FailingEmailSender.ReplaceAppSender));
         var worker = await AddUserAsync(a.OrganisationId, UserRole.Worker, UserStatus.Active);
+        var unsent = await AddUserAsync(a.OrganisationId, UserRole.Worker, UserStatus.Active);
         var deactivated = await AddUserAsync(a.OrganisationId, UserRole.Worker, UserStatus.Deactivated);
         var noAccount = NewAddress();
 
         var done = await logged.RunAdminCommandAsync(["reset-signin", worker.Email]);
         var refusedAsDeactivated = await logged.RunAdminCommandAsync(["reset-signin", deactivated.Email]);
         var refusedAsNoAccount = await logged.RunAdminCommandAsync(["reset-signin", noAccount]);
+        var failed = await failing.RunAdminCommandAsync(["reset-signin", unsent.Email]);
 
-        Assert.Equal((0, 1, 1), (done.ExitCode, refusedAsDeactivated.ExitCode, refusedAsNoAccount.ExitCode));
-        var setupLink = done.SingleOutputLine();
-        var token = SetupLinks.Read(setupLink, worker.Email).Token;
+        Assert.Equal(
+            (0, 1, 1, 1),
+            (done.ExitCode, refusedAsDeactivated.ExitCode, refusedAsNoAccount.ExitCode, failed.ExitCode));
+        var token = SetupLinks.FromEmail(Assert.Single(Sent(logged))).Token;
         string[] personal =
-            [worker.Email, deactivated.Email, noAccount, setupLink, token, Uri.EscapeDataString(token)];
+        [
+            worker.Email, unsent.Email, deactivated.Email, noAccount, $"{Grow2NotesFactory.Origin}/setup", token,
+            Uri.EscapeDataString(token),
+        ];
         Assert.DoesNotContain(logs.Entries, entry => personal.Any(entry.Holds));
     }
 
@@ -282,6 +327,36 @@ public sealed class ResetSignInCommandTests : IClassFixture<Grow2NotesFactory>, 
 
     private static void AssertSucceeded(IdentityResult result) =>
         Assert.True(result.Succeeded, string.Join(" ", result.Errors.Select(error => error.Code)));
+
+    // An assistant authorisation of the user's, as a connected assistant leaves one.
+    private async Task AddAuthorisationAsync(Guid userId)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>().CreateAsync(
+            new OpenIddictAuthorizationDescriptor
+            {
+                Subject = userId.ToString("D"),
+                Status = Statuses.Valid,
+                Type = AuthorizationTypes.Permanent,
+                CreationDate = clock.GetUtcNow().UtcDateTime,
+            },
+            TestContext.Current.CancellationToken);
+    }
+
+    // The status of each authorisation that OpenIddict holds for the user, in a scope of its own.
+    private async Task<List<string?>> AuthorisationStatusesAsync(Guid userId)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = app.Services.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>();
+        var statuses = new List<string?>();
+        await foreach (var authorisation in manager.FindBySubjectAsync(userId.ToString("D"), cancellationToken))
+        {
+            statuses.Add(await manager.GetStatusAsync(authorisation, cancellationToken));
+        }
+
+        return statuses;
+    }
 
     // An organisation is the tenant, not tenant-owned, so this needs no tenant.
     private async Task<Guid> AddOrganisationAsync()
