@@ -64,7 +64,8 @@ F-1 was fixed on 25 October 2026, at the owner's decision. One Medium finding st
 1 November 2026 (D97): a password only has no second factor. Every finding is recorded with a decision. "Accepted"
 means the developer decided to leave it, and the owner may overturn that. "Fixed" means the owner asked for the change
 and it is made; the row says how. No finding is in `infra/` at High or Critical, so no bug story was filed; `infra/`
-was edited afterwards only to fix a finding at the owner's request (F-25 and F-8: `bootstrap.bicep`).
+was edited afterwards only to fix a finding at the owner's request (F-25 and F-8: `bootstrap.bicep`; F-7:
+`keyvault.bicep`).
 Counts: Medium 2 (1 fixed, 1 accepted by the owner); Low 17; Informational 7.
 
 ### 3.1 Register
