@@ -209,6 +209,7 @@ public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture
 
         await using var client = await flow.McpClientAsync(tokens.AccessToken, revision);
 
+        Assert.NotNull(client.ServerInfo);
         Assert.Equal("Grow2Notes", client.ServerInfo.Name);
         Assert.Equal("2.0", client.ServerInfo.Version);
         Assert.Equal(McpSetup.ServerInstructions, client.ServerInstructions);
