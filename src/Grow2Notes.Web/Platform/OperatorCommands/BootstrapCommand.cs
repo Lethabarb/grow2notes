@@ -3,21 +3,23 @@ using System.Text.Json.Nodes;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform.Audit;
+using Grow2Notes.Web.Platform.Email;
 using Microsoft.AspNetCore.Identity;
 
 namespace Grow2Notes.Web.Platform.OperatorCommands;
 
 /// <summary>
 /// <c>admin bootstrap</c> (design.md §7.4): creates an organisation, with its Every note group (A43), and invites its
-/// first manager, in one transaction with its <c>admin.bootstrap</c> event, and prints the manager's setup link. There
-/// is no sign-up screen (A1), so this is how each organisation starts. It logs nothing, because the link holds the
-/// setup token and the address is personal (§9.5): the link goes to the output writer only, and the command keeps no
-/// copy of it.
+/// first manager, in one transaction with its <c>admin.bootstrap</c> event, and emails the manager's setup link, as an
+/// invite does. There is no sign-up screen (A1), so this is how each organisation starts. It logs nothing and prints
+/// nothing, because the link holds the setup token and the address is personal (§9.5): the link goes in the email
+/// only, and the command keeps no copy of it.
 /// </summary>
 internal sealed class BootstrapCommand(
     Grow2NotesDbContext db,
     Invitations invitations,
     IAuditWriter audit,
+    IEmailSender emailSender,
     ITenantContext tenant,
     TimeProvider timeProvider,
     IConfiguration configuration)
@@ -43,15 +45,16 @@ internal sealed class BootstrapCommand(
 
     /// <summary>
     /// Reads <paramref name="options"/>, then, in one transaction, adds the organisation with its Every note group,
-    /// invites its first manager through the invite core, and writes <c>admin.bootstrap</c>; once that has committed,
-    /// writes the manager's setup link on <paramref name="output"/>. A refused run says why on <paramref name="error"/>
-    /// and has written nothing: an unknown, missing, empty or overlong option and an <c>App:Origin</c> that is missing
-    /// or not an absolute address are refused before the transaction, and an address that Identity refuses, such as
-    /// one that already has an account (A27), rolls it back.
+    /// invites its first manager through the invite core, writes <c>admin.bootstrap</c>, and emails the manager's
+    /// setup link before the commit, so that a send that fails leaves nothing created. A refused run says why on
+    /// <paramref name="error"/> and has written nothing: an unknown, missing, empty or overlong option and an
+    /// <c>App:Origin</c> that is missing or not an absolute address are refused before the transaction, and an
+    /// address that Identity refuses, such as one that already has an account (A27), or an email that is not sent,
+    /// as when the email settings are blank, rolls it back.
     /// </summary>
     /// <returns><see cref="AdminCommands.Done"/>, or <see cref="AdminCommands.Refused"/>.</returns>
     public async Task<int> RunAsync(
-        IReadOnlyList<string> options, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+        IReadOnlyList<string> options, TextWriter error, CancellationToken cancellationToken)
     {
         if (!TryRead(options, out var values, out var problem))
         {
@@ -63,11 +66,10 @@ internal sealed class BootstrapCommand(
             return await AdminCommands.RefuseAsync(error, originProblem, usage: null);
         }
 
-        // Set by each attempt, so that once a transient failure has run the work again, it holds the link of the
-        // attempt that committed. If the failure came after a commit had reached the server, the address that commit
-        // saved refuses the next attempt: no second organisation is added, but the run is refused as having written
-        // nothing, which that commit makes untrue.
-        string? setupLink = null;
+        // A transient failure runs the whole work again, which sends a second email, and the link of the first now
+        // answers 410. If the failure came after a commit had reached the server, the address that commit saved
+        // refuses the next attempt: no second organisation is added, but the run is refused as having written
+        // nothing, which that commit makes untrue, although its email went.
         try
         {
             await db.InTransactionAsync(async ct =>
@@ -101,15 +103,18 @@ internal sealed class BootstrapCommand(
                         new JsonObject { ["userId"] = invite.User.Id }, ct);
                 }
 
-                setupLink = invite.SetupLink;
+                await SetupLinkEmail.SendAsync(emailSender, values.ManagerEmail, invite.SetupLink, ct);
             }, cancellationToken);
         }
         catch (InviteRefusedException refused)
         {
             return await AdminCommands.RefuseAsync(error, Describe(refused.Errors), usage: null);
         }
+        catch (EmailNotSentException)
+        {
+            return await AdminCommands.RefuseAsync(error, AdminCommands.EmailNotSent, usage: null);
+        }
 
-        await output.WriteLineAsync(setupLink);
         return AdminCommands.Done;
     }
 
