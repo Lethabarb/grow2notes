@@ -52,6 +52,9 @@ param pointInTimeRestoreDays int
 @description('Whether AI-assistant access for managers and admins is on: on in test, off in prod (mcp-server.md).')
 param mcpEnabled bool = false
 
+@description('The size of the Key Vault key that wraps the key ring: 3072 in prod, 2048 in test (F-7, §10.3).')
+param dataProtectionKeySize 2048 | 3072
+
 // bootstrap.bicep creates the identity and its roles; this file only reads it, by the name bootstrap.bicep gives it, so
 // no client ID has to be copied into the repository (D60).
 resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
@@ -95,6 +98,7 @@ module keyVault 'modules/keyvault.bicep' = {
   params: {
     environmentName: environmentName
     subnetId: network.outputs.subnetId
+    dataProtectionKeySize: dataProtectionKeySize
     resendApiKey: resendApiKey
   }
 }

@@ -24,6 +24,10 @@ param useFreeOffer = false
 param backupStorageRedundancy = 'Geo'
 param pointInTimeRestoreDays = 35
 
+// The Key Vault key that wraps the key ring: RSA 3072, 128 bits of security (ops/security-review.md F-7). Azure makes
+// it with the vault and never changes it, so this must not change after the first deploy.
+param dataProtectionKeySize = 3072
+
 // Placeholders only. Every deploy passes the real values as parameters, from the prod environment's secrets, because
 // the object ID belongs to the operator's tenant and the addresses may contain the company's name (D42, D60, D64, D65);
 // sql.bicep and monitoring.bicep refuse the first three empty, and an empty sender address makes the app warn and
