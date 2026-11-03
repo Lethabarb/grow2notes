@@ -115,14 +115,14 @@ resource pointInTimeRestore 'Microsoft.Sql/servers/databases/backupShortTermRete
 }
 
 // Long-term retention is production's alone (design.md §10.1, §10.3): one backup a month, kept for 12 months. Weekly
-// and yearly are PT0S, which is none. The policy resource is left out of test, so test keeps no long-term backups.
+// and yearly are left out, which Azure stores as PT0S, none: a yearly value, even PT0S, is refused without a week of
+// the year (LongTermRetentionMissingWeekOfYear, at production's first deploy). The policy resource is left out of
+// test, so test keeps no long-term backups.
 resource longTermRetention 'Microsoft.Sql/servers/databases/backupLongTermRetentionPolicies@2025-01-01' = if (environmentName == 'prod') {
   parent: database
   name: 'default'
   properties: {
     monthlyRetention: 'P12M'
-    weeklyRetention: 'PT0S'
-    yearlyRetention: 'PT0S'
   }
 }
 
