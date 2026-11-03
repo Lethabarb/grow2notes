@@ -64,7 +64,8 @@ F-1 was fixed on 25 October 2026, at the owner's decision. One Medium finding st
 1 November 2026 (D97): a password only has no second factor. Every finding is recorded with a decision. "Accepted"
 means the developer decided to leave it, and the owner may overturn that. "Fixed" means the owner asked for the change
 and it is made; the row says how. No finding is in `infra/` at High or Critical, so no bug story was filed; `infra/`
-was edited afterwards only to fix a finding at the owner's request (F-25 and F-8: `bootstrap.bicep`).
+was edited afterwards only to fix a finding at the owner's request (F-25 and F-8: `bootstrap.bicep`; F-7:
+`keyvault.bicep`).
 Counts: Medium 2 (1 fixed, 1 accepted by the owner); Low 17; Informational 7.
 
 ### 3.1 Register
@@ -77,7 +78,7 @@ Counts: Medium 2 (1 fixed, 1 accepted by the owner); Low 17; Informational 7.
 | F-4 | Low | 6.2.2, 7.5.1, 7.5.2 | design.md §8.6 | No self-service account management: a person cannot change their password, or list their sessions or end one alone (Sign out ends them all, A99), and a manager is not asked to sign in again before changing a person's email or resetting their sign-in. | Accepted, by design: recovery goes through a manager (D23, D74); a reset is confirmed in a dialog and audited. | Accepted |
 | F-5 | Low | 11.4.2 | `Program.cs` | Passwords are hashed with Identity's default PBKDF2 at its default of 100,000 iterations, below OWASP's current guidance for HMAC-SHA512. | Accepted: it matters only to someone who already has a copy of the database, and a second factor remains for the people who chose one (D97, F-26). Raising `PasswordHasherOptions.IterationCount` is one line, and Identity rehashes at the next sign-in. | Accepted |
 | F-6 | Low | 3.3.1, 3.3.2, 3.3.3 | `Program.cs`, `EnrolmentCookie.cs` | Identity's two-factor cookie keeps its defaults (SameSite Lax, Secure as the request is, no `__Host-` prefix), and the setup cookie is `__Secure-` with a path, not `__Host-`. | Accepted: both are HttpOnly, last 5 and 30 minutes, hold a protected ID, and every endpoint that reads them needs the antiforgery token; the setup cookie's path is deliberate. Setting `SecurePolicy` and `SameSite` on the two-factor scheme is two lines beside the existing `Configure` call. | Accepted |
-| F-7 | Low | 11.2.3 | `infra/modules/keyvault.bicep` | The Key Vault key that wraps the Data Protection key ring is RSA 2048, about 112 bits of security where the standard asks for 128. | Accepted, `infra/` not edited: the key only wraps the key ring, which is itself AES-256. A 3072-bit key is a change to the vault module and a re-wrap, best made when production is first deployed. | Accepted |
+| F-7 | Low | 11.2.3 | `infra/modules/keyvault.bicep` | The Key Vault key that wraps the Data Protection key ring is RSA 2048, about 112 bits of security where the standard asks for 128. | Fixed for production (the owner's go-live decision, 3 November 2026): `keyvault.bicep` makes the key RSA 3072, which production's vault gets when it is first created. ARM never changes an existing key, so test keeps its RSA 2048 key, which wraps only made-up data's key ring. | Fixed |
 | F-8 | Low | 13.2.2 | `infra/modules/bootstrap-environment.bicep` | The app identity held the built-in role Communication and Email Service Owner, to send mail with Entra ID, which is broader than sending. | Fixed (D92, 25 October 2026): Communication Services is gone, and the role is replaced by Key Vault Secrets User at group scope, which only reads secrets, to read the Resend key (`infra/modules/bootstrap-environment.bicep`). The old role assignment is deleted by hand (`infra/README.md`, `ops/first-use-in-test.md` step 153). | Fixed |
 | F-9 | Low | 13.2.3 | `.github/workflows/ci.yml`, `tests/README.md` | CI and the test guide hold a fixed SQL Server password for a throwaway container. The repository is public. | Accepted: the password guards a container that exists for one CI job and is reachable only inside it; no deployed system uses it. | Accepted |
 | F-10 | Low | 13.2.4 | `.github/workflows/deploy.yml` | The deploy asks a third-party service for the runner's address, to open a temporary SQL firewall rule. | Accepted: the answer must look like an IPv4 address, the rule is deleted after the migration whatever happens, and SQL accepts Entra sign-in only, so the firewall alone gives no access. | Accepted |
@@ -164,7 +165,7 @@ Counts: Medium 2 (1 fixed, 1 accepted by the owner); Low 17; Informational 7.
 | What | Algorithm and size | Kept in | Protected by |
 |---|---|---|---|
 | Session, antiforgery, enrolment and two-factor cookies; setup tokens | AES-256-CBC with HMAC-SHA256 (Data Protection's default) | The key ring in `dbo.DataProtectionKeys` | The Key Vault key below |
-| Key ring wrapping key `data-protection` | RSA 2048, wrap and unwrap only, OAEP (F-7) | Key Vault, with soft delete and purge protection | Entra RBAC: the app identity's Crypto Service Encryption User role |
+| Key ring wrapping key `data-protection` | RSA 3072 in production and RSA 2048 in test, wrap and unwrap only, OAEP (F-7) | Key Vault, with soft delete and purge protection | Entra RBAC: the app identity's Crypto Service Encryption User role |
 | Resend API key | Opaque bearer token | Key Vault secret `resend-api-key`, written by each deploy from the environment's GitHub secret `RESEND_API_KEY` and read at each send | Entra RBAC: the app identity's Key Vault Secrets User role |
 | Passwords | PBKDF2 with 100,000 iterations (F-5) | `AspNetUsers` | Database access control |
 | Authenticator keys | HMAC-SHA1 TOTP of RFC 6238, 6 digits (F-12) | Identity's user-token table | Database access control |
@@ -456,7 +457,7 @@ Of the 253 rows, 153 are met (8 of them confirmed in test), 86 are not applicabl
 | 11.1.2 | 2 | Cryptographic inventory | Met: the cryptographic inventory in section 4 of this record lists every key, algorithm and certificate. |
 | 11.2.1 | 2 | Industry-validated implementations | Met: .NET's cryptography, ASP.NET Core Data Protection, Identity's hasher and the Azure SDK; the app implements no algorithm. |
 | 11.2.2 | 2 | Changing algorithms | Met: each algorithm is a library setting in one place (Data Protection, `PasswordHasherOptions`, the Key Vault key), not spread through the code. |
-| 11.2.3 | 2 | 128 bits of security | F-7: the Key Vault wrapping key is RSA 2048; the rest meets it (AES-256, HMAC-SHA256, TLS 1.2 or later). |
+| 11.2.3 | 2 | 128 bits of security | Met in production: the Key Vault wrapping key is RSA 3072 (F-7; test's is RSA 2048); the rest meets it (AES-256, HMAC-SHA256, TLS 1.2 or later). |
 | 11.3.1 | 1 | No weak block modes or padding | Met: Data Protection uses AES-CBC with HMAC and the Key Vault client wraps with RSA-OAEP (the library names `RsaOaep` only); the app chooses no mode. |
 | 11.3.2 | 1 | Approved ciphers and modes | Met: AES-256-CBC with HMAC-SHA256 (Data Protection's default) and RSA-OAEP for wrapping. |
 | 11.3.3 | 2 | Encrypted data protected from change | Met: Data Protection encrypts then authenticates, so a changed payload fails to unprotect; data in SQL is not encrypted by the app, deliberately (design.md §9.3). |
@@ -465,7 +466,7 @@ Of the 253 rows, 153 are met (8 of them confirmed in test), 86 are not applicabl
 | 11.4.3 | 2 | Hashes in digital signatures | N/A: the app makes no digital signatures. |
 | 11.4.4 | 2 | Keys derived from passwords | N/A: no key is derived from a password; passwords are only hashed for checking (11.4.2). |
 | 11.5.1 | 2 | Random values | Met: secrets come from Identity and Data Protection; there is no `System.Random` in `src/`. |
-| 11.6.1 | 2 | Public-key algorithms | Met: the one key pair is the Key Vault RSA key of 2048 bits, used with OAEP; TLS keys are the platform's (strength is F-7). |
+| 11.6.1 | 2 | Public-key algorithms | Met: the one key pair is the Key Vault RSA key, 3072 bits in production and 2048 in test, used with OAEP; TLS keys are the platform's (strength is F-7). |
 
 ### V12 Secure communication
 

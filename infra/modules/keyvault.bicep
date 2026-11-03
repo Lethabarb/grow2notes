@@ -57,13 +57,14 @@ resource vault 'Microsoft.KeyVault/vaults@2026-02-01' = {
   }
 }
 
-// ARM creates the key only if it does not exist yet: a redeploy never changes it or adds a version.
+// ARM creates the key only if it does not exist yet: a redeploy never changes it or adds a version. So 3072 bits, 128
+// bits of security (F-7), applies to a vault made from now on, such as production's; test keeps its 2048-bit key.
 resource dataProtectionKey 'Microsoft.KeyVault/vaults/keys@2026-02-01' = {
   parent: vault
   name: 'data-protection'
   properties: {
     kty: 'RSA'
-    keySize: 2048
+    keySize: 3072
     keyOps: [
       'wrapKey'
       'unwrapKey'
