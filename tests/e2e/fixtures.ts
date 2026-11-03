@@ -12,11 +12,11 @@ export { expect };
 const reportsCspViolation = (message: ConsoleMessage) =>
   message.type() === 'error' && message.text().includes('Content Security Policy');
 
-/** A first manager whom the published app's `admin bootstrap` invited, with the setup link that it printed. */
+/** A first manager whom the published app's `admin bootstrap` invited, with the setup link that it emailed. */
 export type Invite = {
   displayName: string;
   email: string;
-  /** The link as the command printed it, `…/setup#u=…&t=…`. */
+  /** The link as the command's email holds it, `…/setup#u=…&t=…`. */
   setupLink: string;
 };
 
@@ -25,9 +25,10 @@ export type Invite = {
 const commandSettings = ['E2E_APP_DIR', 'ConnectionStrings__Grow2Notes', 'App__Origin'];
 
 /**
- * Runs one of the published app's own operator commands that print a setup link (ops/break-glass.md) as the SSH
- * console runs it: from the app's folder, with the settings of the app under test, so that the link opens there.
- * Gives the link, which the command prints and nothing else.
+ * Runs one of the published app's own operator commands that email a setup link (ops/break-glass.md) as the SSH
+ * console runs it: from the app's folder, with the settings of the app under test, so that the link opens there. CI
+ * sends no email, so the command runs with the console sender, which writes the email on standard output (design.md
+ * §10.3). Gives the one link in that email.
  */
 async function adminCommand(baseURL: string | undefined, args: readonly string[]): Promise<string> {
   const missing = commandSettings.filter((name) => !process.env[name]);
@@ -35,14 +36,27 @@ async function adminCommand(baseURL: string | undefined, args: readonly string[]
     throw new Error(`admin ${args[0]} needs these settings, which tests/README.md describes: ${missing.join(', ')}.`);
   }
 
-  const { stdout } = await promisify(execFile)(
+  const { stdout, stderr } = await promisify(execFile)(
     'dotnet',
     ['Grow2Notes.Web.dll', 'admin', ...args],
-    // Production, as the app runs in CI and in App Service, so that no appsettings.Development.json is read.
-    { cwd: process.env.E2E_APP_DIR, env: { ...process.env, ASPNETCORE_ENVIRONMENT: 'Production' } },
+    // Production, as the app runs in CI and in App Service, so that no appsettings.Development.json is read, with
+    // the console sender chosen by the setting, as the server step of CI chooses it.
+    {
+      cwd: process.env.E2E_APP_DIR,
+      env: { ...process.env, ASPNETCORE_ENVIRONMENT: 'Production', Email__UseConsole: 'true' },
+    },
   );
 
-  const setupLink = stdout.trim();
+  const links = stdout.split(/\r?\n/).filter((line) => line.startsWith('https://'));
+  // Only standard error is reported, because standard output holds the email and the CI log is public (A103).
+  if (links.length !== 1) {
+    throw new Error(
+      `admin ${args[0]} should email one setup link on standard output, but gave ${links.length}. ` +
+        `Standard error: ${stderr.trim() || 'empty'}`,
+    );
+  }
+
+  const setupLink = links[0];
   expect(new URL(setupLink).origin, 'App__Origin is the address that the tests open').toBe(
     new URL(baseURL ?? '').origin,
   );
@@ -194,8 +208,9 @@ export const test = base.extend<{
   secondInvite: async ({ baseURL }, use) => {
     await use(await adminBootstrap(baseURL, 'Jordan'));
   },
-  // The published app's own admin reset-signin for an address, which gives the new link that it prints: for someone
-  // invited from the Users screen, whose emailed link the test cannot read, the way to a link of their own.
+  // The published app's own admin reset-signin for an address, which gives the new link that it emails to the
+  // console: for someone invited from the Users screen, whose emailed link the test cannot read, the way to a link of
+  // their own.
   resetSignIn: async ({ baseURL }, use) => {
     await use((email) => adminCommand(baseURL, ['reset-signin', email]));
   },
