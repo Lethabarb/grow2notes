@@ -43,7 +43,7 @@ provider's organisation and first manager. It must merge before go-live section 
 Up to four lanes run at once, each one task at a time:
 
 - **A:** T01, T04, T11, T16, T19, T24 for Release 1, then T30 to T38, then T41, then T39, one after another, because
-  each MCP tool edits the shared `tools/list` snapshot and tool matrix.
+  each MCP tool edits the shared `tools/list` snapshot and tool matrix. T43 follows T41.
 - **B:** T02, T05, T06, T07, T15, T17, T21, T25, then T29 beside T30, then T42.
 - **C:** T03, T08, T09, T10, T12, T13, T14, T18, T20, T26. The note form is one hot spot, so its tasks run back to
   back.
@@ -8166,7 +8166,7 @@ changed, and the pull request names each.
 
 ```yaml
 id: T43
-status: doing
+status: done
 release: R1
 lane: A
 size: M
@@ -8228,6 +8228,11 @@ organisation starts. It must merge before go-live section D.
   not strictly true for a first manager and is kept unchanged because the owner asked for the same email (D85, first-use
   step 201); (2) `az webapp exec` is a preview command, so go-live keeps the by-hand block as the fallback.
 - Only `admin bootstrap` is agent-run. `admin reset-signin` now emails but stays a by-hand break-glass step.
+- Built on 3 November 2026. The workflow's review and fix agents could not run (the organisation's Claude
+  subscription access for Claude Code was off), so the main session reviewed v1 and v2, fixed v1's end-to-end
+  fixture (it took only lines starting `https://`, while CI's app runs at `http://localhost:5000`, so 60 end-to-end
+  tests failed in `admin bootstrap`), and wrote v3. `az webapp exec` was read on Microsoft Learn's `az webapp`
+  reference the same day (`ops/onboard-provider.md`). go-live D's rehearsal gate is first-use steps 219 to 222.
 - Not touched: no endpoint, MCP tool, SPA route, table, column, event type or migration (the latest stays
   `20261026094320_AddOpenIddict`), no infra, and nothing in Azure or GitHub.
 
@@ -8272,10 +8277,10 @@ Decisions where the design is silent: A144 and D101, as in the Notes.
 
 ### Steps
 
-- [ ] App (v1): the emailed link, no stdout on success, no telemetry for commands, the tests, the e2e fixture and
+- [x] App (v1): the emailed link, no stdout on success, no telemetry for commands, the tests, the e2e fixture and
       tests/README.md.
-- [ ] Skill (v2): `bootstrap.sh`, SKILL.md section B, by-hand.md, and `OnboardingSkillTests`.
-- [ ] Records (v3): break-glass.md, go-live.md D, onboard-provider.md, first-use-in-test.md, design.md, D101 and A144,
+- [x] Skill (v2): `bootstrap.sh`, SKILL.md section B, by-hand.md, and `OnboardingSkillTests`.
+- [x] Records (v3): break-glass.md, go-live.md D, onboard-provider.md, first-use-in-test.md, design.md, D101 and A144,
       the amended stories, S07.06.02, and this file's counts, lane list and totals.
 
 ---

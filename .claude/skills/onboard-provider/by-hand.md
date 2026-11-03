@@ -2,7 +2,8 @@
 
 The skill reads this file when it says so and leads the owner through it. The skill runs none of these steps,
 except that in section B it runs `bootstrap.sh` once. The operator pages it links are read from the freshly pulled
-main checkout at run time, and no block from them is copied here: [break-glass.md](../../../ops/break-glass.md) and [go-live.md](../../../ops/go-live.md), section D.
+main checkout at run time, and no block from them is copied here: [break-glass.md](../../../ops/break-glass.md) and
+[go-live.md](../../../ops/go-live.md), section D.
 
 ## A. Preconditions
 
