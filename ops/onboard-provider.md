@@ -42,7 +42,8 @@ server feature and no operator command over MCP (D48).
 
 The skill invites last, after the set-up. The hour's allowance and its arithmetic are in the pacing paragraph of
 [mcp-switch-on.md](mcp-switch-on.md). The skill keeps no count: the server's `rate_limited` is the stop, and the owner
-waits. A gap of over 30 minutes means signing in again from `/mcp`, which loses nothing.
+waits. The wait does not end the connection, which lasts until 7 days unused (D100). If Claude Code asks you to
+sign in again, do it from `/mcp`, which loses nothing.
 
 The invite email still says that a manager added the person, even when Support invites (A138). Whether that needs its
 own wording is step 201 of first-use-in-test.md.

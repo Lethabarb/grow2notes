@@ -31,7 +31,6 @@ internal static class TokenEndpoint
         HttpContext http,
         UserManager<ApplicationUser> users,
         IOpenIddictAuthorizationManager authorizations,
-        TimeProvider time,
         IConfiguration configuration)
     {
         var stored = (await http.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)).Principal
@@ -39,30 +38,23 @@ internal static class TokenEndpoint
         var subject = stored.GetClaim(Claims.Subject);
         var user = subject is null ? null : await users.FindByIdAsync(subject);
 
-        switch (AssistantTokens.Check(user, stored, time.GetUtcNow()))
+        if (!AssistantTokens.IsAllowed(user, stored))
         {
-            case AssistantTokenCheck.Allowed:
-                // OpenIddict puts back its own private claims (the authorisation, the presenters, the dates) from the
-                // code or refresh token that was presented, so only the person's are rebuilt here.
-                return Results.SignIn(
-                    AssistantTokens.PrincipalFor(
-                        user!,
-                        stored.GetClaim(Grow2NotesSignInManager.AuthTimeClaimType)!,
-                        stored.GetScopes(),
-                        McpSetup.Resource(configuration)),
-                    authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-
-            case AssistantTokenCheck.UserChanged:
-                // Whoever changed, every connection that person has ends, not only this one. The subject is the "D" ID
-                // that PrincipalFor wrote, and the revocation must finish even if the assistant disconnects.
-                await authorizations.RevokeConnectionsAsync(Guid.Parse(subject!), CancellationToken.None);
-                return Refused("The person is no longer allowed to connect an assistant.");
-
-            default:
-                // The session that began this chain is past its limit, and its sign-in time never changes, so the chain
-                // can never be used again. The person's other assistants, from a later sign-in, are not touched.
-                return Refused("The session that began this connection has ended.");
+            // Whoever changed, every connection that person has ends, not only this one. The subject is the "D" ID that
+            // PrincipalFor wrote, and the revocation must finish even if the assistant disconnects.
+            await authorizations.RevokeConnectionsAsync(Guid.Parse(subject!), CancellationToken.None);
+            return Refused("The person is no longer allowed to connect an assistant.");
         }
+
+        // OpenIddict puts back its own private claims (the authorisation, the presenters, the dates) from the code or
+        // refresh token that was presented, so only the person's are rebuilt here.
+        return Results.SignIn(
+            AssistantTokens.PrincipalFor(
+                user,
+                stored.GetClaim(Grow2NotesSignInManager.AuthTimeClaimType)!,
+                stored.GetScopes(),
+                McpSetup.Resource(configuration)),
+            authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
     private static IResult Refused(string description) =>

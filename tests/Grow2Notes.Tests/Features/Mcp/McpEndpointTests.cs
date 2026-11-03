@@ -361,29 +361,20 @@ public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture
     }
 
     [Fact]
-    public async Task A_call_past_12_hours_from_sign_in_is_refused_without_revoking()
+    public async Task A_call_days_after_the_sign_in_is_allowed()
     {
         var tokens = await flow.ConnectAsync(browser);
-        var limit = TestClock.Start + TimeSpan.FromHours(12);
-        tokens = await flow.RefreshEveryAsync(tokens, limit);
 
-        // The last refresh is a minute within the limit, so the token it gives is still valid when the call comes after
-        // the limit: only the check on the person's session can refuse it.
-        flow.Clock.Advance(limit - TimeSpan.FromMinutes(1) - flow.Clock.GetUtcNow());
+        // Past the app's own 12 hours from the sign-in, which no longer limit a connection (D100).
+        flow.Clock.Advance(TimeSpan.FromDays(6));
         using (var refresh = await flow.RefreshAsync(tokens.RefreshToken))
         {
             tokens = await AssistantFlow.ReadTokensAsync(refresh);
         }
 
-        using (var within = await flow.PostMcpAsync(tokens.AccessToken))
-        {
-            Assert.Equal(HttpStatusCode.OK, within.StatusCode);
-        }
+        using var call = await flow.PostMcpAsync(tokens.AccessToken);
 
-        flow.Clock.Advance(TimeSpan.FromMinutes(2));
-        using var past = await flow.PostMcpAsync(tokens.AccessToken);
-
-        await AssistantFlow.AssertChallengeAsync(past, Errors.InvalidToken);
+        Assert.Equal(HttpStatusCode.OK, call.StatusCode);
         Assert.Equal([Statuses.Valid], await flow.AuthorisationStatusesAsync(managerId));
     }
 

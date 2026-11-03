@@ -22,8 +22,7 @@ namespace Grow2Notes.Web.Features.Mcp;
 /// </remarks>
 internal sealed class AssistantCallCheck(
     UserManager<ApplicationUser> users,
-    IOpenIddictAuthorizationManager authorizations,
-    TimeProvider time) : IOpenIddictValidationHandler<ProcessAuthenticationContext>
+    IOpenIddictAuthorizationManager authorizations) : IOpenIddictValidationHandler<ProcessAuthenticationContext>
 {
     public static OpenIddictValidationHandlerDescriptor Descriptor { get; } =
         OpenIddictValidationHandlerDescriptor.CreateBuilder<ProcessAuthenticationContext>()
@@ -53,30 +52,16 @@ internal sealed class AssistantCallCheck(
         var subject = principal.GetClaim(Claims.Subject);
         var user = subject is null ? null : await users.FindByIdAsync(subject);
 
-        var check = AssistantTokens.Check(user, principal, time.GetUtcNow());
-        string? refusal = check switch
-        {
-            AssistantTokenCheck.Allowed => null,
-            AssistantTokenCheck.UserChanged => "The person is no longer allowed to use this connection.",
-            // The session that began the connection is past its limit, which never changes, so the token cannot be
-            // used again. The person's other assistants, from a later sign-in, are not touched.
-            AssistantTokenCheck.PastAbsoluteLimit => "The session that began this connection has ended.",
-        };
-
-        if (refusal is null)
+        if (AssistantTokens.IsAllowed(user, principal))
         {
             var identity = principal.Identities.First();
-            identity.AddClaim(new(identity.RoleClaimType, user!.Role.ToString()));
+            identity.AddClaim(new(identity.RoleClaimType, user.Role.ToString()));
             return;
         }
 
-        if (check == AssistantTokenCheck.UserChanged)
-        {
-            // As at the token endpoint, whoever changed, every connection that person has ends, and the revocation
-            // must finish even if the assistant disconnects.
-            await authorizations.RevokeConnectionsAsync(Guid.Parse(subject!), CancellationToken.None);
-        }
-
-        context.Reject(Errors.InvalidToken, refusal);
+        // As at the token endpoint, whoever changed, every connection that person has ends, and the revocation must
+        // finish even if the assistant disconnects.
+        await authorizations.RevokeConnectionsAsync(Guid.Parse(subject!), CancellationToken.None);
+        context.Reject(Errors.InvalidToken, "The person is no longer allowed to use this connection.");
     }
 }
