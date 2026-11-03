@@ -17,6 +17,9 @@ param tags object = resourceGroup().tags
 @description('The VNet integration subnet, from network.bicep: the only network the vault accepts.')
 param subnetId string
 
+@description('The size of the key that wraps the key ring, from the environment\'s parameters file (F-7).')
+param dataProtectionKeySize 2048 | 3072
+
 // Secure, so that ARM keeps the value out of the deployment's history. The module's parameter in main.bicep is too.
 @description('The Resend API key, from the environment\'s GitHub secret. Empty leaves the vault\'s secret as it is.')
 @secure()
@@ -57,14 +60,15 @@ resource vault 'Microsoft.KeyVault/vaults@2026-02-01' = {
   }
 }
 
-// ARM creates the key only if it does not exist yet: a redeploy never changes it or adds a version. So 3072 bits, 128
-// bits of security (F-7), applies to a vault made from now on, such as production's; test keeps its 2048-bit key.
+// ARM creates the key only if it does not exist yet. A redeploy never changes it or adds a version, and fails if it
+// asks for another size (KeyCreationParametersDidNotMatchExistingKey), so the size is each environment's: 3072 bits,
+// 128 bits of security, in production (F-7), and 2048 in test, whose key was made before that.
 resource dataProtectionKey 'Microsoft.KeyVault/vaults/keys@2026-02-01' = {
   parent: vault
   name: 'data-protection'
   properties: {
     kty: 'RSA'
-    keySize: 3072
+    keySize: dataProtectionKeySize
     keyOps: [
       'wrapKey'
       'unwrapKey'

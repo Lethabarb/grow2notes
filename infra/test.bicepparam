@@ -28,6 +28,10 @@ param pointInTimeRestoreDays = 7
 // Every deploy replaces the app settings, so this parameter, not a setting changed by hand, is what keeps it on.
 param mcpEnabled = true
 
+// Test's Key Vault key was made at 2048 bits before F-7 was fixed, and Azure refuses a deploy that asks an existing
+// key for another size, so this stays 2048. It wraps only made-up data's key ring (ops/security-review.md F-7).
+param dataProtectionKeySize = 2048
+
 // Placeholders only. Every deploy passes the real values as parameters, from the test environment's secrets, because
 // the object ID belongs to the operator's tenant and the addresses may contain the company's name (D42, D60, D64, D65);
 // sql.bicep and monitoring.bicep refuse the first three empty, and an empty sender address makes the app warn and
