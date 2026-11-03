@@ -126,12 +126,12 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
     }
 
     [Fact]
-    public void Access_tokens_last_10_minutes_and_refresh_tokens_30_rolling_with_a_leeway_of_15_seconds()
+    public void Access_tokens_last_10_minutes_and_refresh_tokens_7_days_rolling_with_a_leeway_of_15_seconds()
     {
         var server = app.Services.GetRequiredService<IOptions<OpenIddictServerOptions>>().Value;
 
         Assert.Equal(TimeSpan.FromMinutes(10), server.AccessTokenLifetime);
-        Assert.Equal(TimeSpan.FromMinutes(30), server.RefreshTokenLifetime);
+        Assert.Equal(TimeSpan.FromDays(7), server.RefreshTokenLifetime);
         Assert.Equal(TimeSpan.FromSeconds(15), server.RefreshTokenReuseLeeway);
         Assert.False(server.DisableRollingRefreshTokens);
         Assert.False(server.DisableSlidingRefreshTokenExpiration);

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,22 +10,6 @@ using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Grow2Notes.Web.Features.Mcp.OAuth;
-
-/// <summary>What <see cref="AssistantTokens.Check"/> finds when a code or a refresh token is presented.</summary>
-internal enum AssistantTokenCheck
-{
-    /// <summary>The person is as they were and the session is within its limit.</summary>
-    Allowed,
-
-    /// <summary>The session that began the connection is more than 12 hours old.</summary>
-    PastAbsoluteLimit,
-
-    /// <summary>
-    /// The person is gone, no longer active, no longer a manager or Support, in another organisation, or has signed
-    /// out.
-    /// </summary>
-    UserChanged,
-}
 
 /// <summary>
 /// What an approved assistant's tokens carry (mcp-server.md §4.2, §6.1): who the person is and when they signed in, and
@@ -72,29 +57,20 @@ internal static class AssistantTokens
     }
 
     /// <summary>
-    /// Whether the connection that <paramref name="stored"/> (the principal inside a code or a refresh token) belongs
-    /// to may go on, by <paramref name="user"/>'s row now. A person who has changed is found first, so that a
-    /// deactivated person past the 12 hours still has their authorisations revoked.
+    /// Whether the connection that <paramref name="stored"/> (the principal inside a code, a refresh token or an access
+    /// token) belongs to may go on, by <paramref name="user"/>'s row now: false when the person is gone, no longer
+    /// active, no longer a manager or Support, in another organisation, or has signed out. A connection has no limit
+    /// from the sign-in that began it; one left unused lapses with its refresh token (D100).
     /// </summary>
-    public static AssistantTokenCheck Check(ApplicationUser? user, ClaimsPrincipal stored, DateTimeOffset now)
-    {
-        if (user is not
-            {
-                Status: UserStatus.Active,
-                Role: UserRole.Manager or UserRole.Support,
-                SecurityStamp: { } stamp,
-            }
-            || !SameValue(stored.FindFirstValue(StampHashClaimType), StampHash(stamp))
-            || !SameValue(
-                stored.FindFirstValue(TenantContext.OrganisationIdClaimType), user.OrganisationId.ToString("D")))
+    public static bool IsAllowed([NotNullWhen(true)] ApplicationUser? user, ClaimsPrincipal stored) =>
+        user is
         {
-            return AssistantTokenCheck.UserChanged;
+            Status: UserStatus.Active,
+            Role: UserRole.Manager or UserRole.Support,
+            SecurityStamp: { } stamp,
         }
-
-        return SessionRules.IsWithinAbsoluteLimit(stored, now)
-            ? AssistantTokenCheck.Allowed
-            : AssistantTokenCheck.PastAbsoluteLimit;
-    }
+        && SameValue(stored.FindFirstValue(StampHashClaimType), StampHash(stamp))
+        && SameValue(stored.FindFirstValue(TenantContext.OrganisationIdClaimType), user.OrganisationId.ToString("D"));
 
     /// <summary>
     /// Ends every connection that <paramref name="userId"/> has: revokes their authorisations, which refuses the

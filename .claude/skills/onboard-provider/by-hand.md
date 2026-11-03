@@ -144,7 +144,8 @@ three things before choosing Allow:
 
 After you choose Allow, type /onboard-provider and choose return.
 
-If you later wait more than 30 minutes without a call, sign in again from /mcp. Nothing is lost.
+Waiting does not end the connection: it lasts until 7 days unused. If Claude Code asks you to sign in again, do
+it from /mcp. Nothing is lost.
 
 ### C5. When it fails
 

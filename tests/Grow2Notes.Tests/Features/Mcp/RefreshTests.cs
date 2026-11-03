@@ -7,7 +7,7 @@ namespace Grow2Notes.Tests.Features.Mcp;
 
 /// <summary>
 /// Refreshing an approved assistant's tokens at <c>POST /oauth/token</c> (mcp-server.md §4.2): rotation, the leeway for
-/// a lost response, the 30-minute lifetime that each refresh renews, the 12 hours from the person's sign-in, and the
+/// a lost response, the 7-day lifetime that each refresh renews with no limit from the person's sign-in (D100), and the
 /// end of every connection when the person changes. The app runs on a fake clock, which OpenIddict takes its lifetimes
 /// from, so each test moves the time the assistant would have waited.
 /// </summary>
@@ -81,44 +81,29 @@ public sealed class RefreshTests(Grow2NotesFactory factory, SqlServerFixture sql
     }
 
     [Fact]
-    public async Task A_refresh_token_is_refused_31_minutes_after_the_last_refresh()
+    public async Task A_refresh_token_is_refused_7_days_and_a_second_after_the_last_refresh()
     {
         var tokens = await flow.ConnectAsync(browser);
-        flow.Clock.Advance(TimeSpan.FromMinutes(20));
+        flow.Clock.Advance(TimeSpan.FromDays(1));
         tokens = await RefreshAsync(tokens.RefreshToken);
 
-        flow.Clock.Advance(TimeSpan.FromMinutes(31));
+        flow.Clock.Advance(TimeSpan.FromDays(7) + TimeSpan.FromSeconds(1));
 
         await AssertRefusedAsync(tokens.RefreshToken);
     }
 
     [Fact]
-    public async Task Refreshes_every_29_minutes_go_on_to_12_hours_from_the_sign_in_and_the_next_is_refused()
+    public async Task Refreshes_less_than_7_days_apart_go_on_with_no_limit_from_the_sign_in()
     {
         var tokens = await flow.ConnectAsync(browser);
-        var limit = TestClock.Start + TimeSpan.FromHours(12);
-        tokens = await flow.RefreshEveryAsync(tokens, limit);
 
-        flow.Clock.Advance(limit - flow.Clock.GetUtcNow());
-        tokens = await RefreshAsync(tokens.RefreshToken);
+        for (var refresh = 0; refresh < 3; refresh++)
+        {
+            flow.Clock.Advance(TimeSpan.FromDays(7) - TimeSpan.FromMinutes(1));
+            tokens = await RefreshAsync(tokens.RefreshToken);
+        }
 
-        flow.Clock.Advance(TimeSpan.FromSeconds(1));
-        await AssertRefusedAsync(tokens.RefreshToken);
-    }
-
-    [Fact]
-    public async Task An_assistant_past_12_hours_is_refused_without_ending_another_connected_from_a_later_sign_in()
-    {
-        var a = await flow.ConnectAsync(browser);
-        a = await flow.RefreshEveryAsync(a, TestClock.Start + TimeSpan.FromHours(12));
-        using var laterBrowser = await flow.SignInAsync(managerId);
-        var b = await flow.ConnectAsync(laterBrowser);
-
-        flow.Clock.Advance(TimeSpan.FromMinutes(25));
-
-        await AssertRefusedAsync(a.RefreshToken);
-        Assert.All(await flow.AuthorisationStatusesAsync(managerId), status => Assert.Equal(Statuses.Valid, status));
-        await RefreshAsync(b.RefreshToken);
+        Assert.Equal(600, tokens.ExpiresIn);
     }
 
     [Theory]

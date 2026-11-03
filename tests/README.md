@@ -1203,7 +1203,7 @@ are the examples.
 - `AssistantFlow.StartAsync(factory, sqlServer, name)` starts the app, and `AddUserAsync(role)` adds a person to its
   organisation, or to another with `AddOrganisationAsync()` and `AddUserAsync(role, organisationId)`. `SignInAsync`
   signs the person in with the real session cookie, and `ConnectAsync(browser)` has them press Allow and the assistant
-  exchange the code: the tokens of a connection. `RefreshEveryAsync` keeps a connection going on the fake clock.
+  exchange the code: the tokens of a connection.
 - `PostMcpAsync(accessToken, origin, method)` makes one call as `AssistantFlow.McpRequest` builds it (a `tools/list`
   `POST` that the stateless server answers on its own), and `AssertChallengeAsync(response, error)` asserts the 401 of
   mcp-server.md §4.2: the document and the scope it names, and the `error` it carries, or none for a call with no token.
@@ -1248,9 +1248,8 @@ are the examples.
   test is about what ends a connection and when.
 - `flow.Logs` and `flow.Outbound` hold what the app logged, at its own levels, and every outbound call it tried, which
   fails the test.
-- A token lasts 10 minutes and the session 12 hours from sign-in, both on the fake clock: `flow.Clock.Advance`. To
-  check the 12 hours, refresh up to a minute before, so that the access token is still valid after and only the check on
-  the session can refuse it.
+- An access token lasts 10 minutes and a refresh token 7 days from the last refresh, with no limit from the sign-in
+  (D100), both on the fake clock: `flow.Clock.Advance`.
 - `/mcp` takes bearer tokens only: the session cookie is refused there (a 401 challenge), and a bearer token is
   ignored under `/api`.
 

@@ -1780,8 +1780,9 @@ is on file (MA1).
      the metadata registration, which shows that the resource and any-port loopback matching work. In the audit rows
      (step 15), the calls show `via` of `mcp`, Claude Code's client ID and each invite's reason. This step holds
      nothing open. (S07.06.01; A136, A139, A140.)
-206. Continue after the hour. If more than 30 minutes have passed since the last call, sign in again from `/mcp` and
-     record the labels and what Claude Code showed. In the app, archive one of the common items and add the third
+206. Continue after the hour. Look for Claude Code carrying on without asking you to sign in again, as a connection
+     lasts until 7 days unused (D100); if it does ask, sign in again from `/mcp` and record the labels and what
+     Claude Code showed. In the app, archive one of the common items and add the third
      participant with a made-up date of birth. Run the skill again with the same file. Look for: only the third
      participant's goals added; the archived item reported and not added; the invited workers skipped; the last 2
      invites going; and nothing made twice. Record how an HTTP 429 showed, if one appeared; CI proves the limit

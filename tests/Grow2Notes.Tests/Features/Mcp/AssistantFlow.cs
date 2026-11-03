@@ -40,8 +40,6 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
 
     private const string ToolsListBody = """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""";
 
-    private static readonly TimeSpan Wait = TimeSpan.FromMinutes(29);
-
     private readonly WebApplicationFactory<Program> databaseOfItsOwn;
     private Guid organisationId;
 
@@ -368,21 +366,6 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
     {
         using var response = await ExchangeAsync(await AllowAsync(browser));
         return await ReadTokensAsync(response);
-    }
-
-    /// <summary>
-    /// Refreshes every 29 minutes, as an assistant in use does, for as long as that stays within the time given.
-    /// </summary>
-    public async Task<AssistantTokenSet> RefreshEveryAsync(AssistantTokenSet tokens, DateTimeOffset until)
-    {
-        while (Clock.GetUtcNow() + Wait <= until)
-        {
-            Clock.Advance(Wait);
-            using var response = await RefreshAsync(tokens.RefreshToken);
-            tokens = await ReadTokensAsync(response);
-        }
-
-        return tokens;
     }
 
     /// <summary>

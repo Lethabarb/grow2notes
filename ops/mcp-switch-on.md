@@ -62,9 +62,9 @@ last, so:
 
 So about 20 invites take about one hour from the first invite, and each further 10 adds an hour. Resets and
 deactivations share the same count, so a reset or two in the middle leaves room for fewer invites. After a `429`, wait
-the minute that `Retry-After` gives, then send the call again. **A gap of more than 30 minutes with no call lets the
-connection lapse** (refresh tokens last 30 minutes), and the wait for the next 10 is usually longer than that. The
-person then signs in again, which loses nothing: no change is half made, and the hour's count is kept.
+the minute that `Retry-After` gives, then send the call again. The wait does not end the connection: a refresh
+token lasts 7 days unused (D100). If the assistant does ask the person to sign in again, that loses nothing:
+no change is half made, and the hour's count is kept.
 
 ## A. In test, on made-up data
 

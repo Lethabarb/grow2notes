@@ -33,9 +33,9 @@ internal static class McpSetup
 
     /// <summary>
     /// How long a refresh token lasts after it was issued. Each refresh issues a new one, so an assistant in use stays
-    /// connected, and one idle for longer than this has to be connected again; the 12 hours from sign-in still apply.
+    /// connected with no limit from the sign-in, and one unused for longer than this has to be connected again (D100).
     /// </summary>
-    public static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromMinutes(30);
+    public static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
 
     /// <summary>
     /// How long after a refresh token has been used that using it again is let through, for an assistant whose
