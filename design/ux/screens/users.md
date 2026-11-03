@@ -121,8 +121,9 @@ Content column = 375 px minus two 16 px gutters = 343 px. One column. Nothing is
 |     download reports, and set up      |
 |     participants and users            |
 | ( ) Support (IT operator)             |
-|     Only connects an AI assistant.    |
-|     Sees no participants or notes.    |
+|     Your IT operator. Sets things up  |
+|     for you through an AI assistant,  |
+|     such as Claude. Never sees notes. |
 |                                       |  <p role="alert">, always present, empty
 | [           Send invite             ] |  primary, type="submit", 48 px
 +---------------------------------------+
@@ -339,8 +340,8 @@ exactly as stored, never truncated, wrapping with `overflow-wrap: anywhere`; no 
    [checkbox-list](../components/checkbox-list.md)). Item hints linked by `aria-describedby` on each radio:
    - Worker: "Writes notes and reads past notes" (P, from §2)
    - Manager: "Can also review flagged notes, download reports, and set up participants and users" (P, from §2)
-   - Support (IT operator): "Only connects an AI assistant. Sees no participants or notes." (P, A115; Release 2,
-     mcp-server.md §2.2)
+   - Support (IT operator): "Your IT operator. Sets things up for you through an AI assistant, such as Claude. Never sees notes." (P, approved by the
+     owner on 3 November 2026, A115; Release 2, mcp-server.md §2.2)
    - **Worker is preselected** on Invite [Opinion, weighing Convention]: least privilege (a forgotten change gives
      less access, not more), most invites are workers (D2, D24), and the new row shows "Invited · Worker" at once.
      GOV.UK says don't preselect (https://design-system.service.gov.uk/components/radios/); AgDS allows a default

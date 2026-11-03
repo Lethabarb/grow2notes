@@ -235,7 +235,7 @@ test('Invite user opens with Worker chosen, both fields empty and no error, in T
     'Can also review flagged notes, download reports, and set up participants and users',
   );
   await expect(supportRadio(page)).toHaveAccessibleDescription(
-    'Only connects an AI assistant. Sees no participants or notes.',
+    'Your IT operator. Sets things up for you through an AI assistant, such as Claude. Never sees notes.',
   );
   await expect(page.locator('[disabled]')).toHaveCount(0);
   await expectAxeToPass(page);

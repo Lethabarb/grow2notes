@@ -354,7 +354,7 @@ export const strings = {
     roleHint: {
       Worker: 'Writes notes and reads past notes',
       Manager: 'Can also review flagged notes, download reports, and set up participants and users',
-      Support: 'Only connects an AI assistant. Sees no participants or notes.',
+      Support: 'Your IT operator. Sets things up for you through an AI assistant, such as Claude. Never sees notes.',
     },
     /**
      * Edit user's hints under Email address (users.md component D item 5), for someone else, then on your own page;
