@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Grow2Notes.Tests.Fixtures;
@@ -7,7 +8,8 @@ namespace Grow2Notes.Tests.Features.Mcp;
 /// <summary>
 /// The Claude Code skill that onboards a provider (D95, T41) is instructions to a model, so these tests hold what it
 /// says to the server: it names only tools the server lists, calls only its ten, and the settings it tells the owner
-/// to copy ask before every access tool. It also holds no address, no setup link and no committed MCP configuration.
+/// to copy ask before every access tool and Bash. It also holds no address, no setup link and no committed MCP
+/// configuration, and the one script it runs (T43) is held to the privacy settings it promises.
 /// </summary>
 public sealed partial class OnboardingSkillTests
 {
@@ -36,7 +38,24 @@ public sealed partial class OnboardingSkillTests
         "archive_participant",
     ];
 
-    private static readonly string[] DeniedTools = ["WebSearch", "WebFetch", "Bash", "PowerShell", "Write", "Edit"];
+    // Bash is not here: it asks, because the skill runs bootstrap.sh through it (D101).
+    private static readonly string[] DeniedTools = ["WebSearch", "WebFetch", "PowerShell", "Write", "Edit"];
+
+    // The admin commands the script must never run: it makes an organisation and nothing else.
+    private static readonly string[] OtherAdminCommands = ["reset-signin", "signout-all", "mcp-client"];
+
+    // Anything that would make the Azure CLI or the shell print the values or what they travel in.
+    private static readonly string[] Tracing = ["set -x", "--debug", "--verbose"];
+
+    // What keeps the values out of the Azure CLI's log and telemetry, out of the app's console sender and out of the
+    // command's standard output, which is where a link would be.
+    private static readonly string[] PrivacyPins =
+    [
+        "AZURE_LOGGING_ENABLE_LOG_FILE=no",
+        "AZURE_CORE_COLLECT_TELEMETRY=no",
+        "Email__UseConsole=false",
+        "\\$e >/dev/null 2>\\$t.err",
+    ];
 
     // An error code that is written like a tool name.
     private static readonly string[] ErrorCodes = ["rate_limited"];
@@ -56,6 +75,8 @@ public sealed partial class OnboardingSkillTests
     };
 
     private static string SkillFolder => Path.Combine(Repository.Root(), ".claude", "skills", "onboard-provider");
+
+    private static string ScriptPath => Path.Combine(SkillFolder, "bootstrap.sh");
 
     [GeneratedRegex(@"(?<![\w.])(?:mcp__grow2notes__)?(?<name>[a-z]+(?:_[a-z]+)+)\b")]
     private static partial Regex ToolName();
@@ -95,7 +116,7 @@ public sealed partial class OnboardingSkillTests
     }
 
     [Fact]
-    public void The_settings_the_owner_copies_ask_before_every_access_tool()
+    public void The_settings_the_owner_copies_ask_before_every_access_tool_and_bash()
     {
         var fences = Fences(File.ReadAllLines(Path.Combine(SkillFolder, "by-hand.md")));
 
@@ -104,7 +125,7 @@ public sealed partial class OnboardingSkillTests
         Assert.NotNull(permissions);
 
         Assert.Equal(
-            AccessTools.Select(tool => ServerPrefix + tool).Order(StringComparer.Ordinal),
+            AccessTools.Select(tool => ServerPrefix + tool).Append("Bash").Order(StringComparer.Ordinal),
             Strings(permissions["ask"]).Order(StringComparer.Ordinal));
         Assert.Equal(
             SkillTools.Where(tool => tool != "invite_user")
@@ -113,6 +134,66 @@ public sealed partial class OnboardingSkillTests
             Strings(permissions["allow"]).Order(StringComparer.Ordinal));
         var denied = Strings(permissions["deny"]);
         Assert.All(DeniedTools, tool => Assert.Contains(tool, denied));
+        // A deny rule wins over an ask rule, so Bash here would stop the script from ever running.
+        Assert.DoesNotContain("Bash", denied);
+    }
+
+    [Fact]
+    public void The_skill_names_the_script_it_runs()
+    {
+        var skill = File.ReadAllText(Path.Combine(SkillFolder, "SKILL.md"));
+
+        Assert.Contains("bootstrap.sh", skill, StringComparison.Ordinal);
+        Assert.True(File.Exists(ScriptPath), "SKILL.md names bootstrap.sh, which is not in the skill's folder.");
+    }
+
+    [Fact]
+    public async Task The_script_parses_as_bash()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var process = new Process
+        {
+            StartInfo = new("bash", ["-n", ScriptPath])
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            },
+        };
+        process.Start();
+        try
+        {
+            var output = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var error = process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken).WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+
+            Assert.True(process.ExitCode == 0, await output + await error);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void The_script_is_lf_only_and_runs_no_other_admin_command()
+    {
+        var script = File.ReadAllText(ScriptPath);
+
+        Assert.DoesNotContain('\r', script);
+        Assert.Contains("admin bootstrap", script, StringComparison.Ordinal);
+        Assert.All(OtherAdminCommands, command => Assert.DoesNotContain(command, script, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_script_traces_nothing_and_keeps_the_values_and_the_link_out_of_every_log()
+    {
+        var script = File.ReadAllText(ScriptPath);
+
+        Assert.All(Tracing, trace => Assert.DoesNotContain(trace, script, StringComparison.Ordinal));
+        Assert.All(PrivacyPins, pin => Assert.Contains(pin, script, StringComparison.Ordinal));
     }
 
     [Theory]
