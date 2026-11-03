@@ -47,7 +47,8 @@ async function adminCommand(baseURL: string | undefined, args: readonly string[]
     },
   );
 
-  const links = stdout.split(/\r?\n/).filter((line) => line.startsWith('https://'));
+  // The link's line, by its path: CI's app runs at http://localhost, so the scheme is not always https.
+  const links = stdout.split(/\r?\n/).filter((line) => /^https?:\/\/\S+\/setup#u=/.test(line));
   // Only standard error is reported, because standard output holds the email and the CI log is public (A103).
   if (links.length !== 1) {
     throw new Error(
