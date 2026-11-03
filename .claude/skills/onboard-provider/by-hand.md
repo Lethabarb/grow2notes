@@ -1,22 +1,32 @@
 # By-hand steps for the onboard-provider skill
 
-The skill reads this file when it says so and leads the owner through it. The skill runs none of these steps. The
-operator pages it links are read from the freshly pulled main checkout at run time, and no block from them is copied
-here: [break-glass.md](../../../ops/break-glass.md) and [go-live.md](../../../ops/go-live.md), section D.
+The skill reads this file when it says so and leads the owner through it. The skill runs none of these steps,
+except that in section B it runs `bootstrap.sh` once. The operator pages it links are read from the freshly pulled
+main checkout at run time, and no block from them is copied here: [break-glass.md](../../../ops/break-glass.md) and [go-live.md](../../../ops/go-live.md), section D.
 
 ## A. Preconditions
 
 Ask each line on its own, before any provider data is typed. A no stops the run.
 
-### A1. Environment
+### A1. The gate for section B (the organisation and its first manager)
+
+Every line must hold:
+
+- Azure CLI 2.90.0 or later, signed in as Owner on the subscription that holds the app. You run `az version` and
+  `az account show` and read the results. The skill runs neither.
+- Test: made-up data only (A35), and the first manager's address is a testing-mailbox plus-tag. No real staff address,
+  participant or person. Test is for a rehearsal.
+- Production: the Results of [go-live.md](../../../ops/go-live.md) D1 and D2 read pass, which includes that no
+  organisation exists in production yet.
+- Production: the three Anthropic lines in A2, because the first manager's details reach Claude.
+
+### A2. The gate for section C onward
 
 - Test: made-up data only (A35). No real staff address, participant or person. Test is for a rehearsal.
 - Production: only once the Result of step D5 in [mcp-switch-on.md](../../../ops/mcp-switch-on.md) reads pass on the
   operator's own copy, which means the AI-assistant access is switched on there.
 
-### A2. Production gate (production only)
-
-Every line must hold:
+In production, every line must also hold:
 
 - The Results of go-live.md D1 and D4 read pass.
 - The provider's written approval names Claude Code as the Support person's assistant (MA1, D57), and is kept with the
@@ -28,7 +38,7 @@ Every line must hold:
 
 ### A3. Permissions (test and production)
 
-The access tools must always ask, and nothing else may be allowed beyond the nine set-up and look-up tools.
+The access tools and Bash must always ask, and nothing else may be allowed beyond the nine set-up and look-up tools.
 
 1. In the onboarding folder, create `.claude/settings.local.json` with exactly this content. It is the owner's own file,
    outside the repository, and is deleted with the folder:
@@ -40,7 +50,8 @@ The access tools must always ask, and nothing else may be allowed beyond the nin
       "mcp__grow2notes__invite_user",
       "mcp__grow2notes__reset_user_sign_in",
       "mcp__grow2notes__deactivate_user",
-      "mcp__grow2notes__archive_participant"
+      "mcp__grow2notes__archive_participant",
+      "Bash"
     ],
     "allow": [
       "mcp__grow2notes__list_common_items",
@@ -53,14 +64,14 @@ The access tools must always ask, and nothing else may be allowed beyond the nin
       "mcp__grow2notes__add_goal",
       "mcp__grow2notes__list_users"
     ],
-    "deny": ["WebSearch", "WebFetch", "Bash", "PowerShell", "Write", "Edit"]
+    "deny": ["WebSearch", "WebFetch", "PowerShell", "Write", "Edit"]
   }
 }
 ```
 
 2. Claude Code is in the default permission mode: never auto, bypassPermissions or dontAsk.
-3. Run /permissions. It shows allow rules for only the nine tools in the block above, and none for the whole
-   grow2notes server.
+3. Run /permissions. The ask rules are the four access tools and Bash. The allow rules are only the nine tools in the
+   block above, and none for the whole grow2notes server.
 4. Run /hooks. It shows no Elicitation hook, because one could answer Grow2Notes' form for you.
 5. Run /mcp. Every other MCP server is disabled.
 6. Read every invite_user prompt before you choose Yes:
@@ -68,30 +79,49 @@ The access tools must always ask, and nothing else may be allowed beyond the nin
    - A prompt whose arguments hold confirm true is approved only if you have just said yes in the chat to that exact
      person, and only after you check the email, the name, the role worker and the reason in it. Otherwise choose No.
 7. When Claude Code offers "don't ask again", take it for none of the four access tools and never for the whole server.
+8. Approve a Bash prompt only for `bootstrap.sh`, with the values as you confirmed them in the chat. Never choose
+   "don't ask again" for Bash, because it would save the values in a rule.
 
 ### A4. What the skill never asks for
 
 Note content, health detail beyond a goal's wording, dates of birth, setup links, passwords, codes, tokens, phone
-numbers, and the values typed at the console. If you paste one by mistake, the skill says so and does not use it.
+numbers, and the values typed at the console. If you paste one by mistake, the skill says so and does not use it. The
+one exception is section B's three values, which stay in this session until clean-up (D) deletes its transcript.
 
 ## B. The organisation and its first manager
 
-The skill runs nothing here. You run the commands, in the SSH console. Details for a real provider come in person or on
-a call, never by chat. Never paste the setup link into the chat, a file or a transcript: the skill never asks for it.
+The agent runs this step, once, with `bootstrap.sh`. It signs in with your Azure CLI sign-in, so you type no password
+and nothing in a console. The provider tells you on a call who its first manager is (A105). You then give the skill the
+organisation's name, the first manager's name and their address in the chat, and it reads them back and asks you one
+question. It never asks for a setup link: the first manager is emailed it. Never paste a link into the chat, a file
+or a transcript.
+
+1. Read the question and the Bash prompt. The values in the prompt must match what you confirmed. If they differ,
+   choose No.
+2. Wait for the outcome, which comes within 3 minutes of the app answering. Done means the email was handed to the
+   email service, not delivered.
+3. If it says Refused, Failed or No result, look for the email first. Never run it a second time for another name or
+   address.
 
 ### In test
 
-1. Open the SSH console as [break-glass.md, The SSH console](../../../ops/break-glass.md#the-ssh-console) says.
-2. The skill reads the block under break-glass.md, admin bootstrap, Running it, and shows it exactly as written. Run
-   it in test's console. Type made-up values only, and only at its prompts: an organisation name, a made-up first
-   manager and a made-up address, as break-glass.md's When to run it says.
-3. The made-up first manager opens the link the console printed in a private window and finishes setup, choosing how to sign in.
+Use made-up values and a testing-mailbox plus-tag address. The made-up first manager opens the emailed link in a
+private window and finishes setup, choosing how to sign in. Then go on to C.
 
 ### In production
 
 Section B is [go-live.md section D](../../../ops/go-live.md#d-the-providers-organisation-first-manager-and-email),
-done before the switch-on. Confirm that D4's Result reads pass, and skip B. Never make a second organisation in
-production: row-level security is deferred (D94), so the skill stops if asked.
+step D3, done before the switch-on. When it ends with Done, do the clean-up steps 1 to 3 in D at once, because the
+values are in this session's transcript, then go on with go-live D4. If the organisation exists already (D4's Result
+reads pass), skip B. Never make a second organisation in production: row-level security is deferred (D94), so the
+skill stops if asked.
+
+### If the script cannot run
+
+Do the same by hand. Open the SSH console as [break-glass.md, The SSH
+console](../../../ops/break-glass.md#the-ssh-console) says. The skill reads the block under break-glass.md, admin
+bootstrap, Running it, and shows it exactly as written. Run it in the console, typing the values only at its prompts.
+The command emails the first manager the setup link and prints none.
 
 ## C. Access for the assistant
 
@@ -156,6 +186,10 @@ it from /mcp. Nothing is lost.
 - Calls that fail with a rate limit: wait a minute (HTTP 429), or for the time the skill gives you.
 
 ## D. Clean-up
+
+Run /permissions first, before the folder is deleted, and check that no Bash allow rule is there (the ask rule from A3
+is expected). If there is one, remove it, because it holds the values. After section B
+in production, no server has been added, so do steps 1 to 3 below and skip the two commands.
 
 Do these in order when the run ends:
 
