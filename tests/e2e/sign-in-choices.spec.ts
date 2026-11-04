@@ -23,8 +23,14 @@ const goBackButton = (page: Page) => main(page).getByRole('button', { name: 'Go 
 const createPasswordField = (page: Page) => page.getByLabel('Create a password', { exact: true });
 const isTo = (path: string) => (message: Request | Response) => new URL(message.url()).pathname === path;
 
-/** Ends the session and opens `/`, as a person does who comes back later, which shows sign-in's view A. */
+/**
+ * Ends the session and opens `/`, as a person does who comes back later, which shows sign-in's view A. The page is
+ * left first, which cancels the requests it still has out: the stamp check runs on every request and renews the
+ * session cookie in its answer (design.md §8.4), so an answer to Today's own loads that came after the cookies were
+ * cleared would sign the person back in.
+ */
 async function comeBackSignedOut(page: Page) {
+  await page.goto('about:blank');
   await page.context().clearCookies();
   await page.goto('/');
   await expectViewA(page);
