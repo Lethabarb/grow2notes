@@ -3,15 +3,21 @@
 ## Purpose
 
 The owner is led through onboarding one new provider, end to end, by a Claude Code skill (D95), kept in
-`.claude/skills/onboard-provider/`. The skill explains each by-hand step and runs none. It changes the provider's
-set-up only through the Grow2Notes tools, as the operator's Support person, and calls ten of them. It adds no tool, no
-server feature and no operator command over MCP (D48).
+`.claude/skills/onboard-provider/`. The skill explains each by-hand step and runs none, with one exception: once you
+have confirmed the values, it makes the organisation and its first manager by running the app's own `admin
+bootstrap` through its script `bootstrap.sh`, with `az webapp exec` on your Azure CLI sign-in, so you type nothing in
+a console (D101). The first manager is emailed the setup link. The skill changes the provider's set-up only through
+the Grow2Notes tools, as the operator's Support person, and calls ten of them. It adds no tool, no server feature and
+no operator command over MCP (D48).
 
 ## When
 
 - Rehearse in test first, with made-up data only: steps 204 to 207 of [first-use-in-test.md](first-use-in-test.md).
 - Production only after step D5 of [mcp-switch-on.md](mcp-switch-on.md) reads pass. The go-live set-up may already
   exist there (go-live.md section E, line 7), so a run adds only what is missing.
+- The organisation step (section B) needs Azure CLI 2.90.0 or later, where `az webapp exec` is a preview command,
+  signed in as Owner on the subscription; `az upgrade` updates it. In production that step is go-live.md D3, run once
+  D1's gate reads pass and before the switch-on.
 
 ## Starting
 
@@ -30,13 +36,13 @@ server feature and no operator command over MCP (D48).
 
 ## What the tools do and what stays by hand
 
-| Through the tools | By hand |
+| Through the tools, or the skill's script | By hand |
 | --- | --- |
-| Common item groups and items | The organisation and first manager (`admin bootstrap`, or go-live.md D) |
-| Guide prompts | The Support account, granted by a manager in Users |
-| Goals for participants a manager has added | Registering Claude Code (`admin mcp-client add`) |
-| Worker invites, each with a reason | Adding participants, with dates of birth, in the app |
-| | `claude mcp add`, signing in, and every permission prompt |
+| The organisation and first manager, through `bootstrap.sh` on your yes (D101) | Hearing from the provider, on a call, who its first manager is (A105) |
+| Common item groups and items | The Support account, granted by a manager in Users |
+| Guide prompts | Registering Claude Code (`admin mcp-client add`) |
+| Goals for participants a manager has added | Adding participants, with dates of birth, in the app |
+| Worker invites, each with a reason | `claude mcp add`, signing in, and every permission prompt |
 
 ## Invites and pacing
 
@@ -76,8 +82,21 @@ Facts relied on:
 - Skills in an `--add-dir` folder load. `disable-model-invocation: true` stops Claude starting a skill, and
   `allowed-tools` pre-approves tools, so the skill has none. Compaction keeps the first 5,000 tokens of a skill.
 - Rules are checked deny, then ask, then allow. An ask rule prompts in every permission mode, except that `dontAsk`
-  denies. Rules are written `mcp__<server>__<tool>`.
+  denies. Rules are written `mcp__<server>__<tool>`. So Bash, which the skill runs once, is an ask rule: a deny rule
+  would stop it, and an allow rule would skip the prompt (D101).
 - `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` turns auto memory off; `/memory` shows it.
+
+## Azure CLI documentation, as read on 3 November 2026
+
+Page read: the `az webapp` reference on Microsoft Learn (`learn.microsoft.com/cli/azure/webapp`), section `az webapp
+exec`. Facts relied on by `bootstrap.sh`:
+
+- `az webapp exec` is in preview and works only for Linux App Service plans. `--mode execute` runs a command in the
+  app's main container and returns at once with no output and no exit code; a success means only that the command
+  was accepted.
+- `--shell-command` runs as `<shell> -c <command>`, with `--shell` choosing the shell, and the page's example
+  captures output by writing it to a file under `/home/LogFiles`. `--cwd` (or `--working-directory`) sets the
+  folder. With no `--instance`, a random instance is used; Grow2Notes runs one.
 
 A pre-registered client ID (`--client-id`, `--callback-port`) is the developer's fallback only, never improvised by the
 owner: it would change what the operator registers (MA2).

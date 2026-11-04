@@ -40,20 +40,20 @@ here. Each step ends with what it confirms.
 ### The first account: a passkey, on the laptop
 
 1. Open `/healthz/ready` until it answers `200`, which wakes the test database.
-2. Open the web app's SSH console and run its check of the six settings by name, as
-   [break-glass.md](break-glass.md) *The SSH console* says. All six must say `set`. If any says `MISSING`, or the way
+2. Open the web app's SSH console and run its check of the eight settings by name, as
+   [break-glass.md](break-glass.md) *The SSH console* says. All eight must say `set`. If any says `MISSING`, or the way
    into the console fails, stop, run nothing and tell the developer.
 3. Run `admin bootstrap` as [break-glass.md](break-glass.md) says, for a made-up organisation and first manager
-   (account A). Look for `Exit code: 0` after one printed line, a link of the form
-   `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`. Leave the console open for step 5. (S00.03.05's first
-   criterion.)
-4. Copy the link straight into Chrome's address bar on the laptop, with NVDA running, and choose Use a passkey
+   (account A), at a new testing-mailbox `+` tag. Look for `Exit code: 0` alone, with nothing printed before it, and
+   then the email *Set up your Grow2Notes sign-in* in the testing mailbox, with a link of the form
+   `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`. Type `exit` in the console and close its tab.
+   (S00.03.05's first criterion; D101.)
+4. Copy the email's link straight into Chrome's address bar on the laptop, with NVDA running, and choose Use a passkey
    (recommended). Look for: setup ends on Today, at `/`; the `Set-Cookie` of the `200` that
    `POST /api/auth/setup/passkey` answers is `__Host-grow2notes` with `Secure`, `HttpOnly`, `SameSite=Strict` and
    `Path=/`, and no `Domain`, `Expires` or `Max-Age`; and NVDA reads views D and E as sign-in.md's *Accessibility
    checklist* says. (S00.04.01's `Set-Cookie` criterion; S00.04.02; sign-in.md's screen-reader pass.)
-5. Copy the link from the console into a new tab once more. Look for "This link has expired". Then type `exit` in the
-   console and close its tab, so the link is kept nowhere. (S00.04.02.)
+5. Open the email's link in a new tab once more. Look for "This link has expired". (S00.04.02.)
 6. Restart `app-grow2notes-test` from the portal. Once `/healthz` answers `200` again, reload the Today tab. Look for:
    Today again, with no sign-in asked, and `GET /api/auth/me` answering `200`. (S00.02.02's restart criterion.)
 7. Sign out from Account. Look for: `POST /api/auth/logout` answering `204` with
@@ -274,20 +274,19 @@ the steps above. Step 30 signs out everyone in test, so run these when no one el
 
 29. On the laptop, sign in as account C (step 18) in Chrome, and on the iPhone, in Safari, so that C has two sessions,
     and leave Today open on each. You are the organisation here, and you know who account C is, which in production
-    the organisation confirms before the command is run. Open the web app's SSH console, check its six settings as in
-    step 2, and run `admin reset-signin` for account C's address as [break-glass.md](break-glass.md) says. Look for
-    `Exit code: 0` after one printed line, a link of the form
-    `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`. On each device, choose Manage, then Users: look
-    for "You've been signed out". Copy the link into a new tab in Chrome on the laptop and choose Use a passkey
-    (recommended): look for setup ending on Today. Wait 5 minutes and look for no new email to account C in the
-    testing mailbox, junk included. Then paste the block again with a made-up `example.org` address that no account
+    the organisation confirms before the command is run. Open the web app's SSH console, check its eight settings as
+    in step 2, and run `admin reset-signin` for account C's address as [break-glass.md](break-glass.md) says. Look
+    for `Exit code: 0` alone, with nothing printed before it. On each device, choose Manage, then Users: look for
+    "You've been signed out". Look for one new email to account C in the testing mailbox, open its link in a new
+    tab in Chrome on the laptop and choose Use a passkey (recommended): look for setup ending on Today. Then paste the
+    block again with a made-up `example.org` address that no account
     holds, and look for `Refused: No account has that address. Nothing was written.` and `Exit code: 1`. Leave the
     console open for step 30. (S00.03.06's first criterion, in test.)
 30. Sign in as account A on the laptop in Chrome, as in step 9, and as account B on the iPhone, as in step 14, and
     leave Today open on each. Run `admin signout-all` as [break-glass.md](break-glass.md) says. Look for
     `Exit code: 0` with nothing printed before it. On each device, choose Manage, then Users: look for "You've been
     signed out". Then sign each in again, A with Sign in with a passkey and B with email, password and a 6-digit code,
-    and look for Today each time. Type `exit` in the console and close its tab, so step 29's link is kept nowhere.
+    and look for Today each time. Type `exit` in the console and close its tab.
     (S00.03.06's second criterion, in test.)
 31. You read the audit rows as in step 15:
 
@@ -1768,8 +1767,9 @@ is on file (MA1).
      14 emails go out, well within Resend's 100 a day. This step holds nothing open. (S07.06.01; A140.)
 205. Run the skill end to end. Start Claude Code with the documented command from by-hand.md (auto memory off and
      `--add-dir` to a freshly pulled main checkout). Look for: `/memory` shows auto memory off, and `/onboard-provider`
-     is offered (otherwise use the fallback copy, and record that it was needed). Let the skill lead the by-hand parts:
-     bootstrap from the block it shows, the made-up manager setting up in a private window, inviting you as 'Support
+     is offered (otherwise use the fallback copy, and record that it was needed). Let the skill make the organisation
+     and first manager (section B, rehearsed in full in steps 219 to 222), then lead the by-hand parts: the made-up
+     manager setting up from the emailed link in a private window, inviting you as 'Support
      (IT operator)' and adding two of the three participants with a made-up date of birth; then `claude mcp add`,
      signing in, and the Connect screen. Look for: the preconditions asked before any data is given; the setup link
      never asked for, with the warning not to paste it; a plan and one yes before each section; the third participant
@@ -1861,3 +1861,33 @@ Never write down an email address, a password or a setup link.
      password-only link second, and no passkey button and no password-and-passkey link. Then sign in there as the
      step 210 person: after the password, the passkey step says that passkeys do not work in this browser, and Go back
      returns to view A. This step holds nothing open. (S00.07.02; A142.)
+
+### An agent sets up the organisation and first manager (T43)
+
+These steps rehearse section B of the `/onboard-provider` skill in test, with made-up values only: the agent runs
+`admin bootstrap` through `bootstrap.sh` on your Azure CLI sign-in (D101). go-live.md D1 asks for their Results before
+the agent's route is used in production.
+
+219. Get ready. Read `az version` (2.90.0 or later) and `az account show` (signed in as Owner on the subscription that
+     holds the app) yourself. Make an empty onboarding folder with `.claude/settings.local.json` from by-hand.md A3,
+     start Claude Code there as [onboard-provider.md](onboard-provider.md) says, and run `/permissions`: look for Bash
+     among the ask rules and no Bash allow rule. Make up an organisation name and a first manager's name that between them
+     hold a space, an apostrophe, an accented letter, a `$` and a backtick, and use a new testing-mailbox `+` tag. This
+     step holds nothing open. (S07.06.02; A144.)
+220. Run section B. Type `/onboard-provider`, choose test and a first run, and say the organisation does not exist.
+     Give the three values. Look for: one read-back and one question. Answer "not yet" once and look for no Bash prompt
+     and no run; then answer yes. Look for: the Bash prompt shows only `bootstrap.sh`, the word `test` and the three
+     values; no password prompt and nothing to type in a console; the `Done:` line within 3 minutes; the email *Set up
+     your Grow2Notes sign-in* in the testing mailbox. Open its link in a private window and finish setup, then look in
+     Users for the organisation's and the manager's names exactly as typed. This step holds nothing open. (S07.06.02;
+     D101, A144.)
+221. Run section B again with the same three values. Look for: the relayed line `Refused: The address in
+     --manager-email already has an account, and an address can have only one. Nothing was written.`, word for word,
+     and no new email. This step holds nothing open. (S07.06.02; A27.)
+222. Check what was left, then clean up. In test's SSH console, look for no file whose name starts `grow2notes-admin-`
+     in `/home/LogFiles`. For each of the three values, and for each one's base64 form
+     (`printf %s '<value>' | base64 -w0`), search `/home/LogFiles` in the console and `~/.azure` on the laptop with
+     `grep -rlF`: look for nothing found.
+     In Application Insights for test, look for nothing from the command's run. Then clean up as by-hand.md D says, and
+     look for no Bash allow rule in `/permissions` before the folder goes. Record only pass or fail. This step holds
+     nothing open. (S07.06.02; A144.)

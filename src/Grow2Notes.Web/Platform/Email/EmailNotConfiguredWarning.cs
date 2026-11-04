@@ -3,7 +3,7 @@ namespace Grow2Notes.Web.Platform.Email;
 /// <summary>
 /// Logs one warning when the host starts, naming the email settings that are missing, so that an owner sees why every
 /// email answers Not sent. It is a hosted service because an operator command builds the app and never starts the
-/// host, so the warning never reaches the standard output that holds a setup link alone. It names settings only,
+/// host, so the warning never reaches the standard output of a command, which stays empty. It names settings only,
 /// never a value, and never reads Key Vault.
 /// </summary>
 /// <param name="missingSettings">The names of the missing settings, joined by a comma and a space.</param>

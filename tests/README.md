@@ -120,13 +120,15 @@ Seven more fixtures are there for the tests that name them, and only those run t
 
 - `invite` runs the published app's `admin bootstrap` from `E2E_APP_DIR`, with the app's settings, as
   `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager, Alex Sample, with a new
-  `example.org` address (A35). It gives the manager's display name and address, and the setup link that the command
-  printed.
+  `example.org` address (A35). The command emails the setup link and prints nothing, so the fixture runs it with
+  `Email__UseConsole` true, which writes the email to standard output, and takes the one link from it. It gives the
+  manager's display name and address, and that link.
 - `secondInvite` runs it once more, for another made-up organisation and manager, Jordan Sample, for a test of two
   people on one browser.
 - `resetSignIn(email)` runs the published app's `admin reset-signin` for that address in the same way, and gives the
-  link that it printed: a new one for someone invited from the Users screen, whose emailed link the test cannot read,
-  or for someone whose sign-in it resets.
+  link in the email that it wrote: a new one for someone invited from the Users screen, whose emailed link the test
+  cannot read, or for someone whose sign-in it resets. A run that gives no link, or more than one, fails with the
+  command's standard error alone, because standard output holds the email and CI's log is public (A103).
 - `authenticator` adds Chromium's virtual authenticator to the page, through the DevTools protocol, in place of a
   phone: one built into the device, which makes discoverable passkeys and verifies the person, and answers each prompt
   at once. `setUserVerified(false)` fails the person's verification at the prompts that follow, so no passkey is made,
@@ -1390,16 +1392,17 @@ var email = Assert.Single(sent, message => message.To == address);
 
 Each app has a recorder of its own. One made with `WithWebHostBuilder` starts with none recorded, so a test that shows
 that nothing was sent, or exactly what was, uses such an app, as
-`Grow2Notes.Tests/Platform/OperatorCommands/BootstrapCommandTests.cs` shows that `admin bootstrap` sends nothing. The
-class fixture's app is shared by the class's tests, so a test that calls it finds its own messages by the address it
-used, which no other test uses (the seeded-rows rule above). `AppWithoutDatabase` has the app's console sender in
+`Grow2Notes.Tests/Platform/OperatorCommands/BootstrapCommandTests.cs` shows that `admin bootstrap` sends exactly one
+email, and that a refused run sends none. The class fixture's app is shared by the class's tests, so a test that calls
+it finds its own messages by the address it used, which no other test uses (the seeded-rows rule above).
+`AppWithoutDatabase` has the app's console sender in
 Development, from `Email:UseConsole` in `appsettings.Development.json`, which writes each message to standard output;
 the app sends through Resend only where `Email:ApiKeySecretUri` and `Email:SenderAddress` are set, which no test sets
 but `Grow2Notes.Tests/Platform/Email/EmailSendingTests.cs`, whose apps send nothing.
 
 `SetupLinks.FromEmail(email)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) reads the link in a setup-link email, and
-`SetupLinks.Read(link, email)` one that an operator command printed, as `SetupLinks.InviteAsync` reads the invite
-core's, for a test that opens it, such as with `StartSetupAsync`, or shows that it has ended with
+`SetupLinks.Read(link, email)` a link as the app makes it, as `SetupLinks.InviteAsync` reads the invite core's, for a
+test that opens it, such as with `StartSetupAsync`, or shows that it has ended with
 `client.AssertSetupLinkEndedAsync(link)`, which expects `410 auth.setup_link_invalid`. A test of an email that cannot be
 sent hosts its app with `ConfigureTestServices(FailingEmailSender.ReplaceAppSender)`: its sender sends nothing and
 throws an exception that holds the address and the whole text, link and all, so the test shows that neither reaches the
@@ -1435,7 +1438,8 @@ a `+`, `/` or `=` in it.
   the repository as text: no package ID in `Directory.Packages.props`, a `.csproj` or the two `package.json` files names
   SMS, push, SMTP, mail or another messaging service (Resend is called over HTTP, with no package); the `.cs` files of
   the web project that name `IEmailSender` or a mail library are exactly the listed set; the mail libraries are named
-  only in `Platform/Email`; and the three handlers that issue a setup link use the sender only as the first argument of
+  only in `Platform/Email`; and the three handlers and the two operator commands (`admin bootstrap` and
+  `admin reset-signin`) that issue a setup link use the sender only as the first argument of
   `SetupLinkEmail.SendAsync`. A change that adds a sender, or a legitimate use of a mail library, changes the list in
   that test in the same change. Matching by name is coarse by nature.
 

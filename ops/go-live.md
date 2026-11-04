@@ -3,10 +3,10 @@
 The operator's ordered run sheet for production, `https://app-grow2notes-prod.azurewebsites.net` (D91). It sets
 production up, checks it against design.md §10.1 before any real data goes in, tries its alerts, creates the
 provider's organisation and first manager, checks its email, lists the go-live lines of design.md §14, then runs the
-restore test and the cut-over (F). Nothing here is a work item or holds a task open (D90): every step is by hand, an
-agent never runs one, and each is the operator's or the owner's. The Azure subscription is shared with another
-production system, so every command here stays inside the two Grow2Notes resource groups, apart from the read-only
-Defender check in B.
+restore test and the cut-over (F). Nothing here is a work item or holds a task open (D90): every step is by hand but
+D3, which the onboarding skill's agent runs on the operator's yes (D101), and each is the operator's or the owner's.
+The Azure subscription is shared with another production system, so every command here stays inside the two
+Grow2Notes resource groups, apart from the read-only Defender check in B.
 
 Rules for everyone who works through it:
 
@@ -380,11 +380,12 @@ Result: ____ (date), ____ (pass or fail), by ____
 ## D. The provider's organisation, first manager and email
 
 The first manager's name and address are the first real personal information in production, so the operator does D with
-the owner after the gate in D1, and an agent never does. Results in D never name the provider, its first manager or
-anyone invited, and hold no address, phone number or link. Every step ends with the usual `Result:` line.
-Once the AI-assistant access is on ([mcp-switch-on.md](mcp-switch-on.md) D5), the rest of a provider's set-up can be
-entered with the onboarding skill ([onboard-provider.md](onboard-provider.md), D95). The skill points back here for the
-organisation and the first manager, and runs no step of D.
+the owner after the gate in D1. The one step an agent runs is D3: the onboarding skill's section B runs `admin
+bootstrap` through `bootstrap.sh`, on the operator's own Azure CLI sign-in and the operator's yes in that turn (D101).
+Results in D never name the provider, its first manager or anyone invited, and hold no address, phone number or link.
+Every step ends with the usual `Result:` line. Do D8 before D1. Once the AI-assistant access is on
+([mcp-switch-on.md](mcp-switch-on.md) D5), the rest of a provider's set-up can be entered with the same skill
+([onboard-provider.md](onboard-provider.md), D95).
 
 ### D1. The gate (read-only)
 
@@ -397,6 +398,12 @@ organisation and the first manager, and runs no step of D.
   runs a build that test has run (A5 above, design.md §10.4).
 - A1 to A11, B and C have passing Results, and A6's Result holds the owner's F-7 decision, so A6 and A9 come before D.
 - The owner confirms that no custom domain will be added before the first manager enrols (B10, A101, D91).
+- D8's Result reads pass, and Resend shows production's sending domain as Verified, because D3 sends production's
+  first email.
+- No organisation exists in production yet: this is its first, and a second waits for row-level security
+  (design.md §5.9 item 6, D94).
+- For the agent's route in D3: first-use steps 219 to 222 (the agent's rehearsal in test) have passing Results, and
+  the operator's Azure CLI is 2.90.0 or later and signed in as Owner. Otherwise D3 uses the by-hand block.
 
 If any one is missing: stop, run nothing below and tell the owner.
 
@@ -404,55 +411,61 @@ Result: ____ (date), ____ (pass or fail), by ____
 
 ### D2. Who the first manager is, and the organisation's name
 
-(S06.05.02's second criterion; A105, D74, D42, D72.) The provider's named contact gives you four values, in person or on
-a call you make to a number you already hold for the provider, never only by email or chat and never on a number given
-in a message:
+(S06.05.02's second criterion; A105, D74, D42, D72.) The provider's named contact gives you three values, in person or
+on a call you make to a number you already hold for the provider, never only by email or chat and never on a number
+given in a message:
 
 - the organisation's name, exactly as reports are to print it (200 characters or fewer);
 - the first manager's name (100 or fewer);
-- their email address (256 or fewer, with no account yet, A27);
-- their own mobile number.
+- their email address (256 or fewer, with no account yet, A27), which the setup link is emailed to.
 
-The owner and the operator each read the name for the parent company's name before the run, because no screen or
-command renames an organisation later and nothing deletes one. Keep the values only for the run. The mobile number is
-used once, in D4, and is recorded nowhere.
+Agree a time when the first manager has about 15 minutes and can read that email on their own phone, in person with
+you or on a call you make to the provider's number, and ask whether they agree to D7's check of that email. The owner
+and the operator each read the name for the parent company's name before the run, because no screen or command
+renames an organisation later and nothing deletes one. Keep the values only for the run.
 
 Result: ____ (date), ____ (pass or fail), by ____ (name checked by: ____)
 
 ### D3. The run
 
-(S06.05.02's second criterion; design.md §7.4.)
+(S06.05.02's second criterion; design.md §7.4, D101.)
 
-1. Agree a time when the first manager has their own phone and about 15 minutes, in person with you or on a call you
-   make to D2's number. Have your phone's text messages working on the computer you will open the console on.
-2. At that time `https://app-grow2notes-prod.azurewebsites.net/healthz/ready` answers `200`. Open the SSH console of
-   `app-grow2notes-prod` and check its six settings ([break-glass.md, The SSH console](break-glass.md#the-ssh-console)).
-   Paste the block from [break-glass.md, Running it](break-glass.md#running-it), which is linked here and not copied,
-   and give it D2's three values.
-3. Before pressing Enter after the organisation name, read what you typed against D2's. If it differs, press Ctrl+C or
-   close the console tab, then start D3 again. Closing the tab is the sure stop. Either stops the block before the
-   command runs, and the same is true at the other two prompts.
-4. Look for one line starting `https://app-grow2notes-prod.azurewebsites.net/setup#u=` and then `Exit code: 0`. On
-   anything else, follow [break-glass.md, If it is refused or
-   fails](break-glass.md#if-it-is-refused-or-fails), and never run it again with another name or address.
+1. At the time agreed in D2, `https://app-grow2notes-prod.azurewebsites.net/healthz/ready` answers `200`.
+2. Start the onboarding skill in its own empty production folder, as [onboard-provider.md](onboard-provider.md)
+   *Starting* says, and choose production, a first run, and that the organisation does not exist yet. It asks the gate
+   for section B of [by-hand.md](../.claude/skills/onboard-provider/by-hand.md) (A1) one line at a time.
+3. Give it D2's three values in one message. It reads them back once: check them against D2's, character by
+   character, and answer its one question. If one differs, say no and give them again.
+4. Claude Code then asks to run one Bash command, `bootstrap.sh` with the three values. Approve it only if they match
+   what you confirmed, and never choose "don't ask again".
+5. Look for `Done: the organisation and its first manager were created, and the setup-link email was handed to the
+   email service.` within about 3 minutes. On a Refused line, Failed or No result, follow [break-glass.md, If it is
+   refused or fails](break-glass.md#if-it-is-refused-or-fails): look for the email first, and never run it again with
+   another name or address.
+6. Clean up at once, as by-hand.md D steps 1 to 3 say, because the values are in the session's transcript.
 
-Result: ____ (date), ____ (pass or fail), by ____
+If the agent's route cannot be used, run the block from [break-glass.md, Running it](break-glass.md#running-it) in the
+SSH console of `app-grow2notes-prod`, after its check of the eight settings, and look for `Exit code: 0` alone: it
+emails the link in the same way.
 
-### D4. The link to the first manager
+Result: ____ (date), ____ (pass or fail), by ____ (route: agent or by hand)
 
-(S06.05.02's third criterion; A105.) Send it as [break-glass.md, The setup link](break-glass.md#the-setup-link) says:
-one text message to their own mobile, while you are with them or on a call you made to D2's number. Before they open
-it, tell them four things:
+### D4. The email to the first manager
 
-- open it in the phone's browser, such as Safari or Chrome;
-- set up on their own phone, in the way they choose: a passkey, a password and an authenticator app, a password only, or a password and a passkey;
-- a screen that mentions "the link from your email" means this text message;
+(S06.05.02's third criterion; A105, D101.) While you are with the first manager or on the call, tell them four things:
+
+- an email titled *Set up your Grow2Notes sign-in* is on its way: look in junk too, and open its link on their own
+  phone, in the phone's browser, such as Safari or Chrome;
+- set up in the way they choose: a passkey, a password and an authenticator app, a password only, or a password and a
+  passkey;
+- the link works once, for 7 days and only for them, so they forward it to no one;
 - a screen saying the link has expired and to ask a manager means: tell you, because there is no other manager yet.
 
-Once they say the message has arrived, type `exit` and close the console tab. Look for them finishing setup and signing
-in on their phone. Then delete your copies as *The setup link* says. If the link is lost, or 7 days pass, use
-[admin reset-signin](break-glass.md#admin-reset-signin) once the provider's contact has confirmed the person again
-(D74), never a second bootstrap.
+Look for them finishing setup and signing in on their phone. If the email has not arrived after 10 minutes, junk
+included, run [admin reset-signin](break-glass.md#admin-reset-signin) once by hand, as you are on the call with the
+person the provider named (D74). If that email does not arrive either, stop: it is D7's fail path. If the link is lost
+later, or 7 days pass, use admin reset-signin once the provider's contact has confirmed the person again, never a
+second bootstrap.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
@@ -478,8 +491,9 @@ Result: ____ (date), ____ (pass or fail), by ____
 
 ### D7. Production's first invite passes SPF, DKIM and DMARC
 
-(S06.05.01's fourth criterion; D92.) The setup does not send an email, so production's first email is the first invite
-a manager sends from Users after D6. Ask the person invited, before it is sent, whether they agree to this check.
+(S06.05.01's fourth criterion; D92, D101.) Production's first email is D3's setup-link email to the first manager, so
+check that one if they agreed in D2. If they did not, or cannot open its original, use the first invite a manager
+sends from Users after D6, and ask the person invited, before it is sent, whether they agree.
 
 - With you beside them or on a call, they open the message's original (Show original in Gmail, View message source in
   Outlook.com) and read out `Authentication-Results`. Look for `spf=pass`, `dkim=pass` and `dmarc=pass`.
@@ -499,7 +513,7 @@ Write only pass or fail.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
-### D8. Resend, checked by the owner
+### D8. Resend, checked by the owner, before D1
 
 The owner confirms, in Resend and with the provider (A102):
 

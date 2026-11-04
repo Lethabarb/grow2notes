@@ -4,12 +4,14 @@ using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Features.Mcp.OAuth;
+using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform.Audit;
+using Grow2Notes.Web.Platform.Email;
 using Grow2Notes.Web.Platform.OperatorCommands;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -22,7 +24,9 @@ namespace Grow2Notes.Tests.Platform.OperatorCommands;
 /// <summary>
 /// <c>admin bootstrap</c> (design.md §7.4), run through the operator commands' entry as the app's binary runs it, with
 /// writers in place of the console (<see cref="AdminCommandRuns"/>). Each run has made-up names and an address of its
-/// own, which no other test or run of this one uses. The rows are read afresh, in a scope of their own, after each run.
+/// own, which no other test or run of this one uses. A test that reads the emails sent, or that needs none sent, runs
+/// on an app of its own, whose <see cref="RecordingEmailSender"/> starts empty. The rows are read afresh, in a scope
+/// of their own, after each run.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
@@ -80,7 +84,7 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
     };
 
     [Fact]
-    public async Task One_run_creates_the_organisation_and_its_Invited_manager_writes_the_event_and_prints_the_link()
+    public async Task One_run_creates_the_organisation_and_its_Invited_manager_writes_the_event_and_emails_the_link()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var clock = new FakeTimeProvider(TestClock.Start);
@@ -89,14 +93,14 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
 
         var run = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
 
-        Assert.Equal((0, ""), (run.ExitCode, run.Error));
+        // Nothing is printed: the link is in the email alone.
+        Assert.Equal((0, "", ""), (run.ExitCode, run.Output, run.Error));
         var manager = await FindUserAsync(email);
-        var setupLink = run.SingleOutputLine();
-        Assert.StartsWith($"{Grow2NotesFactory.Origin}/setup#u={manager.Id:D}&t=", setupLink, StringComparison.Ordinal);
-        Assert.True(await VerifySetupTokenAsync(app.Services, manager.Id, TokenIn(setupLink)));
-
-        // The operator gives the manager the printed link, so no email is sent.
-        Assert.Empty(app.Services.GetRequiredService<RecordingEmailSender>().Sent);
+        var message = Assert.Single(Sent(app));
+        Assert.Equal((email, SetupLinkEmail.Subject), (message.To, message.Subject));
+        Assert.Contains(
+            $"{Grow2NotesFactory.Origin}/setup#u={manager.Id:D}&t=", message.Text, StringComparison.Ordinal);
+        Assert.True(await VerifySetupTokenAsync(app.Services, manager.Id, SetupLinks.FromEmail(message).Token));
 
         await using var scope = app.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
@@ -168,14 +172,16 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
     [Fact]
     public async Task A_second_run_with_the_address_in_another_letter_case_is_refused_and_changes_nothing()
     {
+        await using var app = factory.WithWebHostBuilder(_ => { });
         var email = NewAddress();
-        var first = await factory.RunAdminCommandAsync(Bootstrap(managerEmail: email));
+        var first = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
         Assert.Equal(0, first.ExitCode);
+        var firstLink = SetupLinks.FromEmail(Assert.Single(Sent(app)));
         var managerId = (await FindUserAsync(email)).Id;
         var managerRows = await ReadUserAsync(managerId);
         var counts = await CountRowsAsync();
 
-        var second = await factory.RunAdminCommandAsync(
+        var second = await app.RunAdminCommandAsync(
             Bootstrap("Hillside Supports", "Alex Morgan", managerEmail: email.ToUpperInvariant()));
 
         Assert.Equal((1, ""), (second.ExitCode, second.Output));
@@ -187,29 +193,33 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         // in the transaction that the refusal rolled back, so it left none.
         Assert.Equal(counts, await CountRowsAsync());
 
-        // Its security stamp among them, so the first run's link still works.
+        // Its security stamp among them, so the first run's link still works, and the second run sent no email.
         Assert.Equal(managerRows, await ReadUserAsync(managerId));
-        Assert.True(await VerifySetupTokenAsync(factory.Services, managerId, TokenIn(first.SingleOutputLine())));
+        Assert.Single(Sent(app));
+        Assert.True(await VerifySetupTokenAsync(app.Services, managerId, firstLink.Token));
     }
 
     [Theory]
     [MemberData(nameof(RefusedArguments))]
-    public async Task A_refused_command_exits_with_1_says_why_and_writes_nothing(string[] arguments, string error)
+    public async Task A_refused_command_exits_with_1_says_why_sends_no_email_and_writes_nothing(
+        string[] arguments, string error)
     {
+        await using var app = factory.WithWebHostBuilder(_ => { });
         var counts = await CountRowsAsync();
 
-        var run = await factory.RunAdminCommandAsync(
+        var run = await app.RunAdminCommandAsync(
             [.. arguments.Select(argument => argument == Address ? NewAddress() : argument)]);
 
         Assert.Equal((1, "", error), (run.ExitCode, run.Output, run.Error));
         Assert.Equal(counts, await CountRowsAsync());
+        Assert.Empty(Sent(app));
     }
 
     // An address without its scheme is not absolute, and the invite core could make no link from it.
     [Theory]
     [InlineData("", "App:Origin is not set")]
     [InlineData("grow2notes.example", "App:Origin is not an absolute address")]
-    public async Task Without_an_absolute_App_Origin_it_exits_with_1_says_why_and_writes_nothing(
+    public async Task Without_an_absolute_App_Origin_it_exits_with_1_says_why_sends_no_email_and_writes_nothing(
         string origin, string reason)
     {
         await using var app = factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration(
@@ -221,12 +231,14 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         Assert.Equal(
             (1, "", Refusal($"{reason}, so no setup link can be made.")), (run.ExitCode, run.Output, run.Error));
         Assert.Equal(counts, await CountRowsAsync());
+        Assert.Empty(Sent(app));
     }
 
     // The event is written inside the transaction, so a failure after it rolls back the organisation and the invite
-    // with it, and the address is free for the run to be made again.
+    // with it, and the address is free for the run to be made again. The failure comes before the email, so none is
+    // sent.
     [Fact]
-    public async Task When_the_work_fails_after_the_event_is_written_nothing_is_kept_and_nothing_is_printed()
+    public async Task When_the_work_fails_after_the_event_is_written_nothing_is_kept_sent_or_printed()
     {
         await using var app = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(
             services => services.AddScoped<IAuditWriter>(
@@ -242,12 +254,36 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         Assert.Equal(("", ""), (output.ToString(), error.ToString()));
         Assert.Equal(counts, await CountRowsAsync());
         Assert.Null(await FindUserOrNullAsync(email));
+        Assert.Empty(Sent(app));
     }
 
-    // A transient failure at the commit runs the whole work again, after the setup link was made. The first attempt's
-    // organisation and manager were rolled back, so the link printed must be the second attempt's.
+    // The email goes before the commit, so a send that fails rolls back the organisation, its group, the manager and
+    // the event (T01's Notes), and the address is free for the run to be made again.
     [Fact]
-    public async Task When_the_commit_fails_transiently_one_organisation_is_added_and_its_managers_link_is_printed()
+    public async Task When_the_email_is_not_sent_it_exits_with_1_says_why_and_writes_nothing()
+    {
+        await using var failing = factory.WithWebHostBuilder(
+            builder => builder.ConfigureTestServices(FailingEmailSender.ReplaceAppSender));
+        var counts = await CountRowsAsync();
+        var email = NewAddress();
+
+        var run = await failing.RunAdminCommandAsync(Bootstrap(managerEmail: email));
+
+        Assert.Equal(
+            (1, "", Refusal("The setup-link email could not be sent.")), (run.ExitCode, run.Output, run.Error));
+        Assert.Equal(counts, await CountRowsAsync());
+        Assert.Null(await FindUserOrNullAsync(email));
+
+        await using var working = factory.WithWebHostBuilder(_ => { });
+        var again = await working.RunAdminCommandAsync(Bootstrap(managerEmail: email));
+        Assert.Equal((0, "", ""), (again.ExitCode, again.Output, again.Error));
+        Assert.Equal(email, Assert.Single(Sent(working)).To);
+    }
+
+    // A transient failure at the commit runs the whole work again, after the first email was sent. The first attempt's
+    // organisation and manager were rolled back, so its link answers 410 and the second attempt's works (T01's Notes).
+    [Fact]
+    public async Task When_the_commit_fails_transiently_one_organisation_is_added_and_the_last_link_emailed_works()
     {
         var commits = new FirstCommitFails();
         await using var app = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(
@@ -257,16 +293,20 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
 
         var run = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
 
-        Assert.Equal((0, ""), (run.ExitCode, run.Error));
+        Assert.Equal((0, "", ""), (run.ExitCode, run.Output, run.Error));
         Assert.Equal(2, commits.Attempts);
         Assert.Equal(
             new RowCounts(
                 counts.Organisations + 1, counts.CommonItemGroups + 1, counts.Users + 1, counts.AuditEvents + 1),
             await CountRowsAsync());
         var manager = await FindUserAsync(email);
-        var setupLink = run.SingleOutputLine();
-        Assert.StartsWith($"{Grow2NotesFactory.Origin}/setup#u={manager.Id:D}&t=", setupLink, StringComparison.Ordinal);
-        Assert.True(await VerifySetupTokenAsync(app.Services, manager.Id, TokenIn(setupLink)));
+        var sent = Sent(app).ToList();
+        Assert.Equal([email, email], sent.Select(message => message.To));
+        var (first, last) = (SetupLinks.FromEmail(sent[0]), SetupLinks.FromEmail(sent[1]));
+        Assert.Equal(manager.Id.ToString("D"), last.UserId);
+        Assert.True(await VerifySetupTokenAsync(app.Services, manager.Id, last.Token));
+        using var client = app.CreateHttpsClient();
+        await client.AssertSetupLinkEndedAsync(first);
     }
 
     [Fact]
@@ -293,22 +333,30 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
 
     // The link holds the setup token, and the names and the address are personal (design.md §9.5). The token is looked
     // for as the link holds it too, escaped, since its base64 almost always has a +, / or = in it, which the link has
-    // as %XX.
+    // as %XX. A send that fails throws an exception whose message holds the address and the link, which must not reach
+    // the logs either.
     [Fact]
-    public async Task Neither_a_run_nor_a_refused_one_logs_the_names_the_address_or_the_link()
+    public async Task Neither_a_run_nor_a_refused_or_failed_one_logs_the_names_the_address_or_the_link()
     {
         var logs = new RecordingLoggerProvider();
         await using var app = factory.WithWebHostBuilder(
             builder => builder.ConfigureLogging(logging => logging.AddProvider(logs)));
+        await using var failing = app.WithWebHostBuilder(
+            builder => builder.ConfigureTestServices(FailingEmailSender.ReplaceAppSender));
         var email = NewAddress();
+        var failedEmail = NewAddress();
 
         var done = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
         var refused = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
+        var failed = await failing.RunAdminCommandAsync(Bootstrap(managerEmail: failedEmail));
 
-        Assert.Equal((0, 1), (done.ExitCode, refused.ExitCode));
-        var setupLink = done.SingleOutputLine();
-        var token = TokenIn(setupLink);
-        string[] personal = [OrganisationName, ManagerName, email, setupLink, token, Uri.EscapeDataString(token)];
+        Assert.Equal((0, 1, 1), (done.ExitCode, refused.ExitCode, failed.ExitCode));
+        var token = SetupLinks.FromEmail(Assert.Single(Sent(app))).Token;
+        string[] personal =
+        [
+            OrganisationName, ManagerName, email, failedEmail, $"{Grow2NotesFactory.Origin}/setup", token,
+            Uri.EscapeDataString(token),
+        ];
         Assert.DoesNotContain(logs.Entries, entry => personal.Any(entry.Holds));
     }
 
@@ -334,9 +382,8 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         $"{RefusalWithUsage(reason)}{ResetSignInCommand.Usage}{Environment.NewLine}" +
         $"{SignOutAllCommand.Usage}{Environment.NewLine}{McpClientCommand.Usage}{Environment.NewLine}";
 
-    // As the SPA reads the fragment, with URLSearchParams, which ParseQuery matches: + is a space, then %XX is decoded.
-    private static string TokenIn(string setupLink) =>
-        QueryHelpers.ParseQuery(setupLink[(setupLink.IndexOf('#', StringComparison.Ordinal) + 1)..])["t"].ToString();
+    private static IReadOnlyCollection<EmailMessage> Sent(WebApplicationFactory<Program> host) =>
+        host.Services.GetRequiredService<RecordingEmailSender>().Sent;
 
     // An address that no other test or run of this one uses.
     private static string NewAddress() => $"sam.taylor.{Guid.NewGuid():N}@example.org";

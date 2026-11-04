@@ -2,8 +2,10 @@
 
 The operator commands are part of the app's own binary (design.md §7.4). The developer runs them from the web app's
 SSH console, signed in to Azure with their own account; a command runs with the app's settings and its identity, and
-writes its audit event. This file says how to open the console, and for each command when to run it, what to have
-ready, how to run it and what it does.
+writes its audit event. `admin bootstrap` can also be run by the onboarding skill's agent, through `az webapp exec`
+on the operator's own Azure CLI sign-in and on the operator's yes (D101, [onboard-provider.md](onboard-provider.md));
+its block below is then the fallback. This file says how to open the console, and for each command when to run it,
+what to have ready, how to run it and what it does.
 
 ## The SSH console
 
@@ -21,15 +23,17 @@ Vault as the app does.
 
    ```shell
    for name in ConnectionStrings__Grow2Notes ManagedIdentity__ClientId DataProtection__KeyVaultKeyUri App__Origin \
-     IDENTITY_ENDPOINT IDENTITY_HEADER; do
+     IDENTITY_ENDPOINT IDENTITY_HEADER Email__ApiKeySecretUri Email__SenderAddress; do
      if printenv "$name" > /dev/null; then echo "$name: set"; else echo "$name: MISSING"; fi
    done
    ```
 
-   All six must say `set`. The first four are the app settings that `infra/main.bicep` gives the app: the database's
+   All eight must say `set`. The first four are the app settings that `infra/main.bicep` gives the app: the database's
    connection string, the client ID of the app's identity, the Key Vault key that wraps the key ring that setup tokens
-   are made with, and the address the app is reached at, which setup links start with. The last two are how App
-   Service lets a process in the container sign in as the app's identity. If any says `MISSING`, stop and run nothing.
+   are made with, and the address the app is reached at, which setup links start with. The next two are how App
+   Service lets a process in the container sign in as the app's identity. The last two are where the Resend key is
+   kept and the address the setup-link email is sent from, which `admin bootstrap` and `admin reset-signin` need
+   (D101). If any says `MISSING`, stop and run nothing.
    Never print the values, with `env`, `printenv` alone or `echo`: `IDENTITY_HEADER` guards the identity's tokens.
 4. Change nothing else: the shell runs as root. `/home/site/wwwroot` is the deployed `app.zip`, mounted read-only
    (A49), and the web app keeps serving while a command runs beside it.
@@ -37,23 +41,25 @@ Vault as the app does.
 
 ## admin bootstrap
 
-Creates an organisation, with its Every note group, and its first manager's invite, and prints the manager's setup
-link (design.md §7.4, §8.1). There is no sign-up screen (D23, A1), so this is how every organisation starts.
+Creates an organisation, with its Every note group, and its first manager's invite, and emails the manager their
+setup link, as an invite does (design.md §7.4, §8.1, D101). There is no sign-up screen (D23, A1), so this is how
+every organisation starts.
 
 ### When to run it
 
 - **Once for each organisation.** Every run that ends with exit code 0 creates another organisation, as onboarding
   another provider would (D3), and nothing removes one. A run is never repeated to put an earlier one right: see *If
   it is refused or fails*.
-- **In test,** only with made-up names and an `example.org` address (A35), such as `Sample Support Services`,
-  `Alex Sample` and `alex.sample.20261012@example.org`, with a new address each time, and only when a test
-  organisation is needed, since it stays for good. The first run in test is step 3 of
-  [first-use-in-test.md](first-use-in-test.md), which opens the link and completes setup with it.
+- **In test,** only with made-up names (A35), such as `Sample Support Services` and `Alex Sample`, and a new
+  testing-mailbox `+` tag each time, because the email is really sent and an `example.org` address would bounce.
+  Run it only when a test organisation is needed, since it stays for good. The first run in test is step 3 of
+  [first-use-in-test.md](first-use-in-test.md), which opens the emailed link and completes setup with it.
 - **In production,** once, for the provider, as S06.05.02 and [go-live.md](go-live.md) D say: only when F06.01's list
   of high and critical findings is empty, because the first manager's name and address are the first real personal
   information in production (design.md §14 M6), only once the provider has told you, in person or on a call you made to
   a number you already hold for it, who its first manager is (A105, D74), and with the provider's name checked by hand
-  for the parent company's name, as every change to the app is (D42, D72).
+  for the parent company's name, as every change to the app is (D42, D72). There the onboarding skill's agent runs
+  it (go-live.md D3, D101), and the block below is the fallback.
 
 ### What to have ready
 
@@ -61,7 +67,7 @@ link (design.md §7.4, §8.1). There is no sign-up screen (D23, A1), so this is 
   most 200 characters. No screen changes it later, so check its spelling first.
 - The first manager's name, as the app is to show it on what they write and review, at most 100 characters, and
   their email address, at most 256 characters, which has no account yet: one address has one account across the whole
-  app (A27).
+  app (A27). The setup-link email goes to that address, so check it with the provider.
 - The app answering `200` at `/healthz/ready`, such as `https://app-grow2notes-test.azurewebsites.net/healthz/ready`,
   which shows that it reaches its database. In test the database pauses when idle and the first request wakes it,
   which can take a minute, so refresh until it answers `200`.
@@ -89,8 +95,9 @@ cd /home/site/wwwroot && {
   app's `appsettings.json`, as the web app does.
 - The command builds the app with all its services and settings and runs in place of the web server (design.md
   §7.4). It takes a few seconds.
+- On success it prints nothing, because the link goes only in the email, so the block prints `Exit code: 0` alone.
 
-### What it writes and prints
+### What it writes and sends
 
 In one transaction (design.md §5.9), so all of it or none of it, it writes:
 
@@ -104,40 +111,27 @@ In one transaction (design.md §5.9), so all of it or none of it, it writes:
 - the audit event `admin.bootstrap`, with no actor, for the organisation, which holds the manager's ID and never their
   name or address (A28).
 
-Once that has committed, it prints the setup link on standard output, and nothing else, and the block then prints
-`Exit code: 0`:
+In that transaction, after the audit event and before the commit, it hands the setup-link email to the email
+service for the first manager's address: the email an invite sends, titled *Set up your Grow2Notes sign-in*
+(design.md §8.1 step 2). A send that fails rolls it all back, so nothing is created (*If it is refused or fails*).
+Exit code 0 means the email was handed on, not that it was delivered.
 
-```text
-https://app-grow2notes-test.azurewebsites.net/setup#u=<the manager's ID>&t=<the setup token>
-```
+It prints nothing, logs nothing, sends no telemetry and keeps no copy of the link: the link holds the token and the
+address is personal (design.md §9.5).
 
-It sends no email, logs nothing and keeps no copy of the link: the link holds the token and the address is personal,
-so neither goes to telemetry (design.md §9.5).
+### The setup-link email
 
-### The setup link
-
-- **It works once, and for 7 days** (A23). The token holds the manager's security stamp, which completing setup
-  changes (design.md §8.1 step 5), so it stops working then, and in any case 7 days after it was printed.
-- **It goes to the first manager directly,** and to no one else: whoever opens it can set up the account. In test the
-  address is made up and receives nothing, so the operator opens it. In production:
-  - Send it in one text message to the first manager's own mobile, the number the provider gave when it confirmed who
-    they are. Send it while you are with them in person or on a call you made to that number, so they open it in their
-    phone's browser and set up there and then (A105).
-  - Copy it from the console and paste it straight into the message, from your computer through your phone's messages
-    (such as Phone Link, Messages for web or Messages on a Mac). Never open it, retype it or read it out.
-  - Once it has gone, clear the clipboard, and its history if the computer keeps one (on Windows, Win+V, then Clear
-    all).
-  - Once they have finished setup, delete the message from your phone and from every computer your messages sync to.
-  - Finishing setup ends the link (first bullet), so a copy missed after that cannot be used.
-  - If setup is not finished then, they finish it from the same message within 7 days, and you delete your copies once
-    they have.
-- **It is kept nowhere else:** not in notes, a ticket, a chat, an email, this repository or `ops/`, and in production
-  nowhere but the one text message above. Apart from that, the console's screen is the only place it is shown, so close
-  the tab once the link has gone to the manager. The token is in the link's fragment, after `#`, which a browser never
-  sends to a server, so no server log holds it either (design.md §8.1 step 2).
-- If it is lost, or 7 days pass before setup, do not run `admin bootstrap` again: the address already has an account,
-  so the run is refused. [admin reset-signin](#admin-reset-signin) prints a new link for the manager, and ends the
-  old one.
+- **The link in it works once, and for 7 days** (A23). The token holds the manager's security stamp, which completing
+  setup changes (design.md §8.1 step 5), so it stops working then, and in any case 7 days after it was sent.
+- **It goes to the first manager's address and nowhere else.** The operator never sees the link, so it is in no
+  console, chat, note, ticket or transcript. In test the address is a testing-mailbox `+` tag, so you open the email
+  there. In production, while you are with the first manager or on a call you made to the provider's number (A105),
+  tell them to look for the email, junk included, and to open it on their own phone, as go-live.md D4 says.
+- **The token is in the link's fragment,** after `#`, which a browser never sends to a server, so no server log holds
+  it (design.md §8.1 step 2).
+- **If it has not arrived after 10 minutes, is lost, or 7 days pass before setup,** do not run `admin bootstrap`
+  again: the address already has an account, so the run is refused. [admin reset-signin](#admin-reset-signin) emails
+  the manager a new link and ends the old one.
 
 ### If it is refused or fails
 
@@ -148,30 +142,37 @@ so neither goes to telemetry (design.md §9.5).
   rolls back, it refuses an address that already has an account (A27) or that is not an email address
   (`InvalidEmail`), and one with a character that the app does not take in an address (`InvalidUserName`): a space, a
   tab, an invisible character that came with a paste, or a letter outside ASCII, such as an accented one. Type the
-  address again rather than pasting it.
+  address again rather than pasting it. Last, it refuses a setup-link email that could not be handed on,
+  `Refused: The setup-link email could not be sent. Nothing was written.`: an email setting is blank, the Resend key
+  is missing from the vault, or Resend refused it. Check the eight settings (*The SSH console*) and the Resend key
+  (go-live.md A7), then run it again.
 - **A refusal wrote nothing, with one exception: a first run with a new address that is refused as already having an
   account.** That happens only when a brief database failure hid the commit of the run's first attempt, and the
   retry was refused on the address that attempt had saved. The organisation, its Every note group and the Invited
-  manager exist, but no link was printed. Do not run it again with another address or organisation name, which would
-  add a second organisation: the manager's link comes from [admin reset-signin](#admin-reset-signin).
+  manager exist, and that attempt's email went, so look for it first: its link works. Do not run it again with
+  another address or organisation name, which would add a second organisation: if the email never came, a new link
+  comes from [admin reset-signin](#admin-reset-signin).
 - **Any other exit code: a failure the command did not expect,** such as a database that stayed unreachable through
   its retries; .NET writes the exception on standard error. Check `/healthz/ready` as above, then run it again with
   the same three values. If the failed run had committed, the address refuses this one, which is the exception above;
   if not, it runs as usual.
+- **After the agent's run said No result or Failed** (the onboarding skill, D101), it may have run: look for the
+  email first. Then, in the SSH console, delete any file left at `/home/LogFiles/grow2notes-admin-*` with `rm`,
+  printing none of them. Such a file holds only an exit code and Refused or Missing lines, never a value.
 
 ## admin reset-signin
 
 **Run it only once the person's organisation has confirmed who the person is** (design.md §7.4, §8.6). Someone at
 the organisation who knows the person, such as one of its managers, tells you, by phone or in person, that the person
-asking for a new link is the one whose address it is. Whoever opens the printed link can set up the account and read
+asking for a new link is the one whose address it is. Whoever opens the emailed link can set up the account and read
 every participant's notes (D20), so never run it on a request that came only by email or chat, or from the person
 alone.
 
-It does what a manager's Reset sign-in does in the app (design.md §4.11, §8.6), and prints the new setup link instead
-of emailing it. For an Active person, it removes their password and passkeys, turns off their two-factor sign-in
-(whichever method they chose, D97), gives them a new authenticator key and makes them Invited, which ends every session of theirs on every device
-on its next request, and revokes the assistant authorisations they gave (mcp-server.md §4.6), which ends their
-connections of an AI assistant on its next call; they then set up again from the link (§8.1 steps 3 to 5). For an
+It does what a manager's Reset sign-in does in the app (design.md §4.11, §8.6), and, as that does, emails the new
+setup link to the address the account holds (D101). For an Active person, it removes their password and passkeys,
+turns off their two-factor sign-in (whichever method they chose, D97), gives them a new authenticator key and makes
+them Invited, which ends every session of theirs on every device on its next request, and revokes the assistant
+authorisations they gave (mcp-server.md §4.6), which ends their connections of an AI assistant on its next call; they then set up again from the link (§8.1 steps 3 to 5). For an
 Invited person, it gives them a new key and link, as Resend invite does. Either way, every link made for them before
 stops working.
 
@@ -183,15 +184,15 @@ stops working.
   it skips that rule. With two Active managers, which the go-live checklist asks for, one resets the other from the
   person's page in Users, and no operator is needed.
 - **When an Invited manager's setup link is lost or past its 7 days, and no manager can resend it,** such as the
-  first manager's link from `admin bootstrap` (*The setup link*, above).
+  first manager's link from `admin bootstrap` (*The setup-link email*, above).
 - **Not for a Deactivated person,** whom it refuses: a manager reactivates them in the app first (D75). If no manager
   can sign in to do that, reset a manager's sign-in first.
 - **In test,** only for made-up accounts (A35), as step 29 of [first-use-in-test.md](first-use-in-test.md) does.
 
 ### What to have ready
 
-- The organisation's confirmation of who the person is (above), and a way to give the person the link directly, as
-  for the first manager's link (*The setup link*, above).
+- The organisation's confirmation of who the person is (above), and the person told to look for the email titled
+  *Set up your Grow2Notes sign-in*, junk included: it goes to the address their account holds.
 - The person's email address, as their account has it, in any letter case: the app compares addresses ignoring case
   (A27), so `Sam.Taylor@Example.org` finds `sam.taylor@example.org`.
 - The app answering `200` at `/healthz/ready`, as for `admin bootstrap` above.
@@ -211,7 +212,7 @@ cd /home/site/wwwroot && {
 }
 ```
 
-### What it writes and prints
+### What it writes and sends
 
 It finds the account by its address, in whichever organisation it is, and in one transaction (design.md §5.9), so all
 of it or none of it, writes:
@@ -224,17 +225,12 @@ of it or none of it, writes:
 - the audit event `admin.signin_reset`, with no actor, for the person's organisation, about the person by their ID,
   and never their name or address (A28).
 
-Once that has committed, it prints the new setup link on standard output, and nothing else, and the block then prints
-`Exit code: 0`:
-
-```text
-https://app-grow2notes-test.azurewebsites.net/setup#u=<the person's ID>&t=<the setup token>
-```
-
-It sends no email, logs nothing and keeps no copy of the link (design.md §9.5). The link is handled as the first
-manager's is (*The setup link*, above): it works once and for 7 days, it goes to the person directly and to no one
-else, and it is kept nowhere else, so close the console's tab once it has gone to them. The person opens it, sets up
-a passkey, a password and an authenticator app, a password only, or a password and a passkey (D97), and is signed in.
+In that transaction, after the audit event and before the commit, it hands the setup-link email to the email
+service for the address the account holds, never the address typed, so a send that fails leaves the sign-in as it
+was. It prints nothing, so the block prints `Exit code: 0` alone, and it logs nothing, sends no telemetry and keeps
+no copy of the link (design.md §9.5). The link works once and for 7 days (*The setup-link email*, above). The
+person opens it, sets up a passkey, a password and an authenticator app, a password only, or a password and a
+passkey (D97), and is signed in.
 
 ### If it is refused or fails
 
@@ -249,10 +245,14 @@ a passkey, a password and an authenticator app, a password only, or a password a
     it, as a paste can bring an invisible character with it;
   - `The account is Deactivated, so a manager reactivates it in the app first.`: see *When to run it*;
   - `The account changed while the command ran, so run it again.`: a manager changed the account in the app at the
-    same moment. Paste the block again, which reads the account as it is now.
+    same moment. Paste the block again, which reads the account as it is now;
+  - `The setup-link email could not be sent.`: an email setting is blank, the Resend key is missing from the vault,
+    or Resend refused it, and the sign-in is as it was. Check the eight settings (*The SSH console*) and the Resend
+    key (go-live.md A7).
 - **Any other exit code: a failure the command did not expect,** such as a database that stayed unreachable through
-  its retries; .NET writes the exception on standard error. No link was printed and the person's sign-in is as it
-  was, so check `/healthz/ready` as above, then run it again with the same address.
+  its retries; .NET writes the exception on standard error. Unless the commit reached the server, the person's
+  sign-in is as it was and any email that went holds a link that does not work, so check `/healthz/ready` as above,
+  then run it again with the same address.
 
 ## admin signout-all
 

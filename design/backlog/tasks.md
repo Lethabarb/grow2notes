@@ -14,6 +14,9 @@ that leads the owner through onboarding a new provider. T39 waits for it.
 T42, added on 1 November 2026 (D97), is a Release 1 task in lane B with two new stories, S00.07.01 and S00.07.02:
 sign in with a password only, or a password and a passkey. It needs no other task.
 
+T43, added on 3 November 2026 (D101), is a Release 1 task in lane A with one new story, S07.06.02: an agent sets up a
+provider's organisation and first manager. It must merge before go-live section D.
+
 - **The stories are the acceptance criteria.** An absorbed story keeps its section in its epic folder: its criteria
   and Notes are the task's acceptance criteria, and the task adds no new spec. Each task links its stories under
   *Absorbs*.
@@ -40,7 +43,7 @@ sign in with a password only, or a password and a passkey. It needs no other tas
 Up to four lanes run at once, each one task at a time:
 
 - **A:** T01, T04, T11, T16, T19, T24 for Release 1, then T30 to T38, then T41, then T39, one after another, because
-  each MCP tool edits the shared `tools/list` snapshot and tool matrix.
+  each MCP tool edits the shared `tools/list` snapshot and tool matrix. T43 follows T41.
 - **B:** T02, T05, T06, T07, T15, T17, T21, T25, then T29 beside T30, then T42.
 - **C:** T03, T08, T09, T10, T12, T13, T14, T18, T20, T26. The note form is one hot spot, so its tasks run back to
   back.
@@ -8159,6 +8162,129 @@ changed, and the pull request names each.
 
 ---
 
+## T43 An agent sets up a provider's organisation and first manager
+
+```yaml
+id: T43
+status: done
+release: R1
+lane: A
+size: M
+depends_on: [T01, T27, T40, T41]
+stories: [S07.06.02]
+```
+
+### Outcome
+
+The operator asks Claude Code, through the onboard-provider skill, to create a provider's organisation and its first
+manager, and the agent does it end to end with no hand typing in the SSH console. The first manager gets the same
+setup-link email an invite sends, through Resend, and never a printed link. `admin bootstrap` stays the only way an
+organisation starts. It must merge before go-live section D.
+
+### Absorbs
+
+- [S07.06.02][] An agent sets up a provider's organisation and first manager
+- Amends [S00.03.05][], [S00.03.06][], [S06.05.01][], [S06.05.02][] and [S07.06.01][] (each says the link is printed or
+  that the step is by hand), each with a dated Note.
+
+### Notes
+
+- Owner request, 3 November 2026 (D101), before the first production deploy: "in prod do i still need to do the ssh
+  stuff or do we have a real on boarding flow? if we dont, i want an onboarding flow". The answer was no: production's
+  first organisation was a block pasted into the Kudu SSH console, and the command printed a link to text on. Asked
+  where it should happen, the owner chose none of an Operator screen, an MCP tool or provider self sign-up: "we can do
+  SSH i just dont want to do it manually. find a way we can have an agent setup the ORG and we chill". Asked how the
+  first manager gets the link, the owner chose email, like any invite.
+- A new task, planned on 3 November 2026 against `origin/main` at `9c1876e`. Until it merges, this section, its story
+  and the plan are its spec. A separate small pull request changes `infra/modules/keyvault.bicep`'s key size (F-7);
+  this task does not touch that file or F-7.
+- Feasibility, read on Microsoft Learn on 3 November 2026 ("Open a Container Shell (SSH) and Run Commands", updated
+  12 October 2026): `az webapp exec` (preview, Azure CLI 2.90.0 or later) reaches the app container through Kudu as an
+  authenticated proxy, needs no SSH server or SSH password, and works with SCM basic authentication off. `--mode
+  execute` is fire-and-forget (no output, no exit code), so the script writes a result file under `/home/LogFiles` and
+  reads it back, as Learn's "capture output and check completion" pattern does. Two points have no Learn example, the
+  read through Kudu's `/api/vfs` with the CLI's Entra token and whether the detached process gets the app settings
+  and the managed-identity variables. Both fail closed (no result is never reported as done; a missing setting means
+  nothing runs), and the test rehearsal proves both before go-live D3 relies on the route. The by-hand block stays
+  the fallback. No blocking owner question.
+- Recipients: bootstrap sends to the `--manager-email` value, the one given to `Invitations.InviteAsync`, as
+  `UserInvite` sends to its request's address. Reset-signin sends to the stored address (`user.Email`), never to the
+  typed argument, as `UserSetupLink` does.
+- Retries follow T01's Notes: a transient retry sends a second email and the first link answers 410. If a commit
+  reached SQL but its acknowledgement was lost, the retry is refused on the address although the email went; the
+  recovery is `admin reset-signin`, never a second bootstrap.
+- Departure from T41's R13 ("deny every other shell route"): the skill's settings move Bash from deny to ask, with
+  PowerShell, web search, web fetch, Write and Edit still denied, because a deny with one exception cannot be
+  expressed (deny wins over ask and allow). The owner approves each Bash prompt, and never chooses "don't ask again".
+  A PreToolUse hook stays rejected unless the owner asks.
+- Operator commands register no telemetry (one `if` in `Program.cs`), because a command holds a name and an address
+  that an exception's text can carry (design.md §9.5). This covers the by-hand route too.
+- Assumed defaults (A144, design.md §13): the script's mechanics (one result file renamed within `/home`, the Kudu
+  read and delete, 2-minute health and 3-minute result limits, base64 transport, stdout to `/dev/null`,
+  `Email__UseConsole=false`, only Refused and Missing lines relayed, Azure CLI logging and telemetry off, the
+  eight-name check); the refusal text; section B's gates; the go-live D reorder; no telemetry for commands; test
+  addresses as testing-mailbox plus-tags; the email's wording kept; row-level security deferred.
+- Owner questions, none blocking: (1) the email's line "a manager added you to Grow2Notes or reset your sign-in" is
+  not strictly true for a first manager and is kept unchanged because the owner asked for the same email (D85, first-use
+  step 201); (2) `az webapp exec` is a preview command, so go-live keeps the by-hand block as the fallback.
+- Only `admin bootstrap` is agent-run. `admin reset-signin` now emails but stays a by-hand break-glass step.
+- Built on 3 November 2026. The workflow's review and fix agents could not run (the organisation's Claude
+  subscription access for Claude Code was off), so the main session reviewed v1 and v2, fixed v1's end-to-end
+  fixture (it took only lines starting `https://`, while CI's app runs at `http://localhost:5000`, so 60 end-to-end
+  tests failed in `admin bootstrap`), and wrote v3. `az webapp exec` was read on Microsoft Learn's `az webapp`
+  reference the same day (`ops/onboard-provider.md`). go-live D's rehearsal gate is first-use steps 219 to 222.
+- Not touched: no endpoint, MCP tool, SPA route, table, column, event type or migration (the latest stays
+  `20261026094320_AddOpenIddict`), no infra, and nothing in Azure or GitHub.
+
+### Plan
+
+Outcome: as above. Approach: reuse the existing command, email and skill; no new endpoint or screen.
+- App: `BootstrapCommand` and `ResetSignInCommand` inject `IEmailSender` and call `SetupLinkEmail.SendAsync` inside
+  their transaction after the audit write, as `UserInvite` and `UserSetupLink` do. `EmailNotSentException` ends in
+  `Refused: The setup-link email could not be sent. Nothing was written.` (exit 1). On success they print nothing,
+  and their `RunAsync` loses the output writer (only `mcp-client` keeps it), so a link cannot reach standard output.
+  `Program.cs` registers telemetry only when no operator command runs.
+- Agent step: a fixed script, `.claude/skills/onboard-provider/bootstrap.sh`, run once through the Bash tool with the
+  three values on stdin (a quoted heredoc). It waits for `/healthz/ready`, submits the command once with `az webapp
+  exec --mode execute` on the operator's Azure CLI sign-in, reads a result file through Kudu's `/api/vfs` and deletes
+  it, and prints only a Done, Refused or Missing line. The values travel as base64 and never reach a log, a history
+  or the repository. The agent never handles a password, key, token or link.
+- Skill and runbooks: section B of the skill runs the script only on the owner's yes in that turn (organisation name,
+  first manager's name and address, and that the provider named the manager on a call, A105). Bash moves from deny to
+  ask. break-glass.md, go-live.md section D, onboard-provider.md, by-hand.md and first-use-in-test.md are updated, and
+  D101 is recorded (D95 is marked amended).
+
+Domain changes: none persisted. Used as today: `Organisation`, the Every note group, `ApplicationUser` (an Invited
+Manager), the setup token (single use, 7 days) and `AuditEvent` (`admin.bootstrap`, `admin.signin_reset`, IDs only).
+Invariants: one transaction per run with the send inside it; a failed send writes nothing; success prints nothing; an
+organisation is created only by `admin bootstrap`; the unique email index (A27) is the only duplicate guard, so a
+second production organisation is prevented by the owner's confirmation and go-live D1, not by schema.
+
+Reuse: `SetupLinkEmail`, `EmailNotSentException`, `UserInvite`'s send-in-transaction pattern,
+`AdminCommands.RefuseAsync`, `EmailSending.AddEmail`, the test fixtures (`RecordingEmailSender`, `FailingEmailSender`,
+`SetupLinks`), break-glass's `/healthz/ready` pre-check and setting check, and the onboarding skill and its settings
+block.
+
+Decisions where the design is silent: A144 and D101, as in the Notes.
+
+### Verticals
+
+- v1: operator commands email the setup link instead of printing it, and send no telemetry; depends_on none;
+  R07, R08, R09, R10, R11, R20.
+- v2: the onboarding skill runs `admin bootstrap` through `bootstrap.sh` on the operator's Azure CLI sign-in;
+  depends_on none; R02, R03, R04, R05, R06, R12, R13.
+- v3: runbooks, design.md, D101, A144, stories and backlog totals; depends_on v1, v2; R01, R14 to R19, R21 to R24.
+
+### Steps
+
+- [x] App (v1): the emailed link, no stdout on success, no telemetry for commands, the tests, the e2e fixture and
+      tests/README.md.
+- [x] Skill (v2): `bootstrap.sh`, SKILL.md section B, by-hand.md, and `OnboardingSkillTests`.
+- [x] Records (v3): break-glass.md, go-live.md D, onboard-provider.md, first-use-in-test.md, design.md, D101 and A144,
+      the amended stories, S07.06.02, and this file's counts, lane list and totals.
+
+---
+
 ## Cut stories
 
 Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `status: cut` and a dated Note.
@@ -8248,6 +8374,7 @@ assumed defaults, which the owner may overturn:
 [S00.02.05]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000205-database-delete-lock
 [S00.02.07]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000207-setup-link-email
 [S00.02.08]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000208-resends-settings-come-from-github-environment-secrets
+[S00.03.05]: E00-skeleton-hosting-sign-in/F00.03-tenancy-audit-operator-commands.md#s000305-bootstrap-the-organisation-and-first-manager
 [S00.03.06]: E00-skeleton-hosting-sign-in/F00.03-tenancy-audit-operator-commands.md#s000306-break-glass-reset-and-sign-out-of-everyone
 [S00.04.03]: E00-skeleton-hosting-sign-in/F00.04-sign-in-setup-sessions.md#s000403-set-up-my-account-with-a-password-and-authenticator-app
 [S00.04.05]: E00-skeleton-hosting-sign-in/F00.04-sign-in-setup-sessions.md#s000405-sign-in-with-email-password-and-code
@@ -8393,5 +8520,6 @@ assumed defaults, which the owner may overturn:
 [S07.05.09]: E07-admin-mcp-server/F07.05-hardening-manual-tests-switch-on.md#s070509-switch-on-in-production
 [S07.05.10]: E07-admin-mcp-server/F07.05-hardening-manual-tests-switch-on.md#s070510-name-the-approved-ai-providers-in-the-wording
 [S07.06.01]: E07-admin-mcp-server/F07.06-onboarding-with-claude-code.md#s070601-onboard-a-new-provider-with-claude-code
+[S07.06.02]: E07-admin-mcp-server/F07.06-onboarding-with-claude-code.md#s070602-an-agent-sets-up-a-providers-organisation-and-first-manager
 [S00.07.01]: E00-skeleton-hosting-sign-in/F00.07-sign-in-choices.md#s000701-set-up-and-sign-in-with-a-password-only
 [S00.07.02]: E00-skeleton-hosting-sign-in/F00.07-sign-in-choices.md#s000702-set-up-and-sign-in-with-a-password-and-a-passkey
