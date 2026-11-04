@@ -567,13 +567,35 @@ Of the 253 rows, 153 are met (8 of them confirmed in test), 86 are not applicabl
 
 ## 6. ZAP baseline scan
 
-Not yet run: `ops/first-use-in-test.md` step 141.
+Run on 5 November 2026 as `ops/first-use-in-test.md` step 141 says: ZAP 2.17.0's baseline scan (`zap-baseline.py`, the
+`ghcr.io/zaproxy/zaproxy:stable` image) on the operator's machine, against the test site only, with no credentials and
+no ZAP sign-in. The baseline spiders for a minute and then scans passively: it reads the answers and attacks nothing.
+Unlike sections 3 to 5, this section comes from a run. The raw reports stay with the operator, because they can hold
+cookie or token values. S06.01.02's criteria: the scan is of the test site, which holds made-up data; no High alert is
+open; every other alert is fixed, accepted with a reason, or a false positive.
 
-When it has been run, the operator writes here what was covered and decides each alert. Raw reports stay with the
-operator, because they can hold cookie or token values. S06.01.02's criteria: the scan is of the test site, which
-holds made-up data; no High alert is open; every other alert is fixed, accepted with a reason, or a false positive.
+**Covered.** The status codes were counted from ZAP's own record of the requests, before it shut down.
 
-**Covered.** Targets, passes, number of URLs and number of `429` answers: not yet recorded.
+| Pass | Target | Spider | URLs | Requests | `429` answers |
+|---|---|---|---|---|---|
+| 1 | The site root | Traditional and AJAX (`-j`) | 15 | 49 | 0 |
+| 2 | `/api/auth/me`, signed out | Traditional | 10 | 10 | 0 |
+
+The other answers were 200, 204, 401 and 404, and 9 requests have no answer recorded. Pass 1's URLs include
+`/api/auth/antiforgery` and `/api/auth/me`, which only the SPA's script calls, so the AJAX spider ran the app.
+
+**Result: no High or Medium alert, and no FAIL.** Both passes raised the same alerts, one Low rule and four
+Informational ones, in the table below. ZAP raised no alert for a missing Strict-Transport-Security (10035),
+Content-Security-Policy (10038) or X-Content-Type-Options (10021) header, or for a cookie without Secure (10011),
+HttpOnly (10010) or SameSite (10054), which confirms ASVS rows 3.3.1, 3.4.1, 3.4.3 and 3.4.4 in test. It raised none
+for the `Server` header (10036) either, because `Server: Kestrel` carries no version, so F-20 stays as decided.
 
 | Alert ID | Name | Risk | Where | Decision |
 |---|---|---|---|---|
+| 90004 | Cross-Origin-Resource-Policy Header Missing or Invalid (Insufficient Site Isolation Against Spectre Vulnerability) | Low | `/`, the hashed assets, `/api/auth/antiforgery` | Accepted. design.md §9.7 sets Cross-Origin-Opener-Policy but not this header. The session cookie is `SameSite=Strict` (§9.8), so a page on another site that loads a Grow2Notes URL gets only what a signed-out visitor gets, and the assets are the public build. `Cross-Origin-Resource-Policy: same-origin` is one line in `SecurityHeaders.cs` if the owner wants it. |
+| 90004 | Cross-Origin-Embedder-Policy Header Missing or Invalid (the same rule) | Low | `/` | Accepted. The header matters only for cross-origin isolation (`SharedArrayBuffer` and precise timers), which the app does not use. |
+| 10109 | Modern Web Application | Informational | `/` | No action: the alert advises the AJAX spider, which pass 1 used. |
+| 10015 | Re-examine Cache-control Directives | Informational | `/` | Accepted, by design: `index.html` is `no-cache`, so a deploy reaches the browser at once (design.md §7.2), and it holds no personal data. |
+| 10049 | Storable but Non-Cacheable Content | Informational | `/` | Accepted, by design, as 10015. |
+| 10049 | Storable and Cacheable Content | Informational | The hashed assets, `/favicon.ico`, `/robots.txt`, `/sitemap.xml` | Accepted, by design: public content; the hashed assets are `public, max-age=31536000, immutable` (design.md §7.2, A50). |
+| 10049 | Non-Storable Content | Informational | `/api/auth/me`, `/api/auth/antiforgery` | Accepted, by design: every `/api` response is `no-store` (design.md §7.2). |

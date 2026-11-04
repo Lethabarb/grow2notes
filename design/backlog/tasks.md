@@ -6096,9 +6096,12 @@ open.
   `/tests/e2e`, GitHub Actions at `/`), each with one group of minor and patch updates, so a major version arrives as a
   pull request of its own, and a `chore(scope)` commit prefix so the titles are Conventional Commits. Alerts are a
   GitHub setting, step 140.
-- Real-site results are pending: ops/first-use-in-test.md steps 140 to 142 (Dependabot alerts, the ZAP baseline, and
-  the two-device check that the limits key on the real client). Record them here, and the ZAP results in
+- Real-site results: ops/first-use-in-test.md steps 140 to 142 (Dependabot alerts, the ZAP baseline, and the
+  two-device check that the limits key on the real client). Record them here, and the ZAP results in
   `ops/security-review.md`.
+  - Step 141 passed on 5 November 2026: two passes on test, no High or Medium alert and no `429` answer; the one Low
+    rule (Spectre site isolation headers) and four Informational ones are decided in `ops/security-review.md` §6.
+  - Steps 140 and 142 are recorded here when run.
 
 ### Plan
 
