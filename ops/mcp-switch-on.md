@@ -220,7 +220,8 @@ Result: ____ (date), ____ (pass or fail), by ____
 
 ## D. Production, all by hand
 
-Do these only when A to C are done and the provider and the operator have agreed a time. The Azure subscription is
+Do these only when A to C are done (for the first provider, decisions.md D102 lets D come first) and the provider and
+the operator have agreed a time. The Azure subscription is
 shared with another production system, so every command here stays inside the two Grow2Notes resource groups.
 
 ### D1. The switch-on pull request, and the CI run to deploy (line 1)
