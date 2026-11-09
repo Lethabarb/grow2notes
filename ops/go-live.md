@@ -387,6 +387,10 @@ Every step ends with the usual `Result:` line. Do D8 before D1. Once the AI-assi
 ([mcp-switch-on.md](mcp-switch-on.md) D5), the rest of a provider's set-up can be entered with the same skill
 ([onboard-provider.md](onboard-provider.md), D95).
 
+**The first provider (D102).** For D3, use the window that `ops/setup-tool/Grow2Notes setup.cmd` opens, in place of the
+onboarding skill: type D2's three values and choose *Create organisation*. It stops if production already has an
+organisation, and approves Claude Code when it finishes. decisions.md D102 records how each line of D1 was met.
+
 ### D1. The gate (read-only)
 
 (S06.05.02's first criterion, design.md §14 M6.) Every one of these must hold:

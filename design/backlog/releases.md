@@ -381,7 +381,8 @@ audit trail, with no note content ever returned (D48–D51, D55–D59, mcp-serve
 **Done when:** README §9 *Release* R2: E07 is done, the mcp-server.md §11.1 switch-on checklist in F07.05 is
 complete, `Mcp:Enabled` is on in production, and the date is recorded below.
 
-**Switch-on date:** not set yet. S07.05.09 records it here.
+**Switch-on date:** 9 November 2026, for the first provider, ahead of the paperwork of mcp-server.md §11.1 (decisions.md
+D102). S07.05.09's and S07.05.10's criteria stay unticked until it is done.
 
 ### Epics
 

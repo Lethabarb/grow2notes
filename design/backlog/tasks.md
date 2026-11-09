@@ -6101,7 +6101,10 @@ open.
   `ops/security-review.md`.
   - Step 141 passed on 5 November 2026: two passes on test, no High or Medium alert and no `429` answer; the one Low
     rule (Spectre site isolation headers) and four Informational ones are decided in `ops/security-review.md` §6.
-  - Steps 140 and 142 are recorded here when run.
+  - Step 142 passed on 9 November 2026, run by the agent from two networks (a laptop, and the test app's own outbound
+    address): 30 answers, then `429` with `Retry-After: 60` for the laptop while the other network was not limited,
+    and the laptop's count was clear a minute later.
+  - Step 140 is recorded here when run.
 
 ### Plan
 
