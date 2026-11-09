@@ -9,7 +9,7 @@ param healthCheckPath = '/healthz'
 // The web app's default address, which App Service's own certificate covers (D62).
 param appOrigin = 'https://app-grow2notes-test.azurewebsites.net'
 
-// The free App Service plan, which keeps test's app at no cost (D102, design.md §10.2, §10.3). It has no VNet
+// The free App Service plan, which keeps test's app at no cost (D103, design.md §10.2, §10.3). It has no VNet
 // integration and no Always On: the SQL server lets in the outbound addresses of the app's App Service stamp, the
 // vault takes every network, the app stops after about 20 idle minutes, and F1's CPU, memory and bandwidth quotas apply
 // (design.md §10.3). 'B1' puts test back as prod is; infra/README.md has the one-time steps.

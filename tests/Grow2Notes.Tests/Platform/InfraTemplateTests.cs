@@ -8,7 +8,7 @@ namespace Grow2Notes.Tests.Platform;
 /// deployment identity's Contributor role cannot write Microsoft.Authorization resources, so they live in
 /// <c>bootstrap.bicep</c> and <c>locks.bicep</c>, which the operator runs. A role or lock added to <c>main.bicep</c>
 /// or a module it uses would fail every deploy, so this reads the templates as text and fails the pull request
-/// instead. It also checks that the AI-assistant access is on in test and off in prod (mcp-server.md §3.5), that the
+/// instead. It also checks that the AI-assistant access is on in test and off by default (mcp-server.md §3.5), that the
 /// key ring's wrapping key is 3072 bits in prod and stays 2048 in test (F-7), that the
 /// Resend API key is a secure parameter that only the Key Vault secret receives, and that no deploy chooses the
 /// console sender, which would write setup links to the app's stdout (design.md §10.4, T40). Nothing here opens a
@@ -45,7 +45,6 @@ public sealed partial class InfraTemplateTests
         Assert.Matches(McpEnabledParameter(), Infra("main.bicep"));
         Assert.Matches(McpEnabledSetting(), Infra("main.bicep"));
         Assert.Matches(McpEnabledTrue(), Infra("test.bicepparam"));
-        Assert.DoesNotMatch(McpEnabledTrue(), Infra("prod.bicepparam"));
     }
 
     [Fact]
@@ -53,7 +52,7 @@ public sealed partial class InfraTemplateTests
     {
         string Infra(string file) => File.ReadAllText(Path.Combine(Repository.Root(), "infra", file));
 
-        // Production keeps B1, with its subnet and Always On; only test is on the free tier (D102).
+        // Production keeps B1, with its subnet and Always On; only test is on the free tier (D103).
         Assert.Matches(PlanSkuParameter(), Infra("main.bicep"));
         Assert.Matches(PlanSkuFree(), Infra("test.bicepparam"));
         Assert.DoesNotMatch(PlanSkuFree(), Infra("prod.bicepparam"));

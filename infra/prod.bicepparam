@@ -28,6 +28,10 @@ param pointInTimeRestoreDays = 35
 // it with the vault and never changes it, so this must not change after the first deploy.
 param dataProtectionKeySize = 3072
 
+// The AI-assistant access for managers and Support is on (ops/mcp-switch-on.md D1, the owner's decision on 9 November
+// 2026). Every deploy replaces the app settings, so this parameter, not a setting changed by hand, is what keeps it on.
+param mcpEnabled = true
+
 // Placeholders only. Every deploy passes the real values as parameters, from the prod environment's secrets, because
 // the object ID belongs to the operator's tenant and the addresses may contain the company's name (D42, D60, D64, D65);
 // sql.bicep and monitoring.bicep refuse the first three empty, and an empty sender address makes the app warn and

@@ -27,7 +27,8 @@ Every line must hold:
 - Production: only once the Result of step D5 in [mcp-switch-on.md](../../../ops/mcp-switch-on.md) reads pass on the
   operator's own copy, which means the AI-assistant access is switched on there.
 
-In production, every line must also hold:
+In production, every line must also hold, except for the first provider, for which the owner waived them on 9 November
+2026 until its paperwork is done (decisions.md D102). In that case, say so once and go on:
 
 - The Results of go-live.md D1 and D4 read pass.
 - The provider's written approval names Claude Code as the Support person's assistant (MA1, D57), and is kept with the

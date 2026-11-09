@@ -259,7 +259,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # design.md §10.4 step 4. The server accepts only the app: production's through its subnet (design.md §10.1),
-      # test's F1 app through its outbound addresses (D102). So the runner's public IPv4 address gets a rule of its own
+      # test's F1 app through its outbound addresses (D103). So the runner's public IPv4 address gets a rule of its own
       # for the migration. The address comes from a third party, so an answer that is
       # not an IPv4 address fails the step before it reaches az or the log.
       - name: Allow the runner through the SQL firewall

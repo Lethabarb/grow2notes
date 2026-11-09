@@ -14,9 +14,9 @@ param tags object = resourceGroup().tags
 @description('The resource ID of the app identity, id-grow2notes-<env>-app, which bootstrap.bicep creates.')
 param appIdentityId string
 
-// B1 in prod. F1, the free tier, in test (D102): it has no VNet integration and no Always On, so test's app reaches SQL
+// B1 in prod. F1, the free tier, in test (D103): it has no VNet integration and no Always On, so test's app reaches SQL
 // and Key Vault over their public endpoints and stops after about 20 idle minutes (design.md §10.3).
-@description('The App Service plan\'s SKU: B1 in prod, F1 (free) in test (D102).')
+@description('The App Service plan\'s SKU: B1 in prod, F1 (free) in test (D103).')
 param planSku 'B1' | 'F1'
 
 // From main.bicep, which also needs it for the SQL and Key Vault network rules. False on F1, which offers neither VNet
