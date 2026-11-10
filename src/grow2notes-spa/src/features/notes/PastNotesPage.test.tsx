@@ -164,7 +164,11 @@ function serveSubmittedNote(noteDate = '2026-10-01') {
     current: {
       versionNumber: 1,
       narrative: 'Jane made toast.',
-      goals: [{ text: 'Makes own breakfast', isTicked: true }],
+      isNotIn: false,
+      isLateNotice: false,
+      isSick: false,
+      medication: null,
+      goals: [{ text: 'Makes own breakfast', isTicked: true, isMediumOrLongTerm: false }],
       commonItemGroups: [],
       isFlagged: true,
       flagReason: 'Jane seemed unwell.',
@@ -183,6 +187,10 @@ function serveNewNote(noteDate = '2026-10-01') {
     goals: [],
     commonItemGroups: [],
     narrative: '',
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     isFlagged: false,
     flagReason: null,
   };

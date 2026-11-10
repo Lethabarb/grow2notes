@@ -26,7 +26,7 @@ public sealed class PdfReportTests
     private static ReportDocument Document(string exportedBy, params ReportBlock[] blocks)
     {
         var model = new DailyReportModel("Example Care", new DateOnly(2026, 10, 1), AsAtUtc, exportedBy, []);
-        return ReportLayout.DailyReport(model) with { Blocks = blocks };
+        return ReportLayout.DailyReport(model, null) with { Blocks = blocks };
     }
 
     private static ReportDocument Document(params ReportBlock[] blocks) => Document($"Jo {Phone} Smith", blocks);
@@ -145,7 +145,7 @@ public sealed class PdfReportTests
         var report = Document(
             "Jo Smith",
             new ReportBlock(ReportBlockKind.Heading1, "Zoë Adams"),
-            new ReportBlock(ReportBlockKind.Line, "Written by Priya Nair"));
+            new ReportBlock(ReportBlockKind.Line, "Note written by: Priya Nair"));
 
         using var document = PdfDocument.Open(PdfReport.Render(report));
 
@@ -165,5 +165,97 @@ public sealed class PdfReportTests
         Assert.DoesNotContain("Adams", everything, StringComparison.Ordinal);
         Assert.DoesNotContain("Nair", everything, StringComparison.Ordinal);
         Assert.DoesNotContain("Smith", everything, StringComparison.Ordinal);
+    }
+
+    // T39: the PDF reads the sizes from ReportStyle, as the Word file does. A word of each style is found by its text.
+    [Fact]
+    public void The_title_and_the_headings_are_set_in_ReportStyle_s_sizes_and_the_third_heading_is_not_italic()
+    {
+        var pdf = PdfReport.Render(Document(
+            new ReportBlock(ReportBlockKind.Title, "TitleWord"),
+            new ReportBlock(ReportBlockKind.Heading1, "FirstWord"),
+            new ReportBlock(ReportBlockKind.Heading2, "SecondWord"),
+            new ReportBlock(ReportBlockKind.Heading3, "ThirdWord"),
+            new ReportBlock(ReportBlockKind.Line, "BodyWord")));
+        using var document = PdfDocument.Open(pdf);
+        var words = document.GetPage(1).GetWords().ToList();
+
+        double SizeOf(string text) => Math.Abs(words.First(word => word.Text == text).Letters[0].PointSize);
+
+        Assert.Equal(ReportStyle.TitlePoints, SizeOf("TitleWord"), 0.1);
+        Assert.Equal(ReportStyle.Heading1Points, SizeOf("FirstWord"), 0.1);
+        Assert.Equal(ReportStyle.Heading2Points, SizeOf("SecondWord"), 0.1);
+        Assert.Equal(ReportStyle.Heading3Points, SizeOf("ThirdWord"), 0.1);
+        Assert.Equal(ReportStyle.BodyPoints, SizeOf("BodyWord"), 0.1);
+        var third = words.First(word => word.Text == "ThirdWord").Letters[0].FontName;
+        Assert.DoesNotContain("Italic", third, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Oblique", third, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void The_footer_is_10_mm_from_the_bottom_edge()
+    {
+        var pdf = PdfReport.Render(Document(new ReportBlock(ReportBlockKind.Line, "Body")));
+        using var document = PdfDocument.Open(pdf);
+        var page = document.GetPage(1);
+
+        var lowest = page.GetWords()
+            .Where(ReportText.IsFurniture)
+            .Where(word => word.BoundingBox.Bottom < page.Height / 2)
+            .Min(word => word.BoundingBox.Bottom);
+
+        const double TenMillimetres = 10 * 72 / 25.4;
+        Assert.InRange(lowest, TenMillimetres - (1.5 * 72 / 25.4), TenMillimetres + (1.5 * 72 / 25.4));
+    }
+
+    // The curly quotes, the en dash of the week and the boxes are all in DejaVu Sans, so none becomes a replacement.
+    [Fact]
+    public void The_quotes_the_en_dash_and_the_boxes_are_drawn_and_the_title_property_keeps_the_en_dash()
+    {
+        var model = new DailyReportModel("Example Care", new DateOnly(2026, 10, 1), AsAtUtc, "Jo Smith", []);
+        var report = ReportLayout.DailyReport(model, "A") with
+        {
+            Blocks =
+            [
+                new ReportBlock(ReportBlockKind.Title, "SUPPORT NOTES – WEEK A"),
+                new ReportBlock(ReportBlockKind.TickRow, string.Empty)
+                {
+                    Ticks = [new("Not In", false), new("Late Notice", true), new("Sick", false)],
+                },
+                new ReportBlock(ReportBlockKind.Tick, "Said ‘hi’ and “bye”", IsTicked: true),
+            ],
+        };
+
+        var pdf = PdfReport.Render(report);
+
+        using var document = PdfDocument.Open(pdf);
+        var letters = document.GetPages().SelectMany(page => page.Letters).Select(letter => letter.Value);
+        Assert.DoesNotContain(Replacement, letters);
+        Assert.Equal(
+            ReportText.Normalised(
+                "SUPPORT NOTES – WEEK A ☐ Not In ☑ Late Notice ☐ Sick ☑ Said ‘hi’ "
+                + "and “bye”"),
+            ReportText.Normalised(string.Join(' ', ReportText.PdfWords(pdf))));
+        Assert.Equal("SUPPORT NOTES – WEEK A: Thursday 01.10.2026", document.Information.Title);
+    }
+
+    // The index's numbers are the pages of the headings that the anchors name, which MigraDoc works out.
+    [Fact]
+    public void An_index_entry_shows_the_page_of_the_heading_with_its_anchor()
+    {
+        var pdf = PdfReport.Render(Document(
+            new ReportBlock(ReportBlockKind.Heading1, "Participants"),
+            new ReportBlock(ReportBlockKind.IndexEntry, "ANN") { Anchor = "p1" },
+            new ReportBlock(ReportBlockKind.IndexEntry, "BOB") { Anchor = "p2" },
+            new ReportBlock(ReportBlockKind.Heading1, "NAME: ANN") { PageBreakBefore = true, Anchor = "p1" },
+            new ReportBlock(ReportBlockKind.Line, "First note"),
+            new ReportBlock(ReportBlockKind.Heading1, "NAME: BOB") { PageBreakBefore = true, Anchor = "p2" },
+            new ReportBlock(ReportBlockKind.Line, "Second note")));
+
+        var text = ReportText.Normalised(ReportText.WithoutLeaders(string.Join(' ', ReportText.PdfWords(pdf))));
+
+        Assert.Equal("Participants ANN 2 BOB 3 NAME: ANN First note NAME: BOB Second note", text);
+        using var document = PdfDocument.Open(pdf);
+        Assert.Equal(3, document.NumberOfPages);
     }
 }

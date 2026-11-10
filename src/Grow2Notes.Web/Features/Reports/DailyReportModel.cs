@@ -18,6 +18,21 @@ internal sealed record DailyReportModel(
     IReadOnlyList<DailyReportNote> Notes)
 {
     /// <summary>
+    /// The names of the day's authors (A157): each author of a submitted note once, distinct by user ID, so that two
+    /// people who share a name both show, with the authors of past-day notes left out, as a manager wrote those later.
+    /// They are in first-name order, which a display name's start gives, and then in the order of their IDs.
+    /// </summary>
+    public IReadOnlyList<string> StaffOnShift =>
+    [
+        .. Notes
+            .Where(note => note.PastDayWrittenAtUtc is null)
+            .DistinctBy(note => note.AuthorUserId)
+            .OrderBy(note => note.AuthorDisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(note => note.AuthorUserId)
+            .Select(note => note.AuthorDisplayName),
+    ];
+
+    /// <summary>
     /// The report for <paramref name="noteDate"/>, or <c>null</c> when the day has no submitted note, so that
     /// <see cref="Notes"/> is never empty.
     /// </summary>
@@ -36,7 +51,7 @@ internal sealed record DailyReportModel(
         DateTime asAtUtc,
         CancellationToken cancellationToken)
     {
-        var rows = await ReadNotesAsync(db, SubmittedOn(db, noteDate), cancellationToken);
+        var rows = await ReadNotesAsync(db, SubmittedOn(db, noteDate), everyGroup: true, cancellationToken);
         if (rows.Count == 0)
         {
             return null;
@@ -52,21 +67,23 @@ internal sealed record DailyReportModel(
 
     /// <summary>
     /// Every note in <paramref name="submitted"/>, which holds submitted notes only, as the file shows it, ordered by
-    /// date, then participant. A report of one day and a record of one participant each have one order to keep, and
-    /// this one serves both.
+    /// date, then participant by given name, family name and ID (A160). A report of one day and a record of one
+    /// participant each have one order to keep, and this one serves both. With <paramref name="everyGroup"/>, which
+    /// only the daily report asks for, each note carries every group with an item, picked or not (D104); without it,
+    /// the groups the note shows (D47).
     /// </summary>
     /// <remarks>
     /// A past-day note is one started on a later day than its own date, so each row is compared with its own
     /// <see cref="ReportNoteRead.NoteDate"/>.
     /// </remarks>
     public static async Task<IReadOnlyList<ReportNoteRead>> ReadNotesAsync(
-        Grow2NotesDbContext db, IQueryable<Note> submitted, CancellationToken cancellationToken)
+        Grow2NotesDbContext db, IQueryable<Note> submitted, bool everyGroup, CancellationToken cancellationToken)
     {
         var rows = await (
             from n in submitted
             join participant in db.Participants on n.ParticipantId equals participant.Id
             join author in db.Users on n.AuthorUserId equals author.Id
-            orderby n.NoteDate, participant.FamilyName, participant.GivenName, participant.Id
+            orderby n.NoteDate, participant.GivenName, participant.FamilyName, participant.Id
             select new
             {
                 n.Id,
@@ -74,6 +91,7 @@ internal sealed record DailyReportModel(
                 n.CurrentVersionNumber,
                 n.CreatedAtUtc,
                 n.FlagStatus,
+                n.AuthorUserId,
                 FlagReason = db.NoteVersions
                     .Where(v => v.NoteId == n.Id && v.VersionNumber == n.FlaggedVersionNumber)
                     .Select(v => v.FlagReason)
@@ -101,14 +119,10 @@ internal sealed record DailyReportModel(
                 new DailyReportNote(
                     $"{row.GivenName} {row.FamilyName}",
                     row.DisplayName,
+                    row.AuthorUserId,
                     pastDayWrittenAtUtc,
                     row.FirstSubmittedAtUtc,
-                    NoteReadVersion.Of(
-                        row.CurrentVersionNumber,
-                        content.Snapshot,
-                        content.Narrative,
-                        content.IsFlagged,
-                        content.FlagReason),
+                    NoteReadVersion.Of(row.CurrentVersionNumber, content, everyGroup),
                     lastEdit,
                     await FlagOfAsync(db, row.Id, row.FlagStatus, row.FlagReason, cancellationToken))));
         }
@@ -152,13 +166,14 @@ internal sealed record DailyReportModel(
 
 /// <summary>
 /// One submitted note as a report shows it, in a daily report or in a participant's record: the participant's name,
-/// who wrote the note, when it was started if that was on a later day than its date, as a past-day note is, when it
-/// was first submitted, and the version that was current when the report was read; who saved that version and when,
-/// when the note has been edited; and its flag, when it has one.
+/// who wrote the note, by name and ID, when it was started if that was on a later day than its date, as a past-day
+/// note is, when it was first submitted, and the version that was current when the report was read; who saved that
+/// version and when, when the note has been edited; and its flag, when it has one.
 /// </summary>
 internal sealed record DailyReportNote(
     string ParticipantName,
     string AuthorDisplayName,
+    Guid AuthorUserId,
     DateTime? PastDayWrittenAtUtc,
     DateTime FirstSubmittedAtUtc,
     NoteReadVersion Current,

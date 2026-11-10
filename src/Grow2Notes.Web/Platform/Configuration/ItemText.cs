@@ -72,7 +72,7 @@ internal sealed partial class ItemText
         [NotNullWhen(true)] out string? text,
         [NotNullWhen(false)] out IReadOnlyDictionary<string, string[]>? errors)
     {
-        var cleaned = sent is null ? "" : LineBreaks().Replace(sent, " ").Trim();
+        var cleaned = sent is null ? "" : Cleaned(sent);
         var refusal = cleaned.Length switch
         {
             0 => enter,
@@ -84,6 +84,12 @@ internal sealed partial class ItemText
         errors = refusal is null ? null : new Dictionary<string, string[]> { [field] = [refusal] };
         return refusal is null;
     }
+
+    /// <summary>
+    /// <paramref name="sent"/> as a row's text is stored: each line break, with the spaces around it, one space, and
+    /// the ends trimmed. The details of a common item (A151) are cleaned the same way.
+    /// </summary>
+    public static string Cleaned(string sent) => LineBreaks().Replace(sent, " ").Trim();
 
     // A run of line breaks, CR, LF or both, with the spaces on either side of it, as the screen's own pattern has it.
     [GeneratedRegex(@"\s*[\r\n]+\s*")]

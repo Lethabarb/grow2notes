@@ -51,7 +51,8 @@ public sealed class ParticipantChangeToolsTests(ToolWorld world) : IClassFixture
     // A mark in a refused value, which no refusal may repeat.
     private const string Mark = "Zq9x";
 
-    private const string NoFieldToChange = "Send at least one of givenName, familyName and dateOfBirth.";
+    private const string NoFieldToChange =
+        "Send at least one of givenName, familyName, dateOfBirth and hasMedicationLine.";
 
     // The field, the value (with {BEL} and {RLO} for a control and a bidirectional character, which a test's name
     // cannot hold), the app's message for it, and the text of the value that the result must not hold.
@@ -704,6 +705,125 @@ public sealed class ParticipantChangeToolsTests(ToolWorld world) : IClassFixture
         Assert.Equal(before, await GoalStateAsync(goal.Id));
     }
 
+    // The Word-template fields (D104): the Medication switch of a participant and a goal's term.
+    [Fact]
+    public async Task The_Medication_switch_is_turned_on_and_off_with_its_old_and_new_values_in_the_audit_row()
+    {
+        var participant = await Scene.AddParticipantAsync();
+
+        var (on, onRow) = await CallAsync(Update, With(Change(participant, "current"), "hasMedicationLine", true));
+
+        Assert.NotEqual(true, on.IsError);
+        var content = Content(on);
+        Assert.True(content.GetProperty("hasMedicationLine").GetBoolean());
+        Assert.True(content.GetProperty("changed").GetBoolean());
+        Assert.True((await StoredAsync(participant.Id)).HasMedicationLine);
+        AssertChanged(onRow, AuditEventTypes.Participant.Updated, Update, Scene.Organisation.ManagerId);
+        var details = JsonNode.Parse(Assert.IsType<string>(onRow.Details))!;
+        Assert.True(JsonNode.DeepEquals(new JsonObject { ["hasMedicationLine"] = false }, details["old"]));
+        Assert.True(JsonNode.DeepEquals(new JsonObject { ["hasMedicationLine"] = true }, details["new"]));
+
+        var turnedOn = new TestParticipant(participant.Id, RowVersionToken.ETag(await StoredAsync(participant.Id)));
+        var (off, offRow) = await CallAsync(Update, With(Change(turnedOn, "current"), "hasMedicationLine", false));
+
+        Assert.False(Content(off).GetProperty("hasMedicationLine").GetBoolean());
+        Assert.False((await StoredAsync(participant.Id)).HasMedicationLine);
+        details = JsonNode.Parse(Assert.IsType<string>(offRow.Details))!;
+        Assert.True(JsonNode.DeepEquals(new JsonObject { ["hasMedicationLine"] = true }, details["old"]));
+        Assert.True(JsonNode.DeepEquals(new JsonObject { ["hasMedicationLine"] = false }, details["new"]));
+    }
+
+    // A call that leaves the switch out keeps it, and records only the name.
+    [Fact]
+    public async Task A_correction_that_leaves_the_Medication_switch_out_keeps_it()
+    {
+        var participant = await Flow.App.Services.AddParticipantAsync(Scene.Organisation, hasMedicationLine: true);
+        var renamed = $"Eve{Unique()}";
+
+        var (result, row) = await CallAsync(Update, With(Change(participant, "current"), "givenName", renamed));
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.True(Content(result).GetProperty("hasMedicationLine").GetBoolean());
+        Assert.True((await StoredAsync(participant.Id)).HasMedicationLine);
+        var details = JsonNode.Parse(Assert.IsType<string>(row.Details))!;
+        Assert.True(JsonNode.DeepEquals(new JsonObject { ["givenName"] = renamed }, details["new"]));
+    }
+
+    [Fact]
+    public async Task A_participant_comes_back_with_the_Medication_switch_and_each_goal_s_term()
+    {
+        var participant = await Flow.App.Services.AddParticipantAsync(Scene.Organisation, hasMedicationLine: true);
+        await Flow.App.Services.AddGoalsAsync(
+            Scene.Organisation,
+            participant.Id,
+            new TestGoal("Short one", 0),
+            new TestGoal("Long one", 1, IsMediumOrLongTerm: true));
+
+        var (result, _) = await CallAsync("get_participant", new() { ["participantId"] = participant.Id.ToString() });
+
+        var content = Content(result);
+        Assert.True(content.GetProperty("hasMedicationLine").GetBoolean());
+        Assert.Equal(
+            [("Short one", false), ("Long one", true)],
+            content.GetProperty("goals").EnumerateArray().Select(
+                goal => (goal.GetProperty("text").GetString(), goal.GetProperty("isMediumOrLongTerm").GetBoolean())));
+    }
+
+    // Set-up data only (D49): no note content, whose names are exactly these, is in what the look-up returns.
+    [Fact]
+    public async Task A_look_up_of_a_participant_holds_no_note_content()
+    {
+        var participant = await Flow.App.Services.AddParticipantAsync(Scene.Organisation, hasMedicationLine: true);
+
+        var (result, _) = await CallAsync("get_participant", new() { ["participantId"] = participant.Id.ToString() });
+
+        string[] noteContent = ["medication", "detail", "isnotin", "islatenotice", "issick"];
+        Assert.DoesNotContain(PropertyNames(Content(result)), name => noteContent.Contains(name.ToLowerInvariant()));
+    }
+
+    [Fact]
+    public async Task A_goal_is_added_Short_term_unless_the_call_says_otherwise()
+    {
+        var participant = await Scene.AddParticipantAsync();
+
+        var (shortTerm, _) = await CallAsync(AddGoal, AddGoalCall(participant.Id, $"Goal {Unique()}"));
+        var (longTerm, longRow) = await CallAsync(
+            AddGoal, With(AddGoalCall(participant.Id, $"Goal {Unique()}"), "isMediumOrLongTerm", true));
+
+        Assert.False(Content(shortTerm).GetProperty("isMediumOrLongTerm").GetBoolean());
+        Assert.False((await StoredGoalAsync(Content(shortTerm).GetProperty("goalId").GetGuid())).IsMediumOrLongTerm);
+        Assert.True(Content(longTerm).GetProperty("isMediumOrLongTerm").GetBoolean());
+        Assert.True((await StoredGoalAsync(Content(longTerm).GetProperty("goalId").GetGuid())).IsMediumOrLongTerm);
+        var details = JsonNode.Parse(Assert.IsType<string>(longRow.Details))!;
+        Assert.True(details["new"]!["isMediumOrLongTerm"]!.GetValue<bool>());
+    }
+
+    // The same text with another term is a change of the term alone; leaving the term out keeps it.
+    [Fact]
+    public async Task A_goal_s_term_is_changed_alone_and_a_call_that_leaves_it_out_keeps_it()
+    {
+        var participant = await Scene.AddParticipantAsync();
+        var goal = await Scene.AddGoalAsync(participant.Id, archived: false);
+        var text = goal.Text;
+
+        var (changed, row) = await CallAsync(
+            UpdateGoal, With(GoalCall(goal, text, "current"), "isMediumOrLongTerm", true));
+
+        Assert.NotEqual(true, changed.IsError);
+        Assert.True(Content(changed).GetProperty("changed").GetBoolean());
+        Assert.True(Content(changed).GetProperty("isMediumOrLongTerm").GetBoolean());
+        AssertChanged(row, AuditEventTypes.Goal.Updated, UpdateGoal, Scene.Organisation.ManagerId);
+        var details = JsonNode.Parse(Assert.IsType<string>(row.Details))!;
+        Assert.True(JsonNode.DeepEquals(new JsonObject { ["isMediumOrLongTerm"] = false }, details["old"]));
+        Assert.True(JsonNode.DeepEquals(new JsonObject { ["isMediumOrLongTerm"] = true }, details["new"]));
+
+        var next = goal with { ETag = RowVersionToken.ETag(await StoredGoalAsync(goal.Id)) };
+        var (reworded, _) = await CallAsync(UpdateGoal, GoalCall(next, $"{text} again", "current"));
+
+        Assert.True(Content(reworded).GetProperty("isMediumOrLongTerm").GetBoolean());
+        Assert.True((await StoredGoalAsync(goal.Id)).IsMediumOrLongTerm);
+    }
+
     private static string Unique() => Guid.NewGuid().ToString("N")[..12];
 
     private static string Sent(string value) =>
@@ -736,6 +856,12 @@ public sealed class ParticipantChangeToolsTests(ToolWorld world) : IClassFixture
     }
 
     private static JsonObject With(JsonObject arguments, string name, string value)
+    {
+        arguments[name] = value;
+        return arguments;
+    }
+
+    private static JsonObject With(JsonObject arguments, string name, bool value)
     {
         arguments[name] = value;
         return arguments;

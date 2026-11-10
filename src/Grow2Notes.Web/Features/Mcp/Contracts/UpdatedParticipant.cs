@@ -5,8 +5,9 @@ namespace Grow2Notes.Web.Features.Mcp.Contracts;
 /// </summary>
 /// <param name="GivenName">As stored.</param>
 /// <param name="FamilyName">As stored.</param>
+/// <param name="HasMedicationLine">Whether notes started from now on have a Medication box.</param>
 /// <param name="Status"><c>active</c>.</param>
 /// <param name="Changed">Whether the call changed anything; a call that changes nothing saves nothing.</param>
 /// <param name="ExpectedVersion">The participant's version now, which a later change needs.</param>
 internal sealed record UpdatedParticipant(
-    string GivenName, string FamilyName, string Status, bool Changed, string ExpectedVersion);
+    string GivenName, string FamilyName, bool HasMedicationLine, string Status, bool Changed, string ExpectedVersion);

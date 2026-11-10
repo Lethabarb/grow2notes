@@ -11,6 +11,14 @@ Screen spec for design.md **§4.12**. The file's content is defined in **§11.6*
 
 **Example data used throughout (made up):** `me.today` is Thursday 1 October 2026. The participant is Jane Citizen, and her earliest submitted note is dated Thursday 1 January 2026.
 
+**T44 (D104, A159, A161): the file's words.** Where the rest of this file differs, this block wins. The screen, its route,
+its parameters, its file name and its audit are unchanged. The file's body follows the note's sections: each note shows
+the **Attendance** row, the goals under **Short term goals** and **Medium or Long term goal**, **Medication** where the
+version has the box, each picked group under its own name with **Details: [text]** under a ticked item that has details,
+**Daily Support Notes**, and **Note written by:**, then the Edited, flag and review lines. The record export keeps D47
+(picked groups only) and its date order, and has no index and no page breaks; unpicked groups print only in the daily
+report. An old version prints with no ticks, Short term goals, no Medication and no details.
+
 ---
 
 ## Purpose and who uses it

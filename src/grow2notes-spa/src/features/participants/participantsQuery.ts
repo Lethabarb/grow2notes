@@ -12,6 +12,8 @@ export type AdminParticipant = {
   familyName: string;
   /** A calendar date, such as "1987-03-07". */
   dateOfBirth: string;
+  /** Whether their notes have a Medication box (A152). */
+  hasMedicationLine: boolean;
   status: ParticipantStatus;
   /** The row's `RowVersion` as base64, which a change to the participant sends as `If-Match` (D78). */
   rowVersion: string;

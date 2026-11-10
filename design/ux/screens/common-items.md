@@ -36,6 +36,15 @@ This spec adds no feature. There is no drag and drop (between rows or between gr
 undo toast, count, search, "Save order" step, separate Groups screen, per-participant setting (D11, D44: any group
 can be picked on any note) or unsaved-changes warning. design.md asks for that warning only on Guide prompts (§4.10).
 
+**T44 (D104, A151): Ask for details when ticked.** Where the rest of this file differs, this block wins. An item's **Edit**
+form gains a tick box **Ask for details when ticked** (P), after the Group radios and before Save, with the hint **Notes
+started from now on show a Details box under this item when it is ticked. It must be filled in to submit.** (P). It is
+saved with the item's Save, sent with the text and the group under `If-Match`; a Save whose text, group and tick are all
+as they were closes the form and sends nothing. An item with it on shows the muted second line **Asks for details** (P)
+under its text. The add form is unchanged and adds an item that does not ask. This is how the Word template's **Other
+(staff to complete if different from above)** items are set up (ops/word-template-setup.md). A change applies to notes
+started afterwards (A2, A3).
+
 ---
 
 ## Purpose and who uses it

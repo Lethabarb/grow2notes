@@ -263,10 +263,14 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
                 items.Property(i => i.GroupId).HasJsonPropertyName("groupId");
                 items.Property(i => i.Text).HasJsonPropertyName("text");
                 items.Property(i => i.IsTicked).HasJsonPropertyName("isTicked");
+                items.Property(i => i.IsMediumOrLongTerm).HasJsonPropertyName("isMediumOrLongTerm");
+                items.Property(i => i.NeedsDetail).HasJsonPropertyName("needsDetail");
+                items.Property(i => i.Detail).HasJsonPropertyName("detail");
             });
 
             // Longer than an nvarchar(n) can hold, so only validation enforces Limits.GuidedNotes (§5.1).
             draft.Property(d => d.Narrative).HasColumnType("nvarchar(max)");
+            draft.Property(d => d.Medication).HasMaxLength(Limits.Medication);
             draft.Property(d => d.FlagReason).HasMaxLength(Limits.FlagReason);
 
             // For a user's unfinished drafts. It starts with the editor's foreign key, so that needs no index of its
@@ -290,6 +294,7 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 
             // Longer than an nvarchar(n) can hold, so only validation enforces Limits.GuidedNotes (§5.1).
             version.Property(v => v.Narrative).HasColumnType("nvarchar(max)");
+            version.Property(v => v.Medication).HasMaxLength(Limits.Medication);
             version.Property(v => v.FlagReason).HasMaxLength(Limits.FlagReason);
 
             // One version of each number per note, so of two saves on the same version only one adds the next, whatever
@@ -349,15 +354,26 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
                 .HasPrincipalKey(g => new { g.OrganisationId, g.NoteVersionId, g.Position });
 
             item.Property(i => i.Text).HasMaxLength(Limits.ItemText);
+            item.Property(i => i.Detail).HasMaxLength(Limits.ItemDetail);
 
             // Each section with the columns that go with it, so no save can leave a goal row with a common item or a
             // group, or a common item row without its item and its group (design.md §5.3). GroupPosition's foreign key
-            // points at the version's NoteVersionGroup row.
-            item.ToTable(table => table.HasCheckConstraint(
-                "CK_NoteVersionItem_Section",
-                "([Section] = 1 AND [GoalId] IS NOT NULL AND [CommonItemId] IS NULL AND [GroupPosition] IS NULL)"
-                + " OR ([Section] = 2 AND [CommonItemId] IS NOT NULL AND [GoalId] IS NULL"
-                + " AND [GroupPosition] IS NOT NULL)"));
+            // points at the version's NoteVersionGroup row. A term belongs to a goal row, and a needs-detail flag and
+            // details to a common item row, with details only on a ticked row that needs them (A150, A151); that a
+            // ticked row that needs details has some is the app's check, as a draft may lack them.
+            item.ToTable(table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_NoteVersionItem_Section",
+                    "([Section] = 1 AND [GoalId] IS NOT NULL AND [CommonItemId] IS NULL AND [GroupPosition] IS NULL)"
+                    + " OR ([Section] = 2 AND [CommonItemId] IS NOT NULL AND [GoalId] IS NULL"
+                    + " AND [GroupPosition] IS NOT NULL)");
+                table.HasCheckConstraint("CK_NoteVersionItem_Term", "[Section] = 1 OR [IsMediumOrLongTerm] = 0");
+                table.HasCheckConstraint(
+                    "CK_NoteVersionItem_Detail",
+                    "([Section] = 2 OR [NeedsDetail] = 0)"
+                    + " AND ([Detail] IS NULL OR ([Section] = 2 AND [NeedsDetail] = 1 AND [IsTicked] = 1))");
+            });
         });
 
         builder.Entity<NoteReview>(review =>

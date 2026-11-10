@@ -82,6 +82,10 @@ function submittedNote(author: NoteAuthor = priya, versionNumber = 3, isPastDayN
     current: {
       versionNumber,
       narrative: 'Jane made toast.',
+      isNotIn: false,
+      isLateNotice: false,
+      isSick: false,
+      medication: null,
       goals: [],
       commonItemGroups: [],
       isFlagged: false,
@@ -95,7 +99,11 @@ function versionOf(row: VersionSummary): NoteVersion {
   return {
     versionNumber: row.versionNumber,
     narrative: `Wording of version ${row.versionNumber}.`,
-    goals: [{ text: 'Makes own breakfast', isTicked: true }],
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
+    goals: [{ text: 'Makes own breakfast', isTicked: true, isMediumOrLongTerm: false }],
     commonItemGroups: [],
     isFlagged: false,
     flagReason: null,

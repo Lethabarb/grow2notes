@@ -125,7 +125,7 @@ public sealed class ParticipantListEndpointTests(Grow2NotesFactory factory, SqlS
             .Single(row => Id(row) == added[0]);
 
         Assert.Equal(
-            ["id", "givenName", "familyName", "dateOfBirth", "status", "rowVersion"],
+            ["id", "givenName", "familyName", "dateOfBirth", "hasMedicationLine", "status", "rowVersion"],
             participant.EnumerateObject().Select(property => property.Name));
         Assert.Equal("Nguyễn", participant.GetProperty("givenName").GetString());
         Assert.Equal("O'Brien-Smith", participant.GetProperty("familyName").GetString());

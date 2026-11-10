@@ -60,3 +60,15 @@
     min-inline-size: 12rem;
   }
 }
+
+/* The Week choice between the date and the downloads (daily-report.md component 3b). */
+.week {
+  margin-block-end: var(--section-gap);
+}
+
+/* What to answer when Word asks to update the fields, under the buttons (daily-report.md component 6). */
+.wordHint {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+}

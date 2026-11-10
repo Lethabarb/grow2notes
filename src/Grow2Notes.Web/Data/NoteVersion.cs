@@ -24,6 +24,19 @@ internal sealed class NoteVersion : ITenantOwned, IAppendOnly
     /// <summary>The Guided notes text, which a version always has.</summary>
     public required string Narrative { get; set; }
 
+    /// <summary>The attendance ticks (D104): independent, and they hide nothing on the note.</summary>
+    public bool IsNotIn { get; set; }
+
+    public bool IsLateNotice { get; set; }
+
+    public bool IsSick { get; set; }
+
+    /// <summary>
+    /// The Medication text: null when the version has no Medication line, and empty when it has the line with nothing
+    /// written (A152). A version saved before T44 has no line.
+    /// </summary>
+    public string? Medication { get; set; }
+
     public bool IsFlagged { get; set; }
 
     /// <summary>Null unless the version is flagged.</summary>

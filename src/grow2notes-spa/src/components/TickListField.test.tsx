@@ -20,7 +20,7 @@ function Goals({ items, initiallyTicked = [], onToggle }: FieldProps) {
   return (
     <TickListField
       idPrefix="goal"
-      heading="1. Goals"
+      heading="Short term goals"
       hint="Ticked means reached."
       emptyText="No goals set up for Jane yet. A manager can add them."
       items={items}
@@ -46,12 +46,12 @@ describe('TickListField', () => {
   it('is a fieldset whose legend is the <h2> and whose description is the hint under it', () => {
     render(<Goals items={[breakfast, bus]} />);
 
-    const group = screen.getByRole('group', { name: '1. Goals' });
+    const group = screen.getByRole('group', { name: 'Short term goals' });
     expect(group.tagName).toBe('FIELDSET');
     expect(group).toHaveAccessibleDescription('Ticked means reached.');
     const legend = group.querySelector('legend')!;
-    expect(within(legend).getByRole('heading', { level: 2 })).toHaveTextContent('1. Goals');
-    expect(legend.textContent).toBe('1. Goals');
+    expect(within(legend).getByRole('heading', { level: 2 })).toHaveTextContent('Short term goals');
+    expect(legend.textContent).toBe('Short term goals');
     expect(screen.getByText('Ticked means reached.')).toHaveAttribute('id', 'goal-hint');
   });
 
@@ -98,19 +98,18 @@ describe('TickListField', () => {
   it('shows the heading and the sentence alone, with no fieldset, when there are no items', () => {
     const { container } = render(<Goals items={[]} />);
 
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('1. Goals');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Short term goals');
     expect(screen.getByText('No goals set up for Jane yet. A manager can add them.')).toBeInTheDocument();
     expect(container.querySelector('fieldset')).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.queryByText('Ticked means reached.')).toBeNull();
   });
 
-  it('has an <h3> in its legend with headingLevel 3, and an <h2> by default', () => {
+  it('has an <h2> in its legend, headed by its own name', () => {
     render(
       <TickListField
         idPrefix="common"
         heading="Every note"
-        headingLevel={3}
         hint="Ticked means done."
         items={[breakfast]}
         ticked={new Set()}
@@ -119,25 +118,26 @@ describe('TickListField', () => {
     );
 
     const group = screen.getByRole('group', { name: 'Every note' });
-    expect(within(group.querySelector('legend')!).getByRole('heading', { level: 3 })).toHaveTextContent('Every note');
-    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+    expect(within(group.querySelector('legend')!).getByRole('heading', { level: 2 })).toHaveTextContent('Every note');
   });
 
-  it('has an <h3> with headingLevel 3 when there are no items too', () => {
+  it('renders what after gives for an item directly after the row of the item, and for no other', () => {
     render(
       <TickListField
         idPrefix="common"
         heading="Every note"
-        headingLevel={3}
-        emptyText="Nothing."
-        items={[]}
+        hint="Ticked means done."
+        items={[breakfast, bus]}
         ticked={new Set()}
         onToggle={() => {}}
+        after={(item) => (item.id === breakfast.id ? <p>Details for {item.text}</p> : null)}
       />,
     );
 
-    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Every note');
-    expect(screen.getByText('Nothing.')).toBeInTheDocument();
+    const box = screen.getByRole('checkbox', { name: breakfast.text });
+    const row = box.closest('label')!;
+    expect(row.nextElementSibling).toHaveTextContent(`Details for ${breakfast.text}`);
+    expect(screen.getAllByText(/^Details for/)).toHaveLength(1);
   });
 
   it('is described by the hint of hintId, and renders no hint of its own, when it is given', () => {

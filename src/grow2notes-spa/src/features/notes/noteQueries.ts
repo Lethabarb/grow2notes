@@ -17,29 +17,68 @@ export type ParticipantHeader = {
 /** An item of a list, a goal or a common item: its wording as the form shows it, and whether it is ticked. */
 export type DraftItem = { id: string; text: string; isTicked: boolean };
 
+/** A goal of the note form: its term, as the snapshot holds it, Medium or long term or else Short term (A150). */
+export type DraftGoal = DraftItem & { isMediumOrLongTerm: boolean };
+
+/**
+ * A common item of the note form: whether ticking it asks for details, and the details written, `null` for none
+ * (A151).
+ */
+export type DraftCommonItem = DraftItem & { needsDetail: boolean; detail: string | null };
+
 /**
  * A common item group of the note form, as the snapshot holds it (design.md §6.3): its name, whether it is Every note,
  * which is never picked, whether it is picked, and its items, all unticked while it is not picked.
  */
-export type DraftGroup = { id: string; name: string; isEveryNote: boolean; isPicked: boolean; items: DraftItem[] };
+export type DraftGroup = {
+  id: string;
+  name: string;
+  isEveryNote: boolean;
+  isPicked: boolean;
+  items: DraftCommonItem[];
+};
 
 /** A group of a saved note's common items: its name as the version holds it, and its items. */
 export type ReadGroup = { name: string; items: TickedItem[] };
+
+/** A goal of a saved note: its wording as the version holds it, whether it is ticked, and its term (A150). */
+export type ReadGoal = TickedItem & { isMediumOrLongTerm: boolean };
+
+/**
+ * What a note's sections show, as `GET {base}` and `GET {base}/versions/{n}` give it, in the shape of a version, which
+ * a manager's read of a draft has too (design.md §6.3): the Daily Support Notes text as written; the three Attendance
+ * ticks; the Medication text, `null` for a note with no Medication box, and empty for one with a box and nothing
+ * written; every goal of the snapshot, in its order; and the groups it shows (D47).
+ */
+export type ReadContent = {
+  narrative: string;
+  isNotIn: boolean;
+  isLateNotice: boolean;
+  isSick: boolean;
+  medication: string | null;
+  goals: ReadGoal[];
+  commonItemGroups: ReadGroup[];
+};
 
 /**
  * The note form with the caller's working copy, as `GET {base}/draft` answers it (design.md §6.3): a new note's
  * template, with `isSaved` false, the lists' version and no flag, or the caller's own draft, with its flag and the time
  * of its last save. `guidePrompts` are the organisation's as they are now; `flagReason` is `null` unless the draft is
- * flagged with a reason.
+ * flagged with a reason; `medication` is `null` for a note with no Medication box and the text otherwise, empty for a
+ * new note (A152).
  */
 export type Draft = {
   baseVersion: number;
   isSaved: boolean;
   listsVersion?: string;
   guidePrompts: string;
-  goals: DraftItem[];
+  goals: DraftGoal[];
   commonItemGroups: DraftGroup[];
   narrative: string;
+  isNotIn: boolean;
+  isLateNotice: boolean;
+  isSick: boolean;
+  medication: string | null;
   isFlagged: boolean;
   flagReason: string | null;
   savedAtUtc?: string;
@@ -68,9 +107,9 @@ export type NoteAuthor = { id: string; displayName: string };
 /**
  * A submitted note, as `GET {base}` gives it to anyone signed in (design.md §6.3): its author's id and display name as
  * stored, when it was started and first submitted, in UTC, whether it is a past-day note, which a manager wrote on a
- * later day than its date, and its current version: its number, the Guided notes text as written,
- * every goal of its snapshot, in the snapshot's order, and the flag, with its reason, which a flagged version always
- * has and an unflagged one never (design.md §5.3, §5.8 step 4). A note with more than one version is edited, and says
+ * later day than its date, and its current version: its number, its content (`ReadContent`), and the flag, with its
+ * reason, which a flagged version always has and an unflagged one never (design.md §5.3, §5.8 step 4). A note with
+ * more than one version is edited, and says
  * who saved the current one and when. To a manager alone, it also gives its review status and every review, newest
  * first; a worker's answer has neither key.
  */
@@ -82,7 +121,7 @@ export type SubmittedNote = {
   isPastDayNote: boolean;
   flagStatus?: FlagStatus;
   reviews?: NoteReview[];
-  current: { versionNumber: number; narrative: string; goals: TickedItem[]; commonItemGroups: ReadGroup[] } & (
+  current: { versionNumber: number } & ReadContent & (
     | { isFlagged: true; flagReason: string }
     | { isFlagged: false; flagReason: null }
   );
@@ -90,13 +129,10 @@ export type SubmittedNote = {
 
 /**
  * A draft's working copy as `GET {base}` gives it to a manager alone, read-only, in the `current` shape (design.md
- * §6.3): its Guided notes text as written, every goal of its snapshot, in the snapshot's order, and the flag, whose
- * reason is `null` unless the draft is flagged with one, as a flagged draft needs no reason until Submit (§3.4).
+ * §6.3): its content (`ReadContent`) and the flag, whose reason is `null` unless the draft is flagged with one, as a
+ * flagged draft needs no reason until Submit (§3.4).
  */
-export type DraftRead = {
-  narrative: string;
-  goals: TickedItem[];
-  commonItemGroups: ReadGroup[];
+export type DraftRead = ReadContent & {
   isFlagged: boolean;
   flagReason: string | null;
 };

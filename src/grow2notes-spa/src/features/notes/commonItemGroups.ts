@@ -1,4 +1,4 @@
-import type { DraftGroup, DraftItem } from './noteQueries.ts';
+import type { DraftCommonItem, DraftGroup } from './noteQueries.ts';
 
 /**
  * Whether the picker offers the group (group-picker.md *States*): Every note never is, as it is not a choice, and a
@@ -9,6 +9,6 @@ export function isOffered(group: DraftGroup): boolean {
 }
 
 /** The items that the form shows, and so may be ticked: those of Every note and of the picked groups. */
-export function shownItems(groups: readonly DraftGroup[], picked: ReadonlySet<string>): DraftItem[] {
+export function shownItems(groups: readonly DraftGroup[], picked: ReadonlySet<string>): DraftCommonItem[] {
   return groups.filter((group) => group.isEveryNote || picked.has(group.id)).flatMap((group) => group.items);
 }

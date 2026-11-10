@@ -38,6 +38,16 @@ the picker (A45), and the group name limit is 200 characters (A6). A third, a li
 (A47), was dropped by the owner on 13 October 2026 (D83): nothing on the form says where copied picks came from, and
 there is no `picksCopiedFrom`.
 
+**T44 (D104, A151, A159): headings and details.** Where the rest of this file differs, this block wins. The numbered
+umbrella heading "2. Common items" is gone from the note form and the read view, and so is the `<h3>` per list: each
+list, Every note's and each picked group's, is headed by its group's name as an `<h2>`, as the Word template's sections
+are, and the picker's legend **Which of these happened?** is an `<h2>` too. The hint **Ticked means done.** stays first,
+and is said once for all the lists. The picker's behaviour, the picks copied from the last note (D46) and the rule that
+unpicking clears the group's ticks (A46) are unchanged, and unpicking also takes away the details written under its
+items. Under a ticked item that a manager marked **Ask for details when ticked**, the form shows a **Details** box
+(note-form.md). D47 stands for the note form, the read view, the version page and the record export; the daily report
+alone prints every group that has an item, picked or not, with an unpicked group's items unticked (D104, A161).
+
 ---
 
 ## Where it's used

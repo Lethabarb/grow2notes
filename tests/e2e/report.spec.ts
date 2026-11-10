@@ -12,6 +12,7 @@ import {
   recordExports,
   reportAddress,
   reportDay,
+  reportFileDay,
   serveHasNotes,
   serveNoNotes,
   serveReport,
@@ -204,8 +205,8 @@ test('S10: a slow download is quiet for 399 ms, then says "Downloading…" and t
   const download = page.waitForEvent('download');
   await route.fallback();
 
-  expect((await download).suggestedFilename()).toBe('daily-notes_2026-10-01.docx');
-  await expect(downloadStatus(page)).toHaveText('daily-notes_2026-10-01.docx is ready. Look in your downloads.');
+  expect((await download).suggestedFilename()).toBe(`${reportFileDay}.docx`);
+  await expect(downloadStatus(page)).toHaveText(`${reportFileDay}.docx is ready. Look in your downloads.`);
   await expect(button(page, 'Download Word')).not.toHaveAttribute('aria-disabled');
 });
 
@@ -222,7 +223,9 @@ test('S11: no connection says so above the buttons, focus stays, and axe passes'
   await expectNothingKept(page);
 });
 
-test('keyboard: Tab goes from the field through both steps to Download Word and Download PDF', async ({ page }) => {
+test('keyboard: Tab goes from the field through both steps and the Week to Download Word and Download PDF', async ({
+  page,
+}) => {
   await open(page);
 
   await heading(page).focus();
@@ -238,8 +241,40 @@ test('keyboard: Tab goes from the field through both steps to Download Word and 
   }
 
   await expectFocusAt(page, '‹ Previous day');
-  await expectStops(page, 'Tab', ['Next day ›', 'Download Word', 'Download PDF']);
+  await expectStops(page, 'Tab', ['Next day ›', 'None', 'Download Word', 'Download PDF']);
   await expectStops(page, 'Shift+Tab', ['Download Word']);
+});
+
+// daily-report.md component 3b: the Week, three radios in a group, one Tab stop, the arrow keys choosing.
+const week = (page: Page) => main(page).getByRole('group', { name: 'Week', exact: true });
+
+test('the Week choice: None to start, the arrow keys choose, and the choice goes into the export request', async ({
+  page,
+}) => {
+  await open(page);
+  const sent = recordExports(page);
+  await expect(week(page).getByRole('radio')).toHaveCount(3);
+  await expect(week(page).getByRole('radio', { name: 'None', exact: true })).toBeChecked();
+  await expect(week(page)).toHaveAccessibleDescription('Printed in the title of the file');
+  await expect(main(page).getByText('When Word asks to update the fields, choose Yes to fill in the page numbers.'))
+    .toBeVisible();
+
+  await button(page, 'Download Word').click();
+  await expect.poll(() => sent).toEqual(['?format=docx']);
+
+  await week(page).getByRole('radio', { name: 'None', exact: true }).focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(week(page).getByRole('radio', { name: 'Week A', exact: true })).toBeChecked();
+  await button(page, 'Download PDF').click();
+  await expect.poll(() => sent).toEqual(['?format=docx', '?format=pdf&week=A']);
+
+  await week(page).getByRole('radio', { name: 'Week B', exact: true }).check();
+  await button(page, 'Download Word').click();
+  await expect.poll(() => sent).toEqual(['?format=docx', '?format=pdf&week=A', '?format=docx&week=B']);
+  await expectAxeToPass(page);
+
+  await page.reload();
+  await expect(week(page).getByRole('radio', { name: 'None', exact: true })).toBeChecked();
 });
 
 test('keyboard: Enter on the unavailable Next day does nothing, and on Download Word saves the file and stays', async ({
@@ -257,7 +292,7 @@ test('keyboard: Enter on the unavailable Next day does nothing, and on Download 
   const download = page.waitForEvent('download');
   await page.keyboard.press('Enter');
 
-  expect((await download).suggestedFilename()).toBe('daily-notes_2026-10-01.docx');
+  expect((await download).suggestedFilename()).toBe(`${reportFileDay}.docx`);
   await expect(button(page, 'Download Word')).toBeFocused();
   await expectNothingKept(page);
 });
@@ -461,7 +496,7 @@ test('in forced colours, an empty day’s unavailable buttons keep dashed GrayTe
     await expect(button(page, name)).toHaveCSS('border-top-style', 'dashed');
   }
 
-  await nextDay(page).focus();
+  await week(page).getByRole('radio', { name: 'None', exact: true }).focus();
   await expectStops(page, 'Tab', ['Download Word', 'Download PDF'], { ...ring, colour: highlight });
 });
 

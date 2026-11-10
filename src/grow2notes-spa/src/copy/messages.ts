@@ -56,6 +56,13 @@ export const msg = {
    */
   noGoalsSetUp: (givenName: string) => `No goals set up for ${givenName} yet. A manager can add them.`,
   /**
+   * Submit's and Save changes' message for a ticked item that asks for details, when its Details box is blank
+   * (note-form.md *Validation*), with the item's wording, inline and in the error summary.
+   */
+  enterDetails: (itemText: string) => `Enter the details for ${itemText}`,
+  /** A ticked item's details on the read view and the version page (note-read-view.md), with the text as written. */
+  itemDetails: (text: string) => `${strings.noteWords.details}: ${text}`,
+  /**
    * The Submit confirmation's confirming button (note-form.md component 14), with the participant's full name, which
    * the title shows too (design.md §3.9).
    */

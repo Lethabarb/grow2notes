@@ -6,6 +6,9 @@
 > went wrong"). This file owns the **mechanism** only: the 1 s delay, one silent retry, Try again outside the status
 > line, the changed "still" text on a repeat failure, and the whole-page messages. The examples below follow
 > microcopy.md §9 since the editorial pass of 1 October 2026.
+>
+> **T38 (A163, 10 November 2026).** The participant page's empty-goals sentence is "No goals yet. Notes will show
+> “No goals set”.", the words a note prints for a participant with no goals.
 
 Component key: `empty-loading-error`. Sources of truth: design.md §3.4 (autosave banner), §4.0 (shared behaviour, accessibility, page titles), §4.1, §4.2, §4.4, §4.6, §4.7, §4.8, §4.9, §4.11 (each screen's **States**), §6.1 and §6.9 (error shapes and codes), §6.8 (refresh), §7.2 (401/403 instead of redirects; unknown `/api` paths give 404), §8.5 (signed out keeps the text), §9.2 (another organisation's record gives 404, not 403), §9.6 (nothing on the device), A17, A18, A32, A33. Decisions D20, D22, D25, D35 and D43 apply.
 
@@ -43,7 +46,7 @@ It does **not** own these, which have their own specs. This document only lines 
 | **Past notes and the read view** (§4.4) | "Loading notes…" / "Loading note…". The `<h1>` is the participant's name, so it appears with the data. | "No notes yet for Jane Citizen." | List or note did not load; participant or note not found (`404`); **Show older** failed; worker opens Edit on someone else's note (`403 note.not_editable`) | The `<h1>` depends on the data, so focus waits for it (see Behaviour). Older notes that failed to load do not remove the 30 already shown. |
 | **Flagged notes** (§4.6) | Per tab: "Loading flagged notes…" / "Loading reviewed notes…" | To review: "No flagged notes to review." Reviewed: "No reviewed notes yet." (proposed) | Tab list did not load; **Show older** on Reviewed failed | Each tab panel is its own region. The tab label shows no "(n)" until the list has loaded. |
 | **Daily report** (§4.7) | None on screen. While `has-notes` is pending, the download buttons are unavailable without a message (`primary-actions.md`). | "No submitted notes for Thursday 1 October 2026." Both buttons disabled. | `has-notes` failed (buttons stay available); download failed (`primary-actions.md`); `404 report.no_notes` from the download; badly formed date in the URL | The **only empty state that is announced**, because it follows the manager's own date change while focus stays on the date controls. No report is ever shown on screen (D43). |
-| **Participants list and participant detail** (§4.8) | "Loading participants…" / "Loading participant…" | Active: "No participants yet." Archived: "No archived participants." (proposed). No match: "No participant matches 'xyz'". Goals: "No goals yet. Notes will show an empty Goals section." | List or participant did not load; participant not found | **Add participant** and **Add goal** are already on the page, so the empty states add no second button. The archived-goals section is left out when there are none. |
+| **Participants list and participant detail** (§4.8) | "Loading participants…" / "Loading participant…" | Active: "No participants yet." Archived: "No archived participants." (proposed). No match: "No participant matches 'xyz'". Goals: "No goals yet. Notes will show “No goals set”." | List or participant did not load; participant not found | **Add participant** and **Add goal** are already on the page, so the empty states add no second button. The archived-goals section is left out when there are none. |
 | **Common items** (§4.9) | "Loading common items…" | Never empty of groups (Every note is built in). A group with no items shows "No items in this group. It does not show on notes until it has one." | List did not load | **Add item** is already in every group. The archived sections are left out when there are none. |
 | **Users** (§4.11) | "Loading users…" / "Loading user…" | Never empty: the manager looking at it is always on the list. | List or user did not load; user not found | No empty state is needed. |
 | *Also applies, outside this list* | Note form "Loading note…" (§4.3); version history (§4.5) | §4.3 "No goals set up for Jane yet. A manager can add them." and "No common items set up."; §4.5 "Not edited since submit"; §4.12 "No submitted notes for Jane Citizen between … and …" | Same patterns | Listed so the same component is used. Their owners decide the details. |
@@ -300,7 +303,7 @@ After a failed Try again, "did not load" becomes "**still did not load**", for e
 | Participants (Manage), Active | No participants yet. | (Add participant is already on the page) | design §4.2 wording reused |
 | Participants (Manage), Archived | No archived participants. | – | proposed |
 | Participants (Manage), no search match | No participant matches 'xyz' | – | design §4.2 wording reused |
-| Participant detail, Goals | No goals yet. Notes will show an empty Goals section. | (Add goal is already on the page) | design §4.8; "No goals yet." is the design's name for the state, shown so the sentence states the status first |
+| Participant detail, Goals | No goals yet. Notes will show “No goals set”. | (Add goal is already on the page) | design §4.8; "No goals yet." is the design's name for the state, shown so the sentence states the status first |
 | Common items, a group with no items | No items in this group. It does not show on notes until it has one. | (Add item is already in the group) | design §4.9 (the page is never empty of groups) |
 
 **Whole-page messages:**
@@ -693,7 +696,7 @@ export function ScreenError() {
 
 - **List:** "Loading participants…". Active and Archived come from one request (`includeArchived`), so switching the toggle never loads. Empty Active: "No participants yet." (no second Add participant: it is already on the page). Empty Archived: "No archived participants." (proposed). No search match: "No participant matches 'xyz'" (`search-filter.md`).
 - **Detail:** the details and the goals load together; "Loading participant…". The `<h1>` is the participant's name (pending focus); a failed load shows the fallback `<h1>` "Participant". A `404` shows "Page not found".
-- **No goals:** "No goals yet. Notes will show an empty Goals section." The **Add goal** field is right there.
+- **No goals:** "No goals yet. Notes will show “No goals set”." The **Add goal** field is right there.
 - **Archived goals section:** left out when there are none.
 - **Archived participant:** the design's read-only banner with Restore (§4.8) is information, not an error: neutral styling, no red.
 - **Write past-day note:** opening the chosen date is an action, so its busy state and failure belong to `primary-actions.md`; the failure line follows microcopy.md §9.

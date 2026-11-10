@@ -11,7 +11,8 @@ Rows are quoted only as far as needed to find them. The sources of truth stay
 (README §11).
 
 Last checked: 4 October 2026, at release planning, when all eight epics had been written, and again after the review
-the same day.
+the same day. Rows were added for D95 (30 October and 3 November 2026) and for D104 (10 November 2026, T44, under E04),
+with one owner each.
 
 ## Check result
 
@@ -20,7 +21,7 @@ the same day.
 | Rows with no owner | **None** |
 | Rows with two owners | **None**. Six rows were named by two epics' drafts; each now has one owner (see *Hand-offs resolved*) |
 | Features that own no row | None. Each of the 38 features owns at least one row |
-| Rows in total | **228**: R1 has 186 (170 owned by a feature, 16 marked DoD); R2 has 42 (all owned by a feature) |
+| Rows in total | **264**: R1 has 220 (204 owned by a feature, 16 marked DoD); R2 has 44 (all owned by a feature). Counted since release planning: 2 rows for D95 (R2) and 34 for D104 (R1) |
 
 ### Hand-offs resolved at merge
 
@@ -377,6 +378,48 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 4 | `daily-report.md › Downloads` | F04.02 | S04.01.01 (the Word half) | Both buttons, the save step and the busy and failure lines are built in T15 (24 October 2026); the status lines are built in T17 (24 October 2026) |
 | 5 | `daily-report.md › Copy and layout` | DoD | | |
 | 6 | `daily-report.md › Real devices, test environment with the production CSP (M4)` | F04.02 | S06.02.04 (the M6 re-run) | |
+
+**D104 The Word template** (added 10 November 2026, T44). One row for each element of the provider's Word support-note
+document, from the owner's parity report. Each has one owner; an element the owner did not choose is owned by F04.01's
+story S04.01.09, which records the decision, and says so in its Notes.
+
+| # | Row | Owner | Also | Notes |
+|---|---|---|---|---|
+| 1 | The title "SUPPORT NOTES" | F04.01 | | Done in T44 (S04.01.07): `ReportLayoutTests`; A155 |
+| 2 | " – WEEK A" or " – WEEK B" in the title, picked when downloading and not stored | F04.02 | F04.01 (the title) | Done in T44 (S04.02.06): `DailyReportEndpointTests`, `DailyReportPage.test.tsx`; A158 |
+| 3 | The "DATE:" row, "Monday 14.09.2026" | F04.01 | | Done in T44 (S04.01.07): `ReportLayoutTests`, `ReportDatesTests`; A155 |
+| 4 | The "STAFF:" row: the authors of the day's submitted notes | F04.01 | | Done in T44 (S04.01.07): `ReportLayoutTests`; A157. No roster behind it |
+| 5 | The "Participants" index with the page each block starts on | F04.01 | | Done in T44 (S04.01.07): `DailyReportFullDayTests`, `PdfReportTests`, `WordReportTests`; A156; Word's fields by hand, first-use step 226 |
+| 6 | Each participant's block starts a new page | F04.01 | | Done in T44 (S04.01.07): `DailyReportFullDayTests`, `WordReportTests`; D104 amends §11.5 |
+| 7 | Participants in first-name order, in the index and the blocks | F04.01 | | Done in T44 (S04.01.07): `DailyReportEndpointTests`; A160 |
+| 8 | "NAME:" with the name in capitals | F04.01 | | Done in T44 (S04.01.07): `ReportLayoutTests` |
+| 9 | Not In, Late Notice and Sick ticks, printed in the NAME row | F02.02 | F04.01 (the printed row) | Done in T44 (S02.02.09): `NoteWordTemplateEndpointsTests`, `NotePage.test.tsx`, `word-template.spec.ts`; A153 |
+| 10 | Goals under "Short term goals" and "Medium or Long term goal", the term set by a manager | F01.02 | F02.02 (the form and read view), F04.01 (the files) | Done in T44 (S01.02.09): `GoalTermEndpointTests`, `NoteWordTemplateEndpointsTests`, `ReportLayoutTests`; A150 |
+| 11 | The "Medication" row, switched on for a participant | F02.02 | F01.02 (the switch) | Done in T44 (S02.02.10, S01.02.10): `MedicationLineEndpointTests`, `NoteWordTemplateEndpointsTests`; A152 |
+| 12 | Each Word section is a group named with its Word heading, purpose tags kept, items in Word order; a sub-heading is its own group | F01.03 | F06.05 (the production entry) | `ops/word-template-setup.md` (T04); A145 |
+| 13 | The pick-up and drop-off options, <bus name> Bus Travel and the venue travel sections | F01.03 | F06.05 | `ops/word-template-setup.md`; A147. Venue and bus names are placeholders |
+| 14 | "Further Supports Provided" with its 11 items | F01.03 | F06.05 | `ops/word-template-setup.md`; A147 |
+| 15 | A parent line with child options, as items worded with the option | F01.03 | | `ops/word-template-setup.md`; A146 |
+| 16 | "Other (staff to complete if different from above)": a Details text, required while ticked | F02.05 | F01.03 (the flag on the item) | Done in T44 (S02.05.05, S01.03.09): `CommonItemNeedsDetailEndpointTests`, `NoteWordTemplateEndpointsTests`, `NotePage.test.tsx`; A151 |
+| 17 | Every group of the note printed, unpicked ones with empty boxes | F04.01 | | Done in T44 (S04.01.07): `NoteToReportTests`, `ReportLayoutTests`; A161 (reverses D47 for the report) |
+| 18 | "Daily Support Notes", paragraphs kept | F02.02 | F04.01 (the files) | Done in T44 (S02.02.11): `NoteHeadingWordsTests`, `NoteToReportTests`; A159 |
+| 19 | "Note written by:" with the author | F04.01 | | Done in T44 (S04.01.07): `ReportLayoutTests`; A155 |
+| 20 | The file named "Monday 14.09.2026.docx" | F04.01 | F04.02 (the screen's fallback name) | Done in T44 (S04.01.08): `DailyReportEndpointTests`, `ReportDatesTests`, `format.test.ts`; A158; by hand, first-use step 227 |
+| 21 | The same layout and styles in Word and PDF | F04.01 | | Done in T44 (S04.01.07): `WordReportTests`, `PdfReportTests`; A162 |
+| 22 | A clear ticked or unticked box for every printed item | F04.01 | | Done in T44 (S04.01.07): `PdfReportTests`, `NoteToReportTests`; greyscale print by hand, first-use step 223 |
+| 23 | Frequency levels (occasionally, regularly, continuously) | F04.01 (S04.01.09) | | Out of scope by D104: not chosen |
+| 24 | "Note checked by:" | F04.01 (S04.01.09) | | Out of scope by D104: not chosen; the report keeps its flag and review lines |
+| 25 | Co-authors and a part-of-day label on "Note written by:" | F04.01 (S04.01.09) | | Out of scope by D104: not chosen; one author per note (D13) |
+| 26 | Handover of a draft from one writer to another | F04.01 (S04.01.09) | | Out of scope by D104: not chosen |
+| 27 | Structured medication fields (a required, validated time) | F04.01 (S04.01.09) | | Out of scope by D104: Medication is free text; D14 stands |
+| 28 | A short note on a section in place of editing its heading | F04.01 (S04.01.09) | | Out of scope by D104: not chosen |
+| 29 | Preferred names and a stored sort key | F04.01 (S04.01.09) | | Out of scope by D104: no preferred names (A149) |
+| 30 | New form warnings (a name other than the participant's, "No prompting required" against other prompts, Other against its text, Not In against content) | F04.01 (S04.01.09) | | Out of scope by D104: only the required Other text (A149) |
+| 31 | Placement- and participant-specific versions of a section's items | F04.01 (S04.01.09) | | Out of scope by D104: one version of each item; no new structure (A145) |
+| 32 | A roster, the day's expected participants and weekly schedules | F04.01 (S04.01.09) | | Out of scope by D20 and D25: no rostering or day planning, and no missing-note detection |
+| 33 | Day completion and download readiness | F04.01 (S04.01.09) | | Out of scope by D20 and D25 |
+| 34 | A block for each expected participant made before any note | F04.01 (S04.01.09) | | Out of scope by D20 and D25: a participant with no note has no block |
+
 
 ### E05 Participant export, audit completeness and retention (M5)
 

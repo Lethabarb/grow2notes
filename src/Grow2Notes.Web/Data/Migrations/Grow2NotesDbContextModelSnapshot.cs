@@ -18,7 +18,7 @@ namespace Grow2Notes.Web.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -190,6 +190,9 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("NeedsDetail")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("OrganisationId")
                         .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
@@ -274,6 +277,9 @@ namespace Grow2Notes.Web.Data.Migrations
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2(3)");
+
+                    b.Property<bool>("IsMediumOrLongTerm")
+                        .HasColumnType("bit");
 
                     b.Property<Guid>("OrganisationId")
                         .IsConcurrencyToken()
@@ -397,11 +403,24 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.Property<bool>("IsFlagged")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsLateNotice")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsNotIn")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSick")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("LastClientId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("LastSeq")
                         .HasColumnType("int");
+
+                    b.Property<string>("Medication")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("Narrative")
                         .IsRequired()
@@ -448,11 +467,20 @@ namespace Grow2Notes.Web.Data.Migrations
                         {
                             b1.IsRequired();
 
+                            b1.Property<string>("Detail")
+                                .HasJsonPropertyName("detail");
+
                             b1.Property<Guid?>("GroupId")
                                 .HasJsonPropertyName("groupId");
 
+                            b1.Property<bool?>("IsMediumOrLongTerm")
+                                .HasJsonPropertyName("isMediumOrLongTerm");
+
                             b1.Property<bool>("IsTicked")
                                 .HasJsonPropertyName("isTicked");
+
+                            b1.Property<bool?>("NeedsDetail")
+                                .HasJsonPropertyName("needsDetail");
 
                             b1.Property<byte>("Section")
                                 .HasJsonPropertyName("section");
@@ -539,6 +567,19 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.Property<bool>("IsFlagged")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsLateNotice")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsNotIn")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSick")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Medication")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<string>("Narrative")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -619,13 +660,23 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.Property<Guid?>("CommonItemId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Detail")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<Guid?>("GoalId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int?>("GroupPosition")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsMediumOrLongTerm")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsTicked")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("NeedsDetail")
                         .HasColumnType("bit");
 
                     b.Property<Guid>("OrganisationId")
@@ -647,11 +698,17 @@ namespace Grow2Notes.Web.Data.Migrations
 
                     b.ToTable("NoteVersionItem", t =>
                         {
+                            t.HasCheckConstraint("CK_NoteVersionItem_Detail",
+                                "([Section] = 2 OR [NeedsDetail] = 0)"
+                                + " AND ([Detail] IS NULL OR ([Section] = 2 AND [NeedsDetail] = 1 AND [IsTicked] = 1))");
+
                             t.HasCheckConstraint("CK_NoteVersionItem_Section",
                                 "([Section] = 1 AND [GoalId] IS NOT NULL AND [CommonItemId] IS NULL"
                                 + " AND [GroupPosition] IS NULL)"
                                 + " OR ([Section] = 2 AND [CommonItemId] IS NOT NULL AND [GoalId] IS NULL"
                                 + " AND [GroupPosition] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_NoteVersionItem_Term", "[Section] = 1 OR [IsMediumOrLongTerm] = 0");
                         });
                 });
 
@@ -711,6 +768,9 @@ namespace Grow2Notes.Web.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("HasMedicationLine")
+                        .HasColumnType("bit");
 
                     b.Property<Guid>("OrganisationId")
                         .IsConcurrencyToken()

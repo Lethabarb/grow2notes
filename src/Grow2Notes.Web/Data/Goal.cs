@@ -22,6 +22,12 @@ internal sealed class Goal : ITenantOwned, IVersionedRow, IOrderedRow
     /// <summary>The current wording, which notes started from now on show.</summary>
     public required string Text { get; set; }
 
+    /// <summary>
+    /// Whether the goal is Medium or long term; false is Short term (D104, A150). Notes started from now on group it
+    /// so.
+    /// </summary>
+    public bool IsMediumOrLongTerm { get; set; }
+
     /// <summary>The goal's place in the participant's list (<see cref="IOrderedRow"/>).</summary>
     public int SortOrder { get; set; }
 

@@ -20,8 +20,10 @@
   padding: 0;
 }
 
+/* A long word, such as Attendance or a group's name, wraps rather than widening the page at 320 px with text at 200%. */
 .heading {
   margin: 0 0 var(--space-1);
+  overflow-wrap: anywhere;
 }
 
 .hint {
@@ -133,4 +135,16 @@
 /* The wording exactly as stored, in the text's full colour whether ticked or not, wrapping anywhere at 320 px. */
 .readText {
   overflow-wrap: anywhere;
+}
+
+/* An item's details on the read view, under its wording, as written. */
+.detail {
+  display: block;
+  color: var(--colour-text-secondary);
+}
+
+/* The Details box under a ticked item that asks for them, in the form: indented under the item's box and wording. */
+.detailField {
+  padding-block: var(--space-2);
+  padding-inline-start: calc(2.5rem + var(--space-3));
 }

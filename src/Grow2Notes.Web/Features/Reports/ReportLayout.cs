@@ -4,11 +4,23 @@ namespace Grow2Notes.Web.Features.Reports;
 
 /// <summary>
 /// What a report file says and in what order (design.md §11.3), as <see cref="ReportBlock"/>s that both renderers read.
-/// The file's own words are constants here, outside the SPA's copy, as the file is not a screen.
+/// The file's own words are constants here, outside the SPA's copy, as the file is not a screen. The words that a note
+/// shares with its screens are <see cref="NoteWords"/>.
 /// </summary>
 internal static class ReportLayout
 {
-    private const string DailyTitle = "Daily progress notes";
+    private const string DailyTitle = "SUPPORT NOTES";
+
+    // An en dash, as the Word template's title has it.
+    private const string WeekLabel = " – WEEK ";
+
+    private const string DateLabel = "DATE: ";
+
+    private const string StaffLabel = "STAFF:";
+
+    private const string Participants = "Participants";
+
+    private const string NameLabel = "NAME: ";
 
     private const string RecordTitle = "Progress notes record";
 
@@ -32,11 +44,9 @@ internal static class ReportLayout
 
     private const string ExportedBy = "Exported by ";
 
-    private const string WrittenBy = "Written by ";
+    private const string NoteWrittenBy = "Note written by: ";
 
-    private const string PastDayWrittenBy = "Past-day note, written by ";
-
-    private const string PastDayManagerOn = " (manager) on ";
+    private const string PastDayManagerWritten = " (manager) · Past-day note, written ";
 
     private const string Submitted = " · Submitted ";
 
@@ -58,16 +68,6 @@ internal static class ReportLayout
 
     private const string Comment = "Comment: ";
 
-    private const string CommonItems = "Common items";
-
-    private const string NoCommonItems = "No common items set";
-
-    private const string Goals = "Goals";
-
-    private const string NoGoals = "No goals set";
-
-    private const string GuidedNotes = "Guided notes";
-
     private const string FooterStart = "Confidential: health information. Copy exported from Grow2Notes by ";
 
     private const string FooterEnd = ". The record in Grow2Notes is authoritative.";
@@ -79,29 +79,51 @@ internal static class ReportLayout
     public const string FooterOf = " of ";
 
     /// <summary>
-    /// The day's report: the running header, the footer sentence and the properties, then the body, which is the
-    /// organisation's name, the title block and each note under its participant's name, in the model's order. The
-    /// exporter and the time in the footer are the strings the title block shows.
+    /// The day's report, as the provider's Word template has it (D104): the running header, the footer sentence and
+    /// the properties, then the title block, which is the title with the week when one is chosen, the day, the staff on
+    /// shift, and who exported it and when; a Participants index; and each participant's note on a page of its own,
+    /// under their name in capitals, in the model's order. The organisation is the file's property alone.
     /// </summary>
-    public static ReportDocument DailyReport(DailyReportModel model)
+    /// <param name="model">The day's notes.</param>
+    /// <param name="week"><c>A</c> or <c>B</c>, which the title prints, or <c>null</c> for no label.</param>
+    public static ReportDocument DailyReport(DailyReportModel model, string? week)
     {
         var asAt = ReportDates.DateTimeWithYear(model.AsAtUtc);
+        var day = ReportDates.DayDotted(model.NoteDate);
+        var title = week is null ? DailyTitle : DailyTitle + WeekLabel + week;
+        var staff = model.StaffOnShift;
         List<ReportBlock> blocks =
         [
-            new(ReportBlockKind.Title, model.OrganisationName),
-            new(ReportBlockKind.Subtitle, DailyTitle),
-            new(ReportBlockKind.Subtitle, ReportDates.DateLong(model.NoteDate)),
+            new(ReportBlockKind.Title, title),
+            new(ReportBlockKind.Subtitle, DateLabel + day),
+            new(ReportBlockKind.Subtitle, staff.Count == 0 ? StaffLabel : $"{StaffLabel} {string.Join(", ", staff)}"),
             new(ReportBlockKind.Subtitle, AsAt + asAt),
             new(ReportBlockKind.Subtitle, ExportedBy + model.ExportedBy),
+            new(ReportBlockKind.Heading1, Participants),
         ];
-        foreach (var note in model.Notes)
+
+        // The anchors are named by position, so that no participant's name is in the file's internals.
+        for (var i = 0; i < model.Notes.Count; i++)
         {
-            blocks.Add(new(ReportBlockKind.Heading1, note.ParticipantName));
+            blocks.Add(new(ReportBlockKind.IndexEntry, model.Notes[i].ParticipantName.ToUpperInvariant())
+            {
+                Anchor = $"p{i + 1}",
+            });
+        }
+
+        for (var i = 0; i < model.Notes.Count; i++)
+        {
+            var note = model.Notes[i];
+            blocks.Add(new(ReportBlockKind.Heading1, NameLabel + note.ParticipantName.ToUpperInvariant())
+            {
+                PageBreakBefore = true,
+                Anchor = $"p{i + 1}",
+            });
             blocks.AddRange(NoteBody(note));
         }
 
         return new ReportDocument(
-            DailyTitle + ": " + ReportDates.DateWithYear(model.NoteDate),
+            $"{title}: {day}",
             model.OrganisationName,
             FooterStart + model.ExportedBy + ", " + asAt + FooterEnd,
             blocks);
@@ -178,7 +200,7 @@ internal static class ReportLayout
                 }
             }
 
-            foreach (var block in VersionBody(version.Content, ReportBlockKind.Line, ReportBlockKind.Line))
+            foreach (var block in VersionBody(version.Content, ReportBlockKind.Line))
             {
                 yield return block;
             }
@@ -186,21 +208,25 @@ internal static class ReportLayout
     }
 
     /// <summary>
-    /// A note under its participant's name, in the order of design.md §11.3's layout example: who wrote it and when it
-    /// was first submitted, with the day it was written for a past-day note; that it was edited, by whom and when; its
-    /// flag, and whether a manager has reviewed it; its goals in the order of its version; its common items by group,
-    /// as its version shows them; and its Guided notes exactly as stored. The submitted time carries its day, so a note
-    /// first submitted on a later day already shows its own date.
+    /// A note under its participant's name, in the order of the Word template and then of design.md §11.3's layout
+    /// example: its version's body; who wrote it and when it was first submitted, with the day it was written for a
+    /// past-day note; that it was edited, by whom and when; its flag, and whether a manager has reviewed it. The
+    /// submitted time carries its day, so a note first submitted on a later day already shows its own date.
     /// </summary>
     public static IEnumerable<ReportBlock> NoteBody(DailyReportNote note)
     {
+        foreach (var block in VersionBody(note.Current, ReportBlockKind.Heading2))
+        {
+            yield return block;
+        }
+
         var submitted = Submitted + ReportDates.DateTimeShort(note.FirstSubmittedAtUtc);
         yield return new(
             ReportBlockKind.Line,
             note.PastDayWrittenAtUtc is { } writtenAtUtc
-                ? $"{PastDayWrittenBy}{note.AuthorDisplayName}{PastDayManagerOn}"
+                ? $"{NoteWrittenBy}{note.AuthorDisplayName}{PastDayManagerWritten}"
                     + $"{ReportDates.DateTimeWithYear(writtenAtUtc)}{submitted}"
-                : $"{WrittenBy}{note.AuthorDisplayName}{submitted}");
+                : $"{NoteWrittenBy}{note.AuthorDisplayName}{submitted}");
         if (note.LastEdit is { } lastEdit)
         {
             yield return new(
@@ -226,49 +252,79 @@ internal static class ReportLayout
                 yield return new(ReportBlockKind.Line, Comment + comment);
             }
         }
-
-        foreach (var block in VersionBody(note.Current, ReportBlockKind.Heading2, ReportBlockKind.Heading3))
-        {
-            yield return block;
-        }
     }
 
     /// <summary>
-    /// A version's goals, its common items by group, as the version shows them, and its Guided notes exactly as
-    /// stored. The section labels are blocks of <paramref name="sectionKind"/> and the group names of
-    /// <paramref name="groupKind"/>, so a note's current version can use headings and an earlier version, which sits
+    /// A version as the Word template has it: the three attendance boxes; its goals under their term, or that it has
+    /// none; its Medication, when the note has the box; each of its common item groups under its own name, with the
+    /// details written for an item after it; and its Daily Support Notes exactly as stored. The headings are blocks of
+    /// <paramref name="labelKind"/>, so a note's current version can use headings and an earlier version, which sits
     /// under a heading of its own, plain lines.
     /// </summary>
-    public static IEnumerable<ReportBlock> VersionBody(
-        NoteReadVersion version, ReportBlockKind sectionKind, ReportBlockKind groupKind)
+    public static IEnumerable<ReportBlock> VersionBody(NoteReadVersion version, ReportBlockKind labelKind)
     {
-        yield return new(sectionKind, Goals);
+        yield return new(ReportBlockKind.TickRow, string.Empty)
+        {
+            Ticks =
+            [
+                new(NoteWords.NotIn, version.IsNotIn),
+                new(NoteWords.LateNotice, version.IsLateNotice),
+                new(NoteWords.Sick, version.IsSick),
+            ],
+        };
+
         if (version.Goals.Count == 0)
         {
-            yield return new(ReportBlockKind.Line, NoGoals);
+            yield return new(ReportBlockKind.Line, NoteWords.NoGoals);
         }
 
-        foreach (var goal in version.Goals)
+        foreach (var term in new[]
         {
-            yield return new(ReportBlockKind.Tick, goal.Text, goal.IsTicked);
+            (Heading: NoteWords.ShortTermGoals, IsMediumOrLong: false),
+            (Heading: NoteWords.MediumOrLongTermGoal, IsMediumOrLong: true),
+        })
+        {
+            var goals = version.Goals.Where(goal => goal.IsMediumOrLongTerm == term.IsMediumOrLong).ToList();
+            if (goals.Count == 0)
+            {
+                continue;
+            }
+
+            yield return new(labelKind, term.Heading);
+            foreach (var goal in goals)
+            {
+                yield return new(ReportBlockKind.Tick, goal.Text, goal.IsTicked);
+            }
         }
 
-        yield return new(sectionKind, CommonItems);
+        if (version.Medication is { } medication)
+        {
+            yield return new(labelKind, NoteWords.Medication);
+            if (medication.Length > 0)
+            {
+                yield return new(ReportBlockKind.Line, medication);
+            }
+        }
+
         if (version.CommonItemGroups.Count == 0)
         {
-            yield return new(ReportBlockKind.Line, NoCommonItems);
+            yield return new(ReportBlockKind.Line, NoteWords.NoCommonItems);
         }
 
         foreach (var group in version.CommonItemGroups)
         {
-            yield return new(groupKind, group.Name);
+            yield return new(labelKind, group.Name);
             foreach (var item in group.Items)
             {
                 yield return new(ReportBlockKind.Tick, item.Text, item.IsTicked);
+                if (item.Detail is { Length: > 0 } detail)
+                {
+                    yield return new(ReportBlockKind.Line, $"{NoteWords.Details}: {detail}");
+                }
             }
         }
 
-        yield return new(sectionKind, GuidedNotes);
+        yield return new(labelKind, NoteWords.DailySupportNotes);
         yield return new(ReportBlockKind.Line, version.Narrative);
     }
 }

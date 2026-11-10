@@ -35,7 +35,15 @@ const worker: Me = {
 
 /** A made-up participant, born on 7 March 1987. */
 function madeUp(id: string, givenName: string, familyName: string, status: ParticipantStatus): AdminParticipant {
-  return { id, givenName, familyName, dateOfBirth: '1987-03-07', status, rowVersion: `AAAAAAAA${id.slice(0, 4)}=` };
+  return {
+    id,
+    givenName,
+    familyName,
+    dateOfBirth: '1987-03-07',
+    hasMedicationLine: false,
+    status,
+    rowVersion: `AAAAAAAA${id.slice(0, 4)}=`,
+  };
 }
 
 const zara = madeUp('1f7c3a9e-5d21-4b48-8e6f-0a2c4d7b9e13', 'Zara', 'Ali', 'Active');

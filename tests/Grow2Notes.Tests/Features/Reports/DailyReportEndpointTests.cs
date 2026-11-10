@@ -14,11 +14,12 @@ using Microsoft.Extensions.Time.Testing;
 namespace Grow2Notes.Tests.Features.Reports;
 
 /// <summary>
-/// <c>GET /api/reports/daily/{date}/export?format=docx|pdf</c> (design.md §6.5), called with the test-only sign-in
-/// (<see cref="TestSignIn"/>): the file's type and name, the headers every API answer has, and the one
-/// <c>report.downloaded</c> event it writes before it sends the file; and what it refuses without one: a caller who is
-/// not a manager, a format that is not exactly <c>docx</c> or <c>pdf</c>, a date that is not a date, and a day with no
-/// submitted note in the caller's organisation. <c>GET /api/reports/daily/{date}/has-notes</c> is covered too: it
+/// <c>GET /api/reports/daily/{date}/export?format=docx|pdf&amp;week=A|B</c> (design.md §6.5), called with the
+/// test-only sign-in (<see cref="TestSignIn"/>): the file's type and name, the week in its title, the headers every API
+/// answer has, and the one <c>report.downloaded</c> event it writes before it sends the file; and what it refuses
+/// without one: a caller who is not a manager, a format that is not exactly <c>docx</c> or <c>pdf</c>, a week that is
+/// not exactly <c>A</c> or <c>B</c>, a date that is not a date, and a day with no submitted note in the caller's
+/// organisation. <c>GET /api/reports/daily/{date}/has-notes</c> is covered too: it
 /// agrees with the export about which days have notes, and it writes no event. Each test adds an organisation of its
 /// own (<see cref="TestOrganisations"/>), so that the organisation's audit events are the test's alone. What the
 /// files say is covered by <see cref="DailyReportTextMatchTests"/>, and who may call by the endpoint matrix.
@@ -57,8 +58,8 @@ public sealed class DailyReportEndpointTests(Grow2NotesFactory factory) : IClass
         Assert.Equal(contentType, response.Content.Headers.ContentType?.MediaType);
         var disposition = response.Content.Headers.ContentDisposition;
         Assert.Equal("attachment", disposition?.DispositionType);
-        Assert.Equal($"daily-notes_{Date}.{format}", disposition?.FileName?.Trim('"'));
-        Assert.Equal($"daily-notes_{Date}.{format}", disposition?.FileNameStar);
+        Assert.Equal($"Thursday 01.10.2026.{format}", disposition?.FileName?.Trim('"'));
+        Assert.Equal($"Thursday 01.10.2026.{format}", disposition?.FileNameStar);
         Assert.True(response.Headers.CacheControl?.NoStore);
         Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         var bytes = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
@@ -69,7 +70,8 @@ public sealed class DailyReportEndpointTests(Grow2NotesFactory factory) : IClass
             (written.EventType, written.ActorUserId, written.EntityType, written.EntityId, written.ParticipantId));
         var details = JsonNode.Parse(written.Details!)!.AsObject();
         Assert.Equal([Date, format], [(string)details["date"]!, (string)details["format"]!]);
-        Assert.Equal(2, details.Count);
+        Assert.Null(details["week"]);
+        Assert.Equal(3, details.Count);
     }
 
     // §2: a worker has no part in the report, and a request with no session has none at all. Neither reads anything or
@@ -298,6 +300,109 @@ public sealed class DailyReportEndpointTests(Grow2NotesFactory factory) : IClass
         await response.ReadProblemAsync(HttpStatusCode.InternalServerError);
         Assert.Null(response.Content.Headers.ContentDisposition);
         Assert.Empty(await EventsOfAsync(organisation));
+    }
+
+    // A158: the week is printed in the title of both files and kept in the event alone, never in the file's name.
+    [Theory]
+    [InlineData("A")]
+    [InlineData("B")]
+    public async Task A_week_is_printed_in_the_title_of_both_files_and_kept_in_the_event_alone(string week)
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        await SubmitANoteAsync(organisation, NoteDate);
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(new FakeTimeProvider(Now)));
+        using var client = app.CreateHttpsClient().SignInAs(organisation.ManagerId);
+
+        using var docxResponse = await client.GetAsync(
+            $"/api/reports/daily/{Date}/export?format=docx&week={week}", TestContext.Current.CancellationToken);
+        var pdf = await client.GetByteArrayAsync(
+            $"/api/reports/daily/{Date}/export?format=pdf&week={week}", TestContext.Current.CancellationToken);
+
+        var docx = await docxResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+        var title = $"SUPPORT NOTES – WEEK {week}";
+        Assert.Equal(title, ReportText.WordParagraphs(docx)[0]);
+        Assert.Equal($"{title}: Thursday 01.10.2026", ReportText.WordHeadersAndFooters(docx).DefaultHeader);
+        Assert.StartsWith(title, ReportText.Normalised(string.Join(' ', ReportText.PdfWords(pdf))));
+        Assert.Equal("Thursday 01.10.2026.docx", docxResponse.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        var events = await EventsOfAsync(organisation);
+        Assert.Equal(2, events.Count);
+        Assert.All(events, written =>
+        {
+            var details = JsonNode.Parse(written.Details!)!.AsObject();
+            Assert.Equal(week, (string?)details["week"]);
+            Assert.Equal(3, details.Count);
+        });
+    }
+
+    [Fact]
+    public async Task A_report_with_no_week_has_no_label_in_its_title()
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        await SubmitANoteAsync(organisation, NoteDate);
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(new FakeTimeProvider(Now)));
+        using var client = app.CreateHttpsClient().SignInAs(organisation.ManagerId);
+
+        var docx = await client.GetByteArrayAsync(
+            $"/api/reports/daily/{Date}/export?format=docx", TestContext.Current.CancellationToken);
+
+        Assert.Equal("SUPPORT NOTES", ReportText.WordParagraphs(docx)[0]);
+        Assert.Equal("SUPPORT NOTES: Thursday 01.10.2026", ReportText.WordHeadersAndFooters(docx).DefaultHeader);
+    }
+
+    // A158: the match is ordinal, as the format's is, and the 400 comes before anything is read, so a day with no note
+    // is refused as a bad request and not as 404.
+    [Theory]
+    [InlineData("C")]
+    [InlineData("a")]
+    [InlineData("b")]
+    [InlineData("")]
+    [InlineData("AB")]
+    public async Task A_week_that_is_not_A_or_B_gets_400_before_anything_is_read_and_no_event(string week)
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        await SubmitANoteAsync(organisation, NoteDate);
+        using var client = factory.CreateHttpsClient().SignInAs(organisation.ManagerId);
+
+        using var onADayWithNotes = await client.GetAsync(
+            $"/api/reports/daily/{Date}/export?format=docx&week={week}", TestContext.Current.CancellationToken);
+        using var onADayWithNone = await client.GetAsync(
+            $"/api/reports/daily/2026-09-01/export?format=pdf&week={week}", TestContext.Current.CancellationToken);
+
+        await onADayWithNotes.ReadProblemAsync(HttpStatusCode.BadRequest);
+        await onADayWithNone.ReadProblemAsync(HttpStatusCode.BadRequest);
+        Assert.Null(onADayWithNotes.Content.Headers.ContentDisposition);
+        Assert.Empty(await EventsOfAsync(organisation));
+    }
+
+    // A160: the notes are in given-name order, so Ann Zed is before Bob Adams, which family-name order would reverse.
+    [Fact]
+    public async Task The_blocks_and_the_index_are_in_given_name_order()
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        foreach (var (given, family) in new[] { ("Bob", "Adams"), ("Ann", "Zed") })
+        {
+            var participant = await factory.Services.AddParticipantAsync(
+                organisation, givenName: given, familyName: family);
+            await factory.Services.AddSubmittedAsync(
+                organisation,
+                new(participant.Id, NoteDate, organisation.WorkerId, StartedAtUtc, SubmittedAtUtc));
+        }
+
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(new FakeTimeProvider(Now)));
+        using var client = app.CreateHttpsClient().SignInAs(organisation.ManagerId);
+
+        var docx = await client.GetByteArrayAsync(
+            $"/api/reports/daily/{Date}/export?format=docx", TestContext.Current.CancellationToken);
+
+        var names = ReportText.WordParagraphs(docx)
+            .Where(text => text.StartsWith("NAME: ", StringComparison.Ordinal))
+            .ToList();
+        var index = ReportText.WordParagraphs(docx)
+            .Where(text => text.Contains("PAGEREF", StringComparison.Ordinal))
+            .Select(text => text[..text.IndexOf('\t', StringComparison.Ordinal)])
+            .ToList();
+        Assert.Equal(["NAME: ANN ZED", "NAME: BOB ADAMS"], names);
+        Assert.Equal(["ANN ZED", "BOB ADAMS"], index);
     }
 
     // Adds a participant of the organisation's own with a note for the day, submitted by its worker, as Submit leaves

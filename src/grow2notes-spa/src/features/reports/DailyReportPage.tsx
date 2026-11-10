@@ -7,6 +7,7 @@ import { useDownload, type FileFormat } from '../../api/useDownload.ts';
 import { Button } from '../../components/Button.tsx';
 import { buttonClass } from '../../components/buttonClass.ts';
 import { ButtonGroup } from '../../components/ButtonGroup.tsx';
+import { ChoiceRow } from '../../components/ChoiceRow.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
@@ -15,7 +16,7 @@ import textInput from '../../components/textInput.module.css';
 import { useDelayed } from '../../components/useDelayed.ts';
 import { useOnWindowFocus } from '../../components/useOnWindowFocus.ts';
 import { apiErrorCopy } from '../../copy/apiErrors.ts';
-import { dateLong, dayAfter, dayBefore, isIsoDate, parseDateOnly } from '../../copy/format.ts';
+import { dateLong, dayAfter, dayBefore, fileDay, isIsoDate, parseDateOnly } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
@@ -32,6 +33,15 @@ const pauseMs = 750;
 const formats: readonly { format: FileFormat; label: string }[] = [
   { format: 'docx', label: strings.report.downloadWord },
   { format: 'pdf', label: strings.report.downloadPdf },
+];
+
+// The week label that the title of a file may carry (A158), none by default.
+type Week = 'A' | 'B' | undefined;
+
+const weeks: readonly { week: Week; id: string; label: string }[] = [
+  { week: undefined, id: 'report-week-none', label: strings.report.noWeek },
+  { week: 'A', id: 'report-week-a', label: strings.report.weekA },
+  { week: 'B', id: 'report-week-b', label: strings.report.weekB },
 ];
 
 const isReportDate = (value: string) => isIsoDate(value) && value >= earliestDate;
@@ -93,6 +103,8 @@ function DailyReport({ date, today }: { date: string; today: string }) {
   const [shownFor, setShownFor] = useState(date);
   const [draft, setDraft] = useState(date);
   const [error, setError] = useState<string>();
+  // Not remembered after a reload, and kept as the date changes.
+  const [week, setWeek] = useState<Week>();
 
   // A new date in the address, from a step, Back or a commit, puts the field right.
   if (shownFor !== date) {
@@ -187,8 +199,8 @@ function DailyReport({ date, today }: { date: string; today: string }) {
     download.start({
       scope: target,
       format,
-      path: `/api/reports/daily/${target}/export?format=${format}`,
-      fallbackName: `daily-notes_${target}.${format}`,
+      path: `/api/reports/daily/${target}/export?format=${format}${week === undefined ? '' : `&week=${week}`}`,
+      fallbackName: `${fileDay(target)}.${format}`,
       failed: (cause) => failed(cause, target),
     });
   }
@@ -268,6 +280,22 @@ function DailyReport({ date, today }: { date: string; today: string }) {
           ))}
         {error !== undefined && <span className="visually-hidden">{error}</span>}
       </p>
+      <div className={styles.week}>
+        <FieldGroup fieldId="report-week" label={strings.report.week} hint={strings.report.weekHint} group>
+          {weeks.map(({ week: each, id, label }) => (
+            <ChoiceRow
+              key={id}
+              id={id}
+              name="report-week"
+              label={label}
+              checked={week === each}
+              onChange={() => {
+                setWeek(each);
+              }}
+            />
+          ))}
+        </FieldGroup>
+      </div>
       <RequestAlert>{download.failure}</RequestAlert>
       <p role="status" className={styles.downloadStatus} data-preparing={slow || undefined}>
         {downloadStatus()}
@@ -294,6 +322,7 @@ function DailyReport({ date, today }: { date: string; today: string }) {
           </Button>
         ))}
       </ButtonGroup>
+      <p className={styles.wordHint}>{strings.report.wordPageNumbersHint}</p>
     </PageStatus>
   );
 }

@@ -919,7 +919,7 @@ test('signed in for real at 375 px, a worker’s flagged submit reaches both man
   await expect(heading(phone)).toBeFocused();
   const address = new URL(phone.url()).pathname;
   const noteDate = address.slice(-10);
-  await main(phone).getByRole('textbox', { name: '3. Guided notes' }).pressSequentially(sentence);
+  await main(phone).getByRole('textbox', { name: 'Daily Support Notes' }).pressSequentially(sentence);
   await main(phone).locator('label[for="flag-for-manager"]').locator('span').click();
   await main(phone).getByRole('textbox', { name: 'Reason', exact: true }).fill(flagReason);
   await expect(phone.locator('#save-status')).toHaveText(savedAnyTime);

@@ -83,7 +83,7 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Assert.Equal(
             [
                 "baseVersion", "isSaved", "listsVersion", "guidePrompts", "goals", "commonItemGroups", "narrative",
-                "isFlagged", "flagReason",
+                "isNotIn", "isLateNotice", "isSick", "medication", "isFlagged", "flagReason",
             ],
             form.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
@@ -101,7 +101,9 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
             Goals(form));
         Assert.All(
             form.GetProperty("goals").EnumerateArray(),
-            goal => Assert.Equal(["id", "text", "isTicked"], goal.EnumerateObject().Select(property => property.Name)));
+            goal => Assert.Equal(
+                ["id", "text", "isTicked", "isMediumOrLongTerm"],
+                goal.EnumerateObject().Select(property => property.Name)));
         Assert.Equal(32, Convert.FromBase64String(form.GetProperty("listsVersion").GetString()!).Length);
     }
 
@@ -279,8 +281,8 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
 
         Assert.Equal(
             [
-                "baseVersion", "isSaved", "guidePrompts", "goals", "commonItemGroups", "narrative", "isFlagged",
-                "flagReason", "savedAtUtc",
+                "baseVersion", "isSaved", "guidePrompts", "goals", "commonItemGroups", "narrative", "isNotIn",
+                "isLateNotice", "isSick", "medication", "isFlagged", "flagReason", "savedAtUtc",
             ],
             form.EnumerateObject().Select(property => property.Name));
         Assert.Equal((false, null), Flag(form));
@@ -1528,7 +1530,9 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Assert.All(groups.SelectMany(ItemsOf), item => Assert.False(item.IsTicked));
         Assert.All(
             groups[0].GetProperty("items").EnumerateArray(),
-            item => Assert.Equal(["id", "text", "isTicked"], item.EnumerateObject().Select(property => property.Name)));
+            item => Assert.Equal(
+                ["id", "text", "isTicked", "needsDetail", "detail"],
+                item.EnumerateObject().Select(property => property.Name)));
     }
 
     // Each a change that a manager's Common items screens make (design.md §4.8), as the stored rows show it.
@@ -1927,8 +1931,8 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
 
         Assert.Equal(
             [
-                "baseVersion", "isSaved", "guidePrompts", "goals", "commonItemGroups", "narrative", "isFlagged",
-                "flagReason",
+                "baseVersion", "isSaved", "guidePrompts", "goals", "commonItemGroups", "narrative", "isNotIn",
+                "isLateNotice", "isSick", "medication", "isFlagged", "flagReason",
             ],
             form.EnumerateObject().Select(property => property.Name));
         Assert.Equal(

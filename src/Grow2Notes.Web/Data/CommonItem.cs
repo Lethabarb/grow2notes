@@ -24,6 +24,12 @@ internal sealed class CommonItem : ITenantOwned, IVersionedRow, IOrderedRow
     /// <summary>The current wording, which notes started from now on show.</summary>
     public required string Text { get; set; }
 
+    /// <summary>
+    /// Whether ticking the item on a note asks for a short text, its details, as an "Other" item does (D104, A151).
+    /// Notes started from now on ask for it.
+    /// </summary>
+    public bool NeedsDetail { get; set; }
+
     /// <summary>The item's place in its group's list (<see cref="IOrderedRow"/>).</summary>
     public int SortOrder { get; set; }
 

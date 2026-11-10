@@ -31,8 +31,9 @@ export function goalsQuery(participantId: string) {
 
 /**
  * `ListEditor`'s way to a participant's goals (list-editor.md *Implementation notes*): their query, whose data is the
- * goals themselves; the one scope of every write on them, `goals:<participantId>` (participants.md B6); the add,
- * whose `201` has no body; a goal's reword, with its `rowVersion` as `If-Match`, whose `200` has none either, and
+ * goals themselves, each with its term (A150); the one scope of every write on them, `goals:<participantId>`
+ * (participants.md B6); the add, whose `201` has no body and which adds a Short term goal; a goal's reword, with its
+ * term and its `rowVersion` as `If-Match`, whose `200` has no body either, and
  * whose `ETag` the editor does not read, as it reads each goal's next version from the list; the reorder of the
  * active goals, with no `If-Match`, as the set of their IDs is its check (design.md §6.7), whose `204` has no body;
  * and a goal's archive and restore, with no body and its `rowVersion` as `If-Match`, whose `204`s have none.
@@ -43,8 +44,12 @@ export function goalsApi(participantId: string): ListApi<ListRow[]> {
     rowsOf: (goals) => goals,
     scopeId: `goals:${participantId}`,
     add: (text) => api<undefined>(goalsPath(participantId), { method: 'POST', body: { text } }),
-    update: (id, text, rowVersion) =>
-      api<undefined>(goalPath(id), { method: 'PUT', body: { text }, ifMatch: rowVersion }),
+    update: (id, text, rowVersion, { setting }) =>
+      api<undefined>(goalPath(id), {
+        method: 'PUT',
+        body: { text, isMediumOrLongTerm: setting },
+        ifMatch: rowVersion,
+      }),
     reorder: (goalIds) => api<undefined>(`${goalsPath(participantId)}/order`, { method: 'PUT', body: { goalIds } }),
     archive: (id, rowVersion) => api<undefined>(`${goalPath(id)}/archive`, { method: 'POST', ifMatch: rowVersion }),
     restore: (id, rowVersion) => api<undefined>(`${goalPath(id)}/restore`, { method: 'POST', ifMatch: rowVersion }),

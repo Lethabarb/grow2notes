@@ -116,6 +116,7 @@ internal static class ToolMatrix
                     ["givenName"] = $"Eve{Unique()}",
                     ["familyName"] = $"Lowe{Unique()}",
                     ["dateOfBirth"] = "1987-04-09",
+                    ["hasMedicationLine"] = true,
                 };
             },
             [
@@ -161,9 +162,13 @@ internal static class ToolMatrix
                     scene => ChangeOfSceneParticipant(scene, "givenName", ""),
                     "validation.failed"),
                 new(
-                    "none of the three fields",
+                    "none of the four fields",
                     scene => Without("givenName", ChangeOfSceneParticipant(scene, "givenName", "x")),
                     "validation.failed"),
+                new(
+                    "a hasMedicationLine that is not a boolean",
+                    scene => With(RenameOfSceneParticipant(scene), "hasMedicationLine", "yes"),
+                    "unexpected"),
                 new(
                     "a blank date",
                     scene => ChangeOfSceneParticipant(scene, "dateOfBirth", " "),
@@ -248,7 +253,7 @@ internal static class ToolMatrix
             async scene =>
             {
                 var participant = await scene.AddParticipantAsync();
-                return AddGoalCall(participant.Id.ToString(), $"Goal {Unique()}");
+                return With(AddGoalCall(participant.Id.ToString(), $"Goal {Unique()}"), "isMediumOrLongTerm", true);
             },
             [
                 new(
@@ -274,6 +279,10 @@ internal static class ToolMatrix
                     "no text",
                     scene => Without("text", AddGoalCall(scene.Participant.Id.ToString(), "Goal x")),
                     "unexpected"),
+                new(
+                    "an isMediumOrLongTerm that is not a boolean",
+                    scene => With(AddGoalCall(scene.Participant.Id.ToString(), "Goal x"), "isMediumOrLongTerm", "yes"),
+                    "unexpected"),
             ],
             OtherOrganisationCode: "not_found",
             Event: AuditEventTypes.Goal.Created),
@@ -282,7 +291,7 @@ internal static class ToolMatrix
             async scene =>
             {
                 var goal = await FreshGoalAsync(scene, archived: false);
-                return GoalCall(goal, $"Goal {Unique()}");
+                return With(GoalCall(goal, $"Goal {Unique()}"), "isMediumOrLongTerm", true);
             },
             [
                 new(
@@ -323,6 +332,10 @@ internal static class ToolMatrix
                     "validation.failed"),
                 new("empty text", scene => With(RewordOfSceneGoal(scene), "text", ""), "validation.failed"),
                 new("no text", scene => Without("text", RewordOfSceneGoal(scene)), "unexpected"),
+                new(
+                    "an isMediumOrLongTerm that is not a boolean",
+                    scene => With(RewordOfSceneGoal(scene), "isMediumOrLongTerm", "yes"),
+                    "unexpected"),
             ],
             OtherOrganisationCode: "not_found",
             Event: AuditEventTypes.Goal.Updated),
@@ -524,7 +537,11 @@ internal static class ToolMatrix
             Event: AuditEventTypes.CommonItemGroup.Restored),
         new(
             "add_common_item",
-            async scene => AddItemCall((await scene.AddGroupAsync()).Id, $"Item {Unique()}"),
+            async scene =>
+            {
+                var group = await scene.AddGroupAsync();
+                return With(AddItemCall(group.Id, $"Item {Unique()}"), "needsDetail", true);
+            },
             [
                 new(
                     "an archived group",
@@ -538,6 +555,10 @@ internal static class ToolMatrix
                 new("no group ID", _ => new() { ["text"] = "Item x" }, "unexpected"),
                 .. TextErrorCases(scene => AddItemCall(scene.Group.Id, "Item x")),
                 new("no text", scene => new() { ["groupId"] = scene.Group.Id.ToString() }, "unexpected"),
+                new(
+                    "a needsDetail that is not a boolean",
+                    scene => With(AddItemCall(scene.Group.Id, "Item x"), "needsDetail", "yes"),
+                    "unexpected"),
             ],
             OtherOrganisationCode: "not_found",
             Event: AuditEventTypes.CommonItem.Created),
@@ -547,11 +568,16 @@ internal static class ToolMatrix
             {
                 var group = await scene.AddGroupAsync();
                 var item = await scene.AddItemAsync(group.Id);
-                return With(ItemTextCall(item, $"Reworded {Unique()}"), "groupId", group.Id);
+                return With(
+                    With(ItemTextCall(item, $"Reworded {Unique()}"), "groupId", group.Id), "needsDetail", true);
             },
             [
                 .. TextErrorCases(scene => ItemTextCall(scene.Items[0], "Reword")),
-                new("neither text nor groupId", scene => ItemCall(scene.Items[0]), "validation.failed"),
+                new("none of text, groupId and needsDetail", scene => ItemCall(scene.Items[0]), "validation.failed"),
+                new(
+                    "a needsDetail that is not a boolean",
+                    scene => With(ItemTextCall(scene.Items[0], "Reword"), "needsDetail", "yes"),
+                    "unexpected"),
                 new(
                     "an item of an archived group with its own groupId",
                     scene => With(
@@ -1053,6 +1079,12 @@ internal static class ToolMatrix
         ChangeOfSceneParticipant(scene, "givenName", $"Rename{scene.Token}");
 
     private static JsonObject With(JsonObject arguments, string name, string value)
+    {
+        arguments[name] = value;
+        return arguments;
+    }
+
+    private static JsonObject With(JsonObject arguments, string name, bool value)
     {
         arguments[name] = value;
         return arguments;

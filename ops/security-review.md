@@ -324,7 +324,7 @@ Of the 253 rows, 153 are met (8 of them confirmed in test), 86 are not applicabl
 | 5.2.3 | 2 | Compressed uploads | N/A: the app accepts no file upload. |
 | 5.3.1 | 1 | Stored files not executed | N/A: the app stores no file; the exports are made in memory and sent. |
 | 5.3.2 | 1 | File paths from untrusted input | N/A: the app builds no file path from request data (the PDF font is an embedded resource). |
-| 5.4.1 | 2 | Download file names | Met: the name is built from a validated date and fixed words (`daily-notes_`, `participant-record_`) in `DailyReportEndpoint.cs` and `ParticipantExportEndpoint.cs`; no user text is in it. |
+| 5.4.1 | 2 | Download file names | Met: the name is built from a validated date and a weekday name (the daily report, A19) or a fixed word (`participant-record_`) in `DailyReportEndpoint.cs` and `ParticipantExportEndpoint.cs`; no user text is in it. |
 | 5.4.2 | 2 | Served names encoded | Met: the same names, written into `Content-Disposition` by `TypedResults.File`. |
 | 5.4.3 | 2 | Scanning files from untrusted sources | N/A: the app serves only files it generated. |
 

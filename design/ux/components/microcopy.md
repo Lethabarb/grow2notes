@@ -17,6 +17,29 @@ Copy marks used below: **(V)** word for word from design.md. **(N)** design.md w
 punctuation format normalised to the rules here. **(P)** proposed, not in design.md. Every (P) string follows a
 pattern already used in design.md and adds no feature, screen, setting or data.
 
+**T44 (D104, A145 to A163): the Word template's words.** Where the rest of this file differs, this block wins.
+
+- **Glossary (§2) additions.** **Attendance** (the note's three ticks): **Not In**, **Late Notice**, **Sick**. **Short term
+  goals**, **Medium or Long term goal** (the note's headings) and **Short term**, **Medium or long term** (the goal editor's
+  radios). **Medication** (the note's box) and **Medication box on notes** (the participant's switch). **Details** (the
+  box under a ticked item), **Ask for details when ticked** and **Asks for details** (the manager's setting). **Week A**,
+  **Week B** (the report's title label). **Daily Support Notes** is the screen label of the design term **Guided notes**,
+  which stays the design term (D12, D34); the screens, the messages and the files say "Daily Support Notes", and never "Guided
+  notes".
+- **One set of words.** The labels a note shares with its report files are the Word template's and are held to
+  `NoteWords.cs` by a test (T40): Not In, Late Notice, Sick, Short term goals, Medium or Long term goal, Medication,
+  Details, Daily Support Notes, **No goals set**, **No common items set**.
+- **T38 (A163): the empty-goals sentence** is "No goals yet. Notes will show “No goals set”." wherever the manager's
+  Goals section is empty; the older "Notes will show an empty Goals section." is retired.
+- **New strings (P).** Attendance; What was taken, and when.; Enter the details for [item]; Details: [text]; Medication
+  box on notes; Shows a Medication box on notes started from now on.; Term; Short term; Medium or long term; Ask for
+  details when ticked; Notes started from now on show a Details box under this item when it is ticked. It must be filled in
+  to submit.; Asks for details; Week; Printed in the title of the file; None; Week A; Week B; When Word asks to update the
+  fields, choose Yes to fill in the page numbers. The section numbers "1.", "2." and "3." are gone from the note's
+  headings, and the older **Write your notes in the Guided notes box** is **Write your notes in the Daily Support Notes
+  box**.
+- **File names (§11).** The daily report is `<Weekday> dd.mm.yyyy.<format>`, such as `Monday 14.09.2026.docx` (A19).
+
 ---
 
 ## Where it's used
@@ -35,7 +58,7 @@ pattern already used in design.md and adds no feature, screen, setting or data.
 | 4.8 to 4.10 Manage: participants and goals, common items, guide prompts | Given name, Family name, Date of birth, Add goal, Add item, New group, Add group, Group name, Rename, Move up, Move down, Archive, Restore, help text, Guide prompts | Laptop-first managers. One-sentence help text is allowed here; the consequence ("notes started from now on") is the key message. |
 | 4.11 Users (managers) | Invite user, Send invite, Resend invite, Reset sign-in, Deactivate, Reactivate, Invited / Active / Deactivated, Worker / Manager | Security-sensitive actions. Consequences must be stated in the confirmation, with the person's name. |
 | 4.12 Export record (managers) | From date, To date, Format, PDF, Word, Include earlier versions of edited notes, Export | Date ranges. "Export" here, "Download" on the report: two different actions, two different words. |
-| Downloaded files and the setup email (§11, A23) | "Daily progress notes", footer, file names | Not screens. §11 owns them. The glossary, spelling and the D42 name rule still apply. |
+| Downloaded files and the setup email (§11, A23) | "SUPPORT NOTES", its labels, footer, file names | Not screens. §11 owns them. The glossary, spelling and the D42 name rule still apply. |
 
 ---
 
@@ -699,7 +722,7 @@ NHS App; [Research] NN/g, https://www.nngroup.com/articles/error-message-guideli
   wording they were written with." Goal hint "You can enter up to 200 characters".
 - Row buttons "Edit", "Move up", "Move down", "Archive"; archived section "Archived goals" with "Restore" **(V)**.
   Each accessible name adds the goal text after the visible word.
-- Empty goals: "Notes will show an empty Goals section." **(V)**
+- Empty goals: "No goals yet. Notes will show “No goals set”." **(V)** (T38, A163: the words a note prints)
 - "Write past-day note" with a date field labelled "Note date" **(P)**.
 
 ### 4.9 Common items
@@ -741,7 +764,7 @@ NHS App; [Research] NN/g, https://www.nngroup.com/articles/error-message-guideli
 
 ### Downloaded files and the setup email (§11, A23)
 
-- Not screens. §11 fixes their exact layout and strings ("Daily progress notes", the footer, file names with dates only).
+- Not screens. §11 fixes their exact layout and strings ("SUPPORT NOTES", the Word labels, the footer, file names with the weekday and date only).
 - The glossary, Australian spelling, the D42 name rule and the comma before a time apply. One alignment for the file
   owner: §11.3 writes "Fri 2 Oct 9:01 am" in one place and "Fri 2 Oct, 8:05 am" in another; use the comma in both.
 

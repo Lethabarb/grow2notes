@@ -267,7 +267,7 @@ cleared.
 | Response | What happens |
 |---|---|
 | `200` (edit) | "Saved 4:12 pm" next to Save, through the always-rendered `<p role="status">` (`status-messages.md`). Focus stays on Save. The page `<h1>` (the participant's full name) updates. Store the new ETag. Update the participants list query in memory. |
-| `201` (add) | Replace the URL with the new participant's detail route (`navigate(…, { replace: true })`, IDs only, design 4.0), so Back returns to the list rather than to an empty form. The Goals section ("Notes will show an empty Goals section.") and Actions appear. Show "Saved 4:12 pm" next to Save and keep focus on Save, so the manager can go straight on to Add goal. |
+| `201` (add) | Replace the URL with the new participant's detail route (`navigate(…, { replace: true })`, IDs only, design 4.0), so Back returns to the list rather than to an empty form. The Goals section ("Notes will show “No goals set”.") and Actions appear. Show "Saved 4:12 pm" next to Save and keep focus on Save, so the manager can go straight on to Add goal. |
 | `422 validation.failed` | `errors.givenName`, `errors.familyName` and `errors.dateOfBirth` map onto the same fields and messages. `dateOfBirth` marks all three parts. |
 | `412 precondition.failed` | Unlinked summary item: "Someone else changed these details while you were editing. Check the details below, then save again." Keep the typed values. Refetch to get the fresh ETag only (`form-validation.md`). |
 | Network or `5xx` | `form-validation.md`'s "Not saved: …" messages. Values kept. |
@@ -475,7 +475,7 @@ export function DateOfBirthField({ value, onChange, error, invalid }: Props) {
 - The same component in "new" mode under the `<h1>` "Add participant". There are no Goals or Actions until the first
   Save, because goals need a participant ID (`POST …/participants/{participantId}/goals`).
 - After `201`, replace the history entry so Back goes to the list. Keep focus on Save with "Saved 4:12 pm". The next Tab
-  reaches the new Goals section ("Notes will show an empty Goals section." and Add goal), which suits the M1 test of
+  reaches the new Goals section ("Notes will show “No goals set”." and Add goal), which suits the M1 test of
   adding five goals on a phone.
 - The new participant appears on Today straight away (3.7, Active). No extra message is added.
 

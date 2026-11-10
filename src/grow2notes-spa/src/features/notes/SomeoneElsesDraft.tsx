@@ -56,11 +56,7 @@ export function SomeoneElsesDraft({
       <PastNotesLink participantId={participantId} />
       {content !== undefined && (
         <>
-          <ReadSections
-            goals={content.goals}
-            commonItemGroups={content.commonItemGroups}
-            narrative={content.narrative}
-          />
+          <ReadSections content={content} />
           <div className={readView.section}>
             <TickRowRead text={strings.note.flagForManager} isTicked={content.isFlagged} />
             {content.isFlagged && content.flagReason !== null && (

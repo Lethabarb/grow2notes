@@ -39,9 +39,10 @@ no operator command over MCP (D48).
 | Through the tools, or the skill's script | By hand |
 | --- | --- |
 | The organisation and first manager, through `bootstrap.sh` on your yes (D101) | Hearing from the provider, on a call, who its first manager is (A105) |
-| Common item groups and items | The Support account, granted by a manager in Users |
+| Common item groups and items, with whether an item asks for details when ticked (an Other item does) | The Support account, granted by a manager in Users |
 | Guide prompts | Registering Claude Code (`admin mcp-client add`) |
-| Goals for participants a manager has added | Adding participants, with dates of birth, in the app |
+| Goals for participants a manager has added, each Short term or Medium or long term | Adding participants, with dates of birth, in the app |
+| | Switching a participant's Medication box on, and changing a goal's term or an item's need for details after it is added, in the app |
 | Worker invites, each with a reason | `claude mcp add`, signing in, and every permission prompt |
 
 ## Invites and pacing

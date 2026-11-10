@@ -35,6 +35,19 @@ internal sealed class NoteDraft : ITenantOwned
     /// <summary>The Guided notes text, which may be empty in a draft.</summary>
     public required string Narrative { get; set; }
 
+    /// <summary>The attendance ticks (D104): independent, and they hide nothing on the note.</summary>
+    public bool IsNotIn { get; set; }
+
+    public bool IsLateNotice { get; set; }
+
+    public bool IsSick { get; set; }
+
+    /// <summary>
+    /// The Medication text: null when the note has no Medication line, and empty when it has the line with nothing
+    /// written (A152). The line is whatever the working copy started with, never a request's.
+    /// </summary>
+    public string? Medication { get; set; }
+
     public bool IsFlagged { get; set; }
 
     /// <summary>Null unless the note is flagged.</summary>

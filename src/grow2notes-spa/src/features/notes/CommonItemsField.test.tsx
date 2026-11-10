@@ -1,14 +1,14 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CommonItemsField } from './CommonItemsField.tsx';
-import type { DraftGroup, DraftItem } from './noteQueries.ts';
+import type { DraftCommonItem, DraftGroup } from './noteQueries.ts';
 
 // group-picker.md's made-up groups: Every note, then three in the managers' order, and one with no items.
-function item(id: string, text: string): DraftItem {
-  return { id, text, isTicked: false };
+function item(id: string, text: string, needsDetail = false): DraftCommonItem {
+  return { id, text, isTicked: false, needsDetail, detail: null };
 }
 
-function group(id: string, name: string, items: DraftItem[], isEveryNote = false): DraftGroup {
+function group(id: string, name: string, items: DraftCommonItem[], isEveryNote = false): DraftGroup {
   return { id, name, isEveryNote, isPicked: false, items };
 }
 
@@ -16,6 +16,7 @@ const medication = item('c1a4e7b2-3f58-4d19-8b60-9e2d7a5c3f81', 'Medication prom
 const mealPrepared = item('d6b3f8a1-4e29-4c70-9a15-0f7c2e8b4d63', 'Meal prepared');
 const trains = item('e8c5a9d3-6b41-4f02-b7e8-1a3d9c6f2b74', 'Travelled by bus or train');
 const showered = item('a9e4c6f2-1d75-4b38-8c03-7d2b5a1e9f40', 'Showered');
+const other = item('f2d7b4a8-0c63-4e91-a5b9-3c8e1d6a7f25', 'Other (staff to complete if different from above)', true);
 
 const everyNote = group('4b7d1e9a-2c63-4f85-a8b0-6e3f9c1d5a72', 'Every note', [medication, mealPrepared], true);
 const outing = group('7c2a8e5d-9b14-4d63-a1f7-4e0b6d3c8a95', 'Community outing', [trains]);
@@ -29,18 +30,21 @@ type Props = Partial<Parameters<typeof CommonItemsField>[0]>;
 function renderField(props: Props = {}) {
   const onPick = vi.fn();
   const onToggle = vi.fn();
+  const onDetail = vi.fn();
   const view = render(
     <CommonItemsField
       groups={[everyNote, outing, inHome, personalCare]}
       picked={new Set()}
       ticked={new Set()}
+      details={{}}
       emptyText={emptyText}
       onPick={onPick}
       onToggle={onToggle}
+      onDetail={onDetail}
       {...props}
     />,
   );
-  return { ...view, onPick, onToggle };
+  return { ...view, onPick, onToggle, onDetail };
 }
 
 /** The wrappers of the groups, by their IDs, in the page's order. */
@@ -49,16 +53,15 @@ function wrappers(container: HTMLElement): string[] {
 }
 
 describe('CommonItemsField', () => {
-  it('is in this order: the <h2>, its hint, Every note, the picker, then each offered group', () => {
+  it('is in this order: its hint, Every note, the picker, then each offered group, each under its own name', () => {
     const { container } = renderField({ picked: new Set([personalCare.id, outing.id]) });
 
-    const order = [...container.querySelectorAll('h2, #common-hint, fieldset, [id^="group-"]')].map((element) =>
+    const order = [...container.querySelectorAll('#common-hint, fieldset, [id^="group-"]')].map((element) =>
       element instanceof HTMLFieldSetElement
         ? `fieldset ${element.getAttribute('aria-describedby')}`
         : element.id || element.tagName,
     );
     expect(order).toEqual([
-      'H2',
       'common-hint',
       'fieldset common-hint',
       'fieldset picker-hint',
@@ -67,7 +70,13 @@ describe('CommonItemsField', () => {
       `group-${personalCare.id}`,
       'fieldset common-hint',
     ]);
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('2. Common items');
+    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      'Every note',
+      'Which of these happened?',
+      'Community outing',
+      'Personal care',
+    ]);
+    expect(screen.queryByRole('heading', { level: 3 })).toBeNull();
     expect(screen.getByText('Ticked means done.')).toHaveAttribute('id', 'common-hint');
     expect(container.firstElementChild!.tagName).toBe('DIV');
   });
@@ -82,11 +91,11 @@ describe('CommonItemsField', () => {
     expect(wrappers(second.container)).toEqual(one);
   });
 
-  it('puts Every note first, as an <h3>, and never as a row of the picker', () => {
+  it('puts Every note first, as an <h2>, and never as a row of the picker', () => {
     renderField();
 
     const every = screen.getByRole('group', { name: 'Every note' });
-    expect(within(every.querySelector('legend')!).getByRole('heading', { level: 3 })).toBeInTheDocument();
+    expect(within(every.querySelector('legend')!).getByRole('heading', { level: 2 })).toBeInTheDocument();
     expect(
       within(every)
         .getAllByRole('checkbox')
@@ -128,14 +137,13 @@ describe('CommonItemsField', () => {
   it.each([
     { named: 'no group', groups: [] },
     { named: 'no item in any group', groups: [{ ...everyNote, items: [] }, inHome] },
-  ])('shows the <h2> and the sentence alone, with no fieldset or hint, for $named', ({ groups }) => {
+  ])('shows the sentence alone, with no heading, fieldset or hint, for $named', ({ groups }) => {
     const { container } = renderField({ groups });
 
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('2. Common items');
     expect(screen.getByText(emptyText)).toBeInTheDocument();
     expect(container.querySelector('fieldset, #common-hint, #picker-hint')).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();
-    expect(screen.queryByRole('heading', { level: 3 })).toBeNull();
+    expect(screen.queryByRole('heading')).toBeNull();
   });
 
   it('says which wrapper each picker box controls, and whether it is expanded', () => {
@@ -168,7 +176,7 @@ describe('CommonItemsField', () => {
     expect(screen.getByRole('group', { name: 'Every note' })).toHaveAccessibleDescription('Ticked means done.');
     expect(screen.getByRole('group', { name: outing.name })).toHaveAccessibleDescription('Ticked means done.');
     expect(picker).toHaveAccessibleDescription('Tick all that happened. Their items show below.');
-    expect(picker.querySelector('legend h3')).not.toBeNull();
+    expect(picker.querySelector('legend h2')).not.toBeNull();
   });
 
   it('reports a pick, with the group, and a tick, with the item', () => {
@@ -191,5 +199,61 @@ describe('CommonItemsField', () => {
     expect(screen.getByRole('checkbox', { name: mealPrepared.text })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: medication.text })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: trains.text })).toBeChecked();
+  });
+
+  describe('an item that asks for details', () => {
+    const asking = group('9a1c5e7b-3d28-4f64-b0a9-5e2c8d1f7b36', 'Further supports', [other]);
+
+    it('shows a Details box directly after the item while it is ticked, named with the item', () => {
+      const { rerender, onPick, onToggle, onDetail } = renderField({ groups: [asking], picked: new Set([asking.id]) });
+      expect(screen.queryByRole('textbox')).toBeNull();
+
+      rerender(
+        <CommonItemsField
+          groups={[asking]}
+          picked={new Set([asking.id])}
+          ticked={new Set([other.id])}
+          details={{ [other.id]: 'Went to the library' }}
+          emptyText={emptyText}
+          onPick={onPick}
+          onToggle={onToggle}
+          onDetail={onDetail}
+        />,
+      );
+
+      const box = screen.getByRole('textbox', { name: `Details, ${other.text}` });
+      expect(box).toHaveAttribute('id', `detail-${other.id}`);
+      expect(box).toHaveValue('Went to the library');
+      expect(screen.getByRole('checkbox', { name: other.text }).closest('label')!.nextElementSibling).toContainElement(
+        box,
+      );
+    });
+
+    it('reports each input into the box with the item and the whole text', () => {
+      const { onDetail } = renderField({
+        groups: [asking],
+        picked: new Set([asking.id]),
+        ticked: new Set([other.id]),
+      });
+
+      fireEvent.change(screen.getByRole('textbox', { name: `Details, ${other.text}` }), {
+        target: { value: 'Went to the park' },
+      });
+
+      expect(onDetail).toHaveBeenCalledWith(other.id, 'Went to the park');
+    });
+
+    it('shows the message it is given for the box, linked to the box by its description', () => {
+      renderField({
+        groups: [asking],
+        picked: new Set([asking.id]),
+        ticked: new Set([other.id]),
+        detailErrors: { [other.id]: `Enter the details for ${other.text}` },
+      });
+
+      const box = screen.getByRole('textbox', { name: `Details, ${other.text}` });
+      expect(box).toHaveAttribute('aria-invalid', 'true');
+      expect(box).toHaveAccessibleDescription(`Error: Enter the details for ${other.text}`);
+    });
   });
 });

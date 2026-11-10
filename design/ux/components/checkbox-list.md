@@ -8,6 +8,18 @@ Component key: `checkbox-list`. These are the tick-box lists on the note form: *
 
 Evidence grades: **[Research]** usability testing or studies · **[Standard]** WCAG 2.2, WAI-ARIA, HTML, CSS, Unicode, browser compatibility data · **[Convention]** established design systems · **[Opinion]** reasoned judgement, no direct evidence.
 
+**T44 (D104, A151, A159): what changed in the tick lists.** Where the rest of this file differs, this block wins.
+
+- **Headings.** Every list's heading is an `<h2>` (`TickListField` and `TickListRead` lose `headingLevel`), named by the
+  section it holds: **Short term goals**, **Medium or Long term goal**, **Attendance**, or a common item group's name.
+  No list is "1. Goals" or "2. Common items" any more.
+- **`TickListField` gains `after(item)`**, rendered directly after an item's row, in DOM order, for the Details box of
+  a ticked common item that asks for details. It is generic over the item type so that the slot can see `needsDetail`.
+- **`TickedItem` gains `detail?`**, which `TickListRead` shows as **Details: [text]** on a line under the item's
+  wording, after the pause that follows "ticked", in the secondary colour.
+- **Attendance** is a plain `<fieldset>` of three of the same rows (`AttendanceField`), not a `TickListField`, as it
+  has no hint and no items from a snapshot.
+
 ---
 
 ## Where it's used

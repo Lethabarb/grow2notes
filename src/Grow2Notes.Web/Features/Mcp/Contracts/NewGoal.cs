@@ -5,6 +5,8 @@ namespace Grow2Notes.Web.Features.Mcp.Contracts;
 /// </summary>
 /// <param name="GoalId">The new goal's ID.</param>
 /// <param name="Text">As stored, with its ends trimmed.</param>
+/// <param name="IsMediumOrLongTerm">True for a Medium or long term goal, false for a Short term goal.</param>
 /// <param name="ExpectedVersion">The goal's version, which a later change needs.</param>
 /// <param name="HelpText">What a change to a goal does to the notes (design.md §4.8).</param>
-internal sealed record NewGoal(Guid GoalId, string Text, string ExpectedVersion, string HelpText);
+internal sealed record NewGoal(
+    Guid GoalId, string Text, bool IsMediumOrLongTerm, string ExpectedVersion, string HelpText);

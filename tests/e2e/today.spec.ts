@@ -545,7 +545,7 @@ test('after Submit, the banner before the <h1> is focused, the row Submitted fro
   await store.serve(page, worker);
   await page.goto('/');
   await row(page, 'Jane Citizen').click();
-  const notesBox = main(page).getByRole('textbox', { name: '3. Guided notes' });
+  const notesBox = main(page).getByRole('textbox', { name: 'Daily Support Notes' });
   await notesBox.pressSequentially('Went to the shops.');
   await expect(page.locator('#save-status')).toHaveText('Saved 4:12 pm');
   await main(page).getByRole('button', { name: 'Submit note', exact: true }).click();
@@ -666,7 +666,7 @@ const listLine = (page: Page, name: string) =>
     .getByRole('listitem')
     .filter({ has: page.locator('a[data-return-key]:not([data-return-key*="/"])', { hasText: name }) })
     .locator('p');
-const notesBox = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
+const notesBox = (page: Page) => main(page).getByRole('textbox', { name: 'Daily Support Notes' });
 
 /** The address of `participantId`'s note for `noteDate`. */
 const noteAddress = (participantId: string, noteDate: string) => `/participants/${participantId}/notes/${noteDate}`;
@@ -923,7 +923,7 @@ test('in forced colours, the Submitted banner keeps its bar and border, in the t
   await store.serve(page, worker);
   await page.goto('/');
   await row(page, 'Jane Citizen').click();
-  await main(page).getByRole('textbox', { name: '3. Guided notes' }).pressSequentially('Went to the shops.');
+  await main(page).getByRole('textbox', { name: 'Daily Support Notes' }).pressSequentially('Went to the shops.');
   await expect(page.locator('#save-status')).toHaveText('Saved 4:12 pm');
   await main(page).getByRole('button', { name: 'Submit note', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Submit note for Jane Citizen' }).click();

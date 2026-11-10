@@ -3,6 +3,9 @@ import type { Locator, Page } from '@playwright/test';
 /** The day of the made-up report (daily-report.md): Thursday 1 October 2026. */
 export const reportDay = '2026-10-01';
 
+/** The made-up day as the file name has it (design.md A19, A80, D104): the weekday and the numbers of the date. */
+export const reportFileDay = 'Thursday 01.10.2026';
+
 /** The Report screen's address. */
 export const reportAddress = `/reports/daily/${reportDay}`;
 
@@ -51,11 +54,13 @@ export async function enterDate(field: Locator, value: string): Promise<void> {
 export async function serveReport(page: Page): Promise<void> {
   await page.route(isExport, (route) => {
     const format = new URL(route.request().url()).searchParams.get('format') === 'pdf' ? 'pdf' : 'docx';
-    const name = `daily-notes_${reportDay}.${format}`;
+    const name = `${reportFileDay}.${format}`;
     return route.fulfill({
       status: 200,
       contentType: contentTypes[format],
-      headers: { 'Content-Disposition': `attachment; filename=${name}; filename*=UTF-8''${name}` },
+      headers: {
+        'Content-Disposition': `attachment; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+      },
       body: Buffer.from('Made-up bytes, not a real file.'),
     });
   });

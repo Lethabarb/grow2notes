@@ -11,6 +11,12 @@ three short messages the design implies but does not word (marked **new copy** b
 Evidence grades: **[Research]** usability testing or studies · **[Standard]** WCAG 2.2, WAI-ARIA, HTML/CSS specs,
 HTML-AAM · **[Convention]** established design systems and platform guidance · **[Opinion]** reasoned judgement.
 
+**T44 (D104, A159): the label.** Where the rest of this file differs, this block wins. This file keeps the design term, "Guided
+notes" (D12, D34); the box's label on every screen is **Daily Support Notes**, the Word template's word, with no section
+number, and every message that names it follows: **Write your notes in the Daily Support Notes box**, **Daily Support Notes
+must be 20,000 characters or less**. Its id, its behaviour, its limit and its count are unchanged. The Medication box
+and the Details boxes are separate fields, and a note ticked Not In still needs this box to submit.
+
 ---
 
 ## Where it's used

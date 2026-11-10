@@ -16,8 +16,14 @@ export const strings = {
     nextGlyph: '›',
     enterADate: 'Enter a date',
     dateNotFuture: 'Date must be today or in the past',
+    week: 'Week',
+    weekHint: 'Printed in the title of the file',
+    noWeek: 'None',
+    weekA: 'Week A',
+    weekB: 'Week B',
     downloadWord: 'Download Word',
     downloadPdf: 'Download PDF',
+    wordPageNumbersHint: 'When Word asks to update the fields, choose Yes to fill in the page numbers.',
     downloading: 'Downloading…',
     tooManyDownloads: 'Not downloaded: too many downloads in the last minute. Wait a minute, then try again.',
     preparing: {
@@ -486,17 +492,35 @@ export const strings = {
     editedSinceOpened: 'This note was edited after you opened it. Read the latest version, then mark it reviewed.',
   },
   /**
+   * The words a note shares with its report files (D104, A159): the Attendance ticks, the two goal terms, the
+   * Medication box, the Details box under a ticked item, the Daily Support Notes box and the sentences for a note with
+   * no goals and no common items. Held to `NoteWords.cs` by a test (T40), key for key and word for word, so that a
+   * screen and a file never name a section differently.
+   */
+  noteWords: {
+    notIn: 'Not In',
+    lateNotice: 'Late Notice',
+    sick: 'Sick',
+    shortTermGoals: 'Short term goals',
+    mediumOrLongTermGoal: 'Medium or Long term goal',
+    medication: 'Medication',
+    details: 'Details',
+    dailySupportNotes: 'Daily Support Notes',
+    noGoals: 'No goals set',
+    noCommonItems: 'No common items set',
+  },
+  /**
    * The note form (note-form.md): its loading line and what did not load, as the failure sentence starts
-   * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), the Common items' heading
-   * and hint, the question over the picker with its hint, and the sentence for a form with no common items
-   * (group-picker.md *Exact copy*), and Guided notes' heading, which is its box's label, each numbered as design.md
-   * numbers the form's sections, whichever of them it shows; the flag's tick box and the label of the Reason it reveals
+   * (empty-loading-error.md); then the Attendance legend, the hint under the goals' headings (design.md §4.3), the
+   * common items' hint, the question over the picker with its hint, and the sentence for a form with no common items
+   * (group-picker.md *Exact copy*), and the hint under the Medication box, whose headings are `noteWords`' and not
+   * numbered; the flag's tick box and the label of the Reason it reveals
    * (design.md §4.3 item 6, conditional-reveal.md *Copy*); and the save indicator once a failed save is being retried,
    * as the top bar's second row, and while a dead end or the takeover banner in the top bar says why the note cannot be
    * saved, then the takeover banner's two choices (autosave-status.md *Exact copy*). Then Submit note (component 12)
-   * and Submit's checks (*Validation*), inline and in the error summary: Guided notes left blank, with the second
-   * sentence only while guide prompts are set, as they are the grey text; the name that Guided notes' too-long message
-   * starts with, as Reason's starts with `reason`; and Reason left blank while the flag is ticked. Then the
+   * and Submit's checks (*Validation*), inline and in the error summary: Daily Support Notes left blank, with the
+   * second sentence only while guide prompts are set, as they are the grey text; and Reason left blank while the flag
+   * is ticked. Then the
    * confirmation (component 14): its title's lead, for a note dated `me.today` and for any other, before the name on
    * its own line; its flag line, from the values that Submit sends; its status line once the request has taken 1 s; and
    * what a failure says is safe, as in "Not submitted: no connection. Your draft is saved. Try again." (microcopy.md
@@ -507,14 +531,13 @@ export const strings = {
   note: {
     loading: 'Loading note…',
     theNote: 'The note',
-    goals: '1. Goals',
+    attendance: 'Attendance',
     goalsHint: 'Ticked means reached.',
-    commonItems: '2. Common items',
     commonItemsHint: 'Ticked means done.',
     whichHappened: 'Which of these happened?',
     whichHappenedHint: 'Tick all that happened. Their items show below.',
     noCommonItemsSetUp: 'No common items set up.',
-    guidedNotes: '3. Guided notes',
+    medicationHint: 'What was taken, and when.',
     flagForManager: 'Flag for manager',
     reason: 'Reason',
     notSavedRetrying: 'Not saved: no connection. Keep this page open; retrying.',
@@ -522,9 +545,8 @@ export const strings = {
     keepTheText: 'Keep the text on this screen',
     loadTheOtherVersion: 'Load the other version',
     submit: 'Submit note',
-    writeYourNotes: 'Write your notes in the Guided notes box',
-    writeYourNotesNotTheGuide: 'Write your notes in the Guided notes box. The grey text is only a guide.',
-    guidedNotesName: 'Guided notes',
+    writeYourNotes: 'Write your notes in the Daily Support Notes box',
+    writeYourNotesNotTheGuide: 'Write your notes in the Daily Support Notes box. The grey text is only a guide.',
     enterAReason: 'Enter a reason for the flag',
     submitTodaysNoteFor: 'Submit today’s note for',
     submitTheNoteFor: 'Submit the note for',
@@ -544,14 +566,11 @@ export const strings = {
   },
   /**
    * The read view of a submitted note (participant-notes.md *Read view*): the word before its submitted time in the
-   * byline, as in "Written by Priya Nair · Submitted 4:42 pm", and, under "1. Goals" and "2. Common items", the words
-   * for a version with none, each as the daily report has them (design.md §11.3); and, under "3. Guided notes", the
-   * words for a draft with no text yet, which a manager reads (*Someone else's draft, manager*).
+   * byline, as in "Written by Priya Nair · Submitted 4:42 pm"; and, under "Daily Support Notes", the words for a draft
+   * with no text yet, which a manager reads (*Someone else's draft, manager*).
    */
   readView: {
     submitted: 'Submitted',
-    noGoals: 'No goals set',
-    noCommonItems: 'No common items set',
     nothingWrittenYet: 'Nothing written yet.',
     edit: 'Edit',
   },
@@ -633,6 +652,8 @@ export const strings = {
     familyName: 'Family name',
     enterGivenName: 'Enter the given name',
     enterFamilyName: 'Enter the family name',
+    medicationLine: 'Medication box on notes',
+    medicationLineHint: 'Shows a Medication box on notes started from now on.',
     changedMeanwhile:
       'Someone else changed these details while you were editing. Check the details, then save again.',
   },
@@ -681,7 +702,7 @@ export const strings = {
       help:
         'Changes apply to notes started from now on. Notes already started or submitted keep the wording they were '
         + 'written with.',
-      empty: 'No goals yet. Notes will show an empty Goals section.',
+      empty: 'No goals yet. Notes will show “No goals set”.',
       archivedSummary: 'Archived goals',
       newLabel: 'New goal',
       add: 'Add goal',
@@ -693,6 +714,9 @@ export const strings = {
       row: 'goal',
       enter: 'Enter the goal',
       text: 'Goal',
+      term: 'Term',
+      shortTerm: 'Short term',
+      mediumOrLongTerm: 'Medium or long term',
     },
     item: {
       help:
@@ -710,6 +734,11 @@ export const strings = {
       row: 'item',
       enter: 'Enter the common item',
       text: 'Common item',
+      needsDetail: 'Ask for details when ticked',
+      needsDetailHint:
+        'Notes started from now on show a Details box under this item when it is ticked. It must be filled in to '
+        + 'submit.',
+      asksForDetails: 'Asks for details',
     },
   },
   /**

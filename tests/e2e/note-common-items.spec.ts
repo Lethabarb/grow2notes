@@ -42,7 +42,7 @@ const savedAnyTime = /^Saved (\d{1,2}:\d{2}\s[ap]m|midday|midnight)$/;
 
 const main = (page: Page) => page.getByRole('main');
 const saveStatus = (page: Page) => page.locator('#save-status');
-const box = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
+const box = (page: Page) => main(page).getByRole('textbox', { name: 'Daily Support Notes' });
 const pickBox = (page: Page, name: string) => main(page).getByRole('checkbox', { name, exact: true });
 const itemBox = (page: Page, text: string) => main(page).getByRole('checkbox', { name: text, exact: true });
 const submitNote = (page: Page) => main(page).getByRole('button', { name: 'Submit note', exact: true });
@@ -63,7 +63,7 @@ async function openJanesNote(page: Page) {
   await serveToday(page, worker.today, participants);
   await store.serve(page, worker);
   await page.goto(`/participants/${jane.id}/notes/${worker.today}`);
-  await expect(main(page).getByRole('heading', { level: 2, name: '2. Common items' })).toBeVisible();
+  await expect(main(page).getByRole('group', { name: everyNote.name })).toBeVisible();
   return store;
 }
 
@@ -139,7 +139,7 @@ test('the form does not scroll sideways at 375 px, with both groups picked', asy
   expect(await scrollsSideways(page), 'Common items with both groups picked').toBe(false);
 });
 
-test('Tab goes through Every note, the picker, picked items, then Guided notes; Space ticks a box and stays', async ({
+test('Tab goes through Attendance, goals, Every note, the picker, items, then the notes; Space ticks a box', async ({
   page,
 }) => {
   await openJanesNote(page);
@@ -147,6 +147,9 @@ test('Tab goes through Every note, the picker, picked items, then Guided notes; 
   await main(page).getByRole('link', { name: 'Past notes', exact: true }).focus();
 
   await expectStops(page, 'Tab', [
+    'Not In',
+    'Late Notice',
+    'Sick',
     breakfast.text,
     bus.text,
     medication.text,
@@ -155,7 +158,7 @@ test('Tab goes through Every note, the picker, picked items, then Guided notes; 
     personalCare.name,
     trains.text,
     purchases.text,
-    '3. Guided notes',
+    'Daily Support Notes',
   ]);
 
   await pickBox(page, personalCare.name).focus();
@@ -163,7 +166,7 @@ test('Tab goes through Every note, the picker, picked items, then Guided notes; 
   await expect(pickBox(page, personalCare.name)).toBeChecked();
   await expect(pickBox(page, personalCare.name)).toBeFocused();
   await expect(pickBox(page, personalCare.name)).toHaveAttribute('aria-expanded', 'true');
-  await expectStops(page, 'Tab', [trains.text, purchases.text, showered.text, '3. Guided notes']);
+  await expectStops(page, 'Tab', [trains.text, purchases.text, showered.text, 'Daily Support Notes']);
 });
 
 /** Submits Jane's note with Community outing picked, and Meal prepared and the bus or train ticked, then reads it. */
@@ -180,14 +183,30 @@ async function readJanesSubmittedNote(page: Page) {
   await expect(page).toHaveURL('/');
 
   await page.goto(`/participants/${jane.id}/notes/${worker.today}`);
-  await expect(readHeading(page, 2)).toHaveText(['1. Goals', '2. Common items', '3. Guided notes']);
+  await expect(readHeading(page, 2)).toHaveText([
+    'Attendance',
+    'Short term goals',
+    everyNote.name,
+    outing.name,
+    'Daily Support Notes',
+  ]);
 }
 
 test('the read view shows only Every note and the picked group, every item ticked or not (D47)', async ({ page }) => {
   await readJanesSubmittedNote(page);
 
-  await expect(readHeading(page, 3)).toHaveText([everyNote.name, outing.name]);
+  await expect(readHeading(page, 2)).toHaveText([
+    'Attendance',
+    'Short term goals',
+    everyNote.name,
+    outing.name,
+    'Daily Support Notes',
+  ]);
+  await expect(readHeading(page, 3)).toHaveCount(0);
   await expect(readItems(page)).toHaveText([
+    'Not In, not ticked',
+    'Late Notice, not ticked',
+    'Sick, not ticked',
     `${breakfast.text}, not ticked`,
     `${bus.text}, not ticked`,
     `${medication.text}, not ticked`,

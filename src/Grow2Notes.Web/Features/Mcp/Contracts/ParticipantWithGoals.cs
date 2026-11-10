@@ -7,6 +7,7 @@ namespace Grow2Notes.Web.Features.Mcp.Contracts;
 /// <param name="ParticipantId">The participant's ID.</param>
 /// <param name="GivenName">As typed (A5).</param>
 /// <param name="FamilyName">As typed (A5).</param>
+/// <param name="HasMedicationLine">Whether notes started from now on have a Medication box.</param>
 /// <param name="Status"><c>active</c> or <c>archived</c>.</param>
 /// <param name="ExpectedVersion">The participant's version, the app's ETag token, which a later change needs.</param>
 /// <param name="Goals">The active goals in the list's order, then the archived goals in the same order.</param>
@@ -14,6 +15,7 @@ internal sealed record ParticipantWithGoals(
     Guid ParticipantId,
     string GivenName,
     string FamilyName,
+    bool HasMedicationLine,
     string Status,
     string ExpectedVersion,
     IReadOnlyList<ParticipantGoal> Goals);

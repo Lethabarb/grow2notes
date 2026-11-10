@@ -54,4 +54,32 @@ public sealed class ReportDatesTests
     {
         Assert.Equal(expected, ReportDates.DateTimeShort(Utc(utc)));
     }
+
+    [Theory]
+    [InlineData("2026-09-14", "Monday 14.09.2026")]
+    [InlineData("2026-10-01", "Thursday 01.10.2026")]
+    [InlineData("2026-01-05", "Monday 05.01.2026")]
+    public void DayDotted_is_the_weekday_and_the_numbers_of_the_date(string date, string expected)
+    {
+        Assert.Equal(expected, ReportDates.DayDotted(DateOnly.Parse(date, CultureInfo.InvariantCulture)));
+    }
+
+    // The weekday is fixed English wording and the digits are ASCII, whatever the current culture says.
+    [Theory]
+    [InlineData("fr-FR")]
+    [InlineData("ar-SA")]
+    [InlineData("ja-JP")]
+    public void DayDotted_is_invariant_English_under_a_non_English_current_culture(string culture)
+    {
+        var before = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+        try
+        {
+            Assert.Equal("Thursday 01.10.2026", ReportDates.DayDotted(new DateOnly(2026, 10, 1)));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = before;
+        }
+    }
 }

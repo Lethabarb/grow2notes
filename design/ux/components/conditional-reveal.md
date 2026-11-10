@@ -345,7 +345,7 @@ Notes:
 ## Per-screen notes
 
 **Note form, new or draft (worker, or manager writing today's or a past-day note).**
-- Place it exactly as in the 4.3 sketch: its own block after **3. Guided notes**, before **Submit note**.
+- Place it exactly as in the 4.3 sketch: its own block after **Daily Support Notes**, before **Submit note**.
 - Ticking it is a "first change" on a new note, so it starts the draft, the same as ticking a goal (3.3).
 - A flag on a draft is not seen by managers (3.6). The form doesn't say so; the design gives no copy for it.
 - In the error summary, the reason error comes after the Guided notes error, in page order.

@@ -24,7 +24,7 @@ const rows = (page: Page) => main(page).locator('a[data-return-key]');
 const noneToReview = (page: Page) => main(page).getByText('No flagged notes to review.', { exact: true });
 const editLink = (page: Page) => main(page).getByRole('link', { name: 'Edit', exact: true });
 const pastNotesLink = (page: Page) => main(page).getByRole('link', { name: 'Past notes', exact: true });
-const narrativeBox = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
+const narrativeBox = (page: Page) => main(page).getByRole('textbox', { name: 'Daily Support Notes' });
 const reasonBox = (page: Page) => main(page).getByRole('textbox', { name: 'Reason', exact: true });
 const flagTick = (page: Page) => main(page).locator('label[for="flag-for-manager"]').locator('span');
 // Either name, because a busy button renames itself while its request is out.

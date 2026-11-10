@@ -74,6 +74,10 @@ const template: Draft = {
   goals: [],
   commonItemGroups: [],
   narrative: '',
+  isNotIn: false,
+  isLateNotice: false,
+  isSick: false,
+  medication: null,
   isFlagged: false,
   flagReason: null,
 };
