@@ -1021,12 +1021,14 @@ manager and one submitted on the next day. Every word typed is made up. Download
      both times in T20's Notes. (S04.01.06; design.md §14 M4.)
 122. Do the same on a phone. If either is over 10 seconds, T20 fixes the speed and the check is repeated. Write the
      times in T20's Notes. (S04.01.06.)
-123. Open the PDF in a PDF viewer. Look for no header on page 1, the running header "Daily progress notes: {date}"
-     from page 2, and on every page the footer with your name, page 1's "As at" time and a correct "Page n of N". Open
+123. Open the PDF in a PDF viewer. Look for no header on page 1, the running header "SUPPORT NOTES: Monday 14.09.2026"
+     (or "SUPPORT NOTES – WEEK A: Monday 14.09.2026" when a week was chosen) from page 2, the Participants index on
+     page 1, and on every page the footer with your name, page 1's "As at" time and a correct "Page n of N". Open
      Document Properties and look for only the title and the organisation, with no author. (S04.01.05; design.md
      §11.5, A85.)
 124. Open the Word file in desktop Word and then in Word on a phone. Look for the same header and footer, correct page
-     numbers on screen and when printed, each common item group as a Heading 3 in the Navigation pane, and File > Info
+     numbers on screen and when printed, each participant's NAME block as a Heading 1 with each common item group as a
+     Heading 2 under it in the Navigation pane, and File > Info
      showing only the Title and the Company. (S04.01.03 and S04.01.05; design.md §11.5, A85.)
 125. Open the Word file in a phone preview that is not Word, such as iOS Files or Quick Look or an Android preview.
      Look for whether the page numbers show, and write down what you see. (S04.01.05.)

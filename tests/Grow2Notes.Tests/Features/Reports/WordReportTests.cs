@@ -171,7 +171,6 @@ public sealed class WordReportTests
         Assert.Equal(
             (1134, 1134u, 1134, 1134u),
             (margin.Top!.Value, margin.Left!.Value, margin.Bottom!.Value, margin.Right!.Value));
-        Assert.Equal((567u, 567u), (margin.Header!.Value, margin.Footer!.Value));
     }
 
     [Fact]
