@@ -280,7 +280,7 @@ test('signed in for real at 375 px, a manager adds five items to Every note, the
   await saveItem(page).click();
   const putAnswer = await put;
   expect(putAnswer.status()).toBe(200);
-  expect(putAnswer.request().postDataJSON()).toEqual({ text: reworded, groupId });
+  expect(putAnswer.request().postDataJSON()).toEqual({ text: reworded, groupId, needsDetail: false });
   expect(await putAnswer.request().headerValue('if-match')).toBe(`"${listed[1].rowVersion}"`);
   expect(await putAnswer.text()).toBe('');
   expect(putAnswer.headers().etag).toBeUndefined();
@@ -460,7 +460,7 @@ test('signed in for real at 375 px, a manager adds two groups, renames one, adds
   await saveItem(page).click();
   const moveAnswer = await moved;
   expect(moveAnswer.status()).toBe(200);
-  expect(moveAnswer.request().postDataJSON()).toEqual({ text: misplaced, groupId: careId });
+  expect(moveAnswer.request().postDataJSON()).toEqual({ text: misplaced, groupId: careId, needsDetail: false });
   expect(await moveAnswer.request().headerValue('if-match')).toBe(`"${item.rowVersion}"`);
   listed = await groupsIn(read);
   expect(groupIn(listed, careRenamed).items.map((each) => [each.text, each.sortOrder])).toEqual([
@@ -597,20 +597,26 @@ for (const width of [375, 1280]) {
     ]);
     await page.keyboard.press('Enter');
     await expect(editItem(page)).toBeFocused();
-    await expectStops(page, 'Tab', ['Save', 'Cancel', ...addForm]);
-    await expectStops(page, 'Shift+Tab', ['New item in Every note', 'Cancel', 'Save', 'Edit item']);
+    await expectStops(page, 'Tab', ['Ask for details when ticked', 'Save', 'Cancel', ...addForm]);
+    await expectStops(page, 'Shift+Tab', [
+      'New item in Every note',
+      'Cancel',
+      'Save',
+      'Ask for details when ticked',
+      'Edit item',
+    ]);
     await page.keyboard.type(' and put away');
-    await expectStops(page, 'Tab', ['Save']);
+    await expectStops(page, 'Tab', ['Ask for details when ticked', 'Save']);
     const saved = page.waitForResponse(isWrite('PUT', `/common-items/${ids[2]}`));
     await page.keyboard.press('Enter');
-    expect((await saved).request().postDataJSON()).toEqual({ text: thirdReworded, groupId });
+    expect((await saved).request().postDataJSON()).toEqual({ text: thirdReworded, groupId, needsDetail: false });
     await expect(itemButton(page, 'Edit', thirdReworded)).toBeFocused();
 
     // Edit again, then Cancel: the typed words dropped, focus back on Edit.
     await page.keyboard.press('Enter');
     await expect(editItem(page)).toBeFocused();
     await page.keyboard.type(' twice');
-    await expectStops(page, 'Tab', ['Save', 'Cancel']);
+    await expectStops(page, 'Tab', ['Ask for details when ticked', 'Save', 'Cancel']);
     await page.keyboard.press('Enter');
     await expect(itemButton(page, 'Edit', thirdReworded)).toBeFocused();
     await expect(itemTexts(page, 'Every note')).toHaveText([first, second, thirdReworded]);
@@ -780,14 +786,24 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'ArrowDown', [respiteRenamed, 'Personal care']);
     await expectStops(page, 'ArrowUp', [respiteRenamed]);
     await expect(groupRadio(page, respiteRenamed)).toBeChecked();
-    await expectStops(page, 'Tab', ['Save', 'Cancel', 'New item in Community outing']);
-    await expectStops(page, 'Shift+Tab', ['Cancel', 'Save', respiteRenamed, 'Edit item']);
+    await expectStops(page, 'Tab', ['Ask for details when ticked', 'Save', 'Cancel', 'New item in Community outing']);
+    await expectStops(page, 'Shift+Tab', [
+      'Cancel',
+      'Save',
+      'Ask for details when ticked',
+      respiteRenamed,
+      'Edit item',
+    ]);
 
     // Saved with Enter: the item at the end of the group chosen, focus on its Edit there.
-    await expectStops(page, 'Tab', [respiteRenamed, 'Save']);
+    await expectStops(page, 'Tab', [respiteRenamed, 'Ask for details when ticked', 'Save']);
     const moved = page.waitForResponse(isWrite('PUT', `/common-items/${lunch.id}`));
     await page.keyboard.press('Enter');
-    expect((await moved).request().postDataJSON()).toEqual({ text: lunch.text, groupId: respiteId });
+    expect((await moved).request().postDataJSON()).toEqual({
+      text: lunch.text,
+      groupId: respiteId,
+      needsDetail: false,
+    });
     await expect(
       section(page, respiteRenamed).getByRole('button', { name: rowName('Edit', lunch.text), exact: true }),
     ).toBeFocused();
@@ -1458,7 +1474,7 @@ test('in forced colours, the focus ring shows in Highlight at each stop, the rad
 
   // The list conflict, after a move with Enter that someone else's archive made stale, takes focus with the ring in
   // Highlight.
-  await expectStops(page, 'Tab', ['Save', 'Cancel'], forcedRing);
+  await expectStops(page, 'Tab', ['Ask for details when ticked', 'Save', 'Cancel'], forcedRing);
   await page.keyboard.press('Enter');
   await expect(itemButton(page, 'Edit', paid.text)).toBeFocused();
   store.changeElsewhere(lunch.id, { archived: true });
@@ -1524,7 +1540,7 @@ test('text is 7:1 against its background, and button borders, radio circles and 
   // The focus ring, reached by Tab, on the radio chosen and on a group's button, at 3:1 against the page.
   await expectStops(page, 'Tab', ['Community outing']);
   expect(await contrastOf(groupRadio(page, 'Community outing'), 'outline-color'), 'the ring').toBeGreaterThanOrEqual(3);
-  await expectStops(page, 'Tab', ['Save', 'Cancel']);
+  await expectStops(page, 'Tab', ['Ask for details when ticked', 'Save', 'Cancel']);
   await page.keyboard.press('Enter');
   await expectStops(page, 'Shift+Tab', [
     ...rowStops(paid.text).slice(0, 2).reverse(),

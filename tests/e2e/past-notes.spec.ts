@@ -43,15 +43,20 @@ const editParticipant = (page: Page) => main(page).getByRole('link', { name: 'Ed
 const showOlder = (page: Page) => main(page).getByRole('button', { name: 'Show older', exact: true });
 const olderLine = (page: Page) => main(page).locator('div:has(> ol) > p[role="status"]');
 // The read view (participant-notes.md *Read view*): the Past notes link, the byline, the flag line, the goals and the
-// Guided notes text.
+// Daily Support Notes text.
 const pastNotesLink = (page: Page) => main(page).getByRole('link', { name: 'Past notes', exact: true });
 const byline = (page: Page) => main(page).locator('p').filter({ hasText: /^Written by / });
 const flagLine = (page: Page) => main(page).locator('p').filter({ hasText: /^Flagged/ });
 const flagged = (page: Page) => main(page).getByText('Flagged', { exact: true });
 const editedLine = (page: Page) => main(page).locator('p').filter({ hasText: /^Edited/ });
-const readGoals = (page: Page) => main(page).locator('ul[role="list"] > li');
+const readGoals = (page: Page) =>
+  main(page)
+    .getByRole('heading', { name: 'Short term goals', exact: true })
+    .locator('xpath=following-sibling::ul[1]/li');
 const readText = (page: Page) =>
-  main(page).getByRole('heading', { name: '3. Guided notes', exact: true }).locator('xpath=following-sibling::div[1]');
+  main(page)
+    .getByRole('heading', { name: 'Daily Support Notes', exact: true })
+    .locator('xpath=following-sibling::div[1]');
 
 /** The address of `participantId`'s note for `noteDate`, and of their Past notes. */
 const noteAddress = (participantId: string, noteDate: string) => `/participants/${participantId}/notes/${noteDate}`;
@@ -279,9 +284,9 @@ test('the read view loading, flagged, with no goals, submitted later, failed and
   expect(await readText(page).textContent()).toBe(narrative);
   await expect(readText(page)).toHaveCSS('white-space', 'pre-wrap');
   await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
-    '1. Goals',
-    '2. Common items',
-    '3. Guided notes',
+    'Attendance',
+    'Short term goals',
+    'Daily Support Notes',
   ]);
   await expect(main(page).getByRole('checkbox')).toHaveCount(0);
   await expect(main(page).getByRole('textbox')).toHaveCount(0);
@@ -827,9 +832,9 @@ test('someone else’s draft: a worker’s view, and a manager’s read-only one
   await expect(main(page).getByRole('button')).toHaveText(['Discard draft']);
   await expect(main(page).getByRole('link')).toHaveText(['Past notes']);
   await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
-    '1. Goals',
-    '2. Common items',
-    '3. Guided notes',
+    'Attendance',
+    'Short term goals',
+    'Daily Support Notes',
   ]);
   await expect(readGoals(page)).toHaveText([`${breakfast.text}, ticked`, `${bus.text}, not ticked`]);
   expect(await readText(page).textContent()).toBe(draftText);
@@ -941,7 +946,7 @@ test('a manager’s Discard draft: the dialog’s lines, Go back and Escape, a 4
 
   // Past notes lists it no more: yesterday's note alone, now submitted.
   await row(page, 'Jane Citizen').click();
-  await expect(main(page).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('');
+  await expect(main(page).getByRole('textbox', { name: 'Daily Support Notes' })).toHaveValue('');
   await pastNotesLink(page).click();
   await expect(heading(page)).toHaveText('Past notes Jane Citizen');
   await expect(rows(page)).toHaveText(['Wednesday 30 September 2026']);

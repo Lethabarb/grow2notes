@@ -56,7 +56,8 @@ const row = (page: Page, name: string) => rows(page).filter({ hasText: name });
 const findField = (page: Page) => main(page).getByRole('textbox', { name: 'Find a participant' });
 
 // The note form (note-form.md *Components, in order*): the top bar, in the shell's bar between <header> and <main>,
-// with the back link, the save indicator and, after a dead end, its banner; then Goals and Guided notes.
+// with the back link, the save indicator and, after a dead end, its banner; then Attendance, the goals and Daily
+// Support Notes.
 const topBar = (page: Page) => page.locator('#page-bar > div');
 const backLink = (page: Page) => page.locator('#page-bar').getByRole('link', { name: 'Today', exact: true });
 const saveStatus = (page: Page) => page.locator('#save-status');
@@ -64,12 +65,12 @@ const deadEnd = (page: Page) => page.locator('#page-bar').getByRole('region');
 // The form's assertive region, after the page's content, which says a dead end's sentence once: visually hidden, where
 // the alert above Submit note shows its words.
 const alert = (page: Page) => main(page).locator('div.visually-hidden[role="alert"]');
-const goals = (page: Page) => main(page).getByRole('group', { name: '1. Goals' });
+const goals = (page: Page) => main(page).getByRole('group', { name: 'Short term goals' });
 const goalBox = (page: Page, text: string) => main(page).getByRole('checkbox', { name: text, exact: true });
 const goalRow = (page: Page, text: string) => main(page).locator('label').filter({ hasText: text });
-const box = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
+const box = (page: Page) => main(page).getByRole('textbox', { name: 'Daily Support Notes' });
 const listsChanged = 'The goal or common-item list was just changed. Please check your ticks.';
-// The lists-changed notice's own status region above Goals (note-form.md component 7).
+// The lists-changed notice's own status region above Attendance (note-form.md component 7).
 const listsNotice = (page: Page) => main(page).locator('div[role="status"][tabindex="-1"]');
 // The region's line, beside the page's visually hidden status region and the lists-changed notice's.
 const loadLine = (page: Page) => main(page).locator('p[role="status"]:not(.visually-hidden)');
@@ -100,12 +101,18 @@ const banner = (page: Page) => main(page).locator('[data-route-focus]');
 // A row's status line on Today, which describes its link (today.md component 8).
 const rowLine = (page: Page, name: string) =>
   main(page).getByRole('listitem').filter({ has: page.locator('a[data-return-key]', { hasText: name }) }).locator('p');
-// The read view (participant-notes.md *Read view*): the byline, the flag line, the goals and the Guided notes text.
+// The read view (participant-notes.md *Read view*): the byline, the flag line, the goals and the Daily Support Notes
+// text.
 const byline = (page: Page) => main(page).locator('p').filter({ hasText: /^Written by / });
 const flagLine = (page: Page) => main(page).locator('p').filter({ hasText: /^Flagged/ });
-const readGoals = (page: Page) => main(page).locator('ul[role="list"] > li');
+const readGoals = (page: Page) =>
+  main(page)
+    .getByRole('heading', { name: 'Short term goals', exact: true })
+    .locator('xpath=following-sibling::ul[1]/li');
 const readText = (page: Page) =>
-  main(page).getByRole('heading', { name: '3. Guided notes', exact: true }).locator('xpath=following-sibling::div[1]');
+  main(page)
+    .getByRole('heading', { name: 'Daily Support Notes', exact: true })
+    .locator('xpath=following-sibling::div[1]');
 const notFound = 'Page not found';
 
 // What a failed Submit says, and the note submitted elsewhere (note-form.md *Confirmation dialog*).
@@ -272,6 +279,11 @@ test('signed in for real at 375 px, a manager finds Jane on Today, starts her no
     tickedGoalIds: [template.goals[0].id],
     pickedGroupIds: [],
     tickedCommonItemIds: [],
+    commonItemDetails: {},
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     isFlagged: false,
     flagReason: null,
   });
@@ -507,27 +519,31 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
   const store = twoGoals();
   await openJanesNote(page, store);
 
-  // New: Goals' legend and hint, each goal unticked in the manager's order, the box with the prompts, and nothing said.
+  // New: Attendance, then the goals' legend and hint, each goal unticked in the manager's order, the box with the
+  // prompts, and nothing said.
   await expect(page).toHaveTitle(title('Note'));
   await expect(heading(page)).toBeFocused();
   await expect(heading(page).locator('[translate="no"]')).toHaveText('Jane Citizen');
   await expect(heading(page).locator('time')).toHaveAttribute('datetime', worker.today);
-  await expect(goals(page).locator('legend')).toHaveText('1. Goals');
+  await expect(goals(page).locator('legend')).toHaveText('Short term goals');
   await expect(goals(page)).toHaveAccessibleDescription('Ticked means reached.');
   for (const text of [breakfast.text, bus.text]) {
     await expect(goalBox(page, text)).not.toBeChecked();
   }
   await expect(main(page).locator('label')).toHaveText([
+    'Not In',
+    'Late Notice',
+    'Sick',
     breakfast.text,
     bus.text,
-    '3. Guided notes',
+    'Daily Support Notes',
     'Flag for manager',
     'Reason',
   ]);
   await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
-    '1. Goals',
-    '2. Common items',
-    '3. Guided notes',
+    'Attendance',
+    'Short term goals',
+    'Daily Support Notes',
   ]);
   await expect(box(page)).toHaveAttribute('placeholder', savedPrompts);
   await expect(box(page)).toHaveAttribute('aria-required', 'true');
@@ -560,6 +576,11 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
       tickedGoalIds: [bus.id],
       pickedGroupIds: [],
       tickedCommonItemIds: [],
+      commonItemDetails: {},
+      isNotIn: false,
+      isLateNotice: false,
+      isSick: false,
+      medication: null,
       isFlagged: false,
       flagReason: null,
     },
@@ -585,12 +606,9 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
   await expect(heading(page)).toHaveText('Ravi de Silva Thursday 1 October 2026');
   await expect(main(page).getByText('No goals set up for Ravi yet. A manager can add them.', { exact: true }))
     .toBeVisible();
-  await expect(main(page).getByRole('group')).toHaveCount(0);
-  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
-    '1. Goals',
-    '2. Common items',
-    '3. Guided notes',
-  ]);
+  await expect(main(page).getByRole('group')).toHaveCount(1);
+  await expect(main(page).getByRole('group')).toHaveAccessibleName('Attendance');
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['Attendance', 'Daily Support Notes']);
   await expectAxeToPass(page);
   await expectNothingKept(page, 'Jane', 'Ravi', 'Caught the bus', breakfast.text, bus.text);
 });
@@ -625,9 +643,12 @@ test('lists changed before the first save: the text and a listed tick kept, the 
   }
   expect(store.draft(jane.id, worker.today)).toMatchObject({ ticked: [bus.id], narrative: 'Caught the bus.' });
   await expect(main(page).locator('label')).toHaveText([
+    'Not In',
+    'Late Notice',
+    'Sick',
     bus.text,
     sister.text,
-    '3. Guided notes',
+    'Daily Support Notes',
     'Flag for manager',
     'Reason',
   ]);
@@ -751,7 +772,7 @@ for (const { width, column } of [
   // The form's 40rem column.
   { width: 1280, column: 40 * 16 },
 ]) {
-  test(`at ${width} px, the Guided notes box and the Guide prompts editor measure the same, ${column} px wide`, async ({
+  test(`at ${width} px, the notes box and the Guide prompts editor measure the same, ${column} px wide`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 800 });
@@ -786,7 +807,7 @@ for (const { width, column } of [
   });
 }
 
-test('the Guided notes box grows with its lines, never scrolling inside, from at least about 6 lines', async ({
+test('the Daily Support Notes box grows with its lines, never scrolling inside, from at least about 6 lines', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 });
@@ -952,7 +973,15 @@ test('in forced colours, the ring is Highlight at each stop of the form, and the
   expect(highlight).not.toBe(ring.colour);
   const forcedRing = { ...ring, colour: highlight };
   await expectStops(page, 'Shift+Tab', ['Today'], forcedRing);
-  await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes'], forcedRing);
+  await expectStops(page, 'Tab', [
+    'Past notes',
+    'Not In',
+    'Late Notice',
+    'Sick',
+    breakfast.text,
+    bus.text,
+    'Daily Support Notes',
+  ], forcedRing);
 
   store.archive(jane.id);
   await page.keyboard.type('Went for a walk.');
@@ -980,12 +1009,16 @@ for (const width of [375, 1280]) {
     await expect(heading(page)).toBeFocused();
 
     // note-form.md *Focus order (Tab)*, for what is built: the back link before <main>, then Past notes, each goal's
-    // box, Guided notes, Flag for manager and Submit note, the indicator, the <h1> and the hidden Reason no stops.
+    // box, Daily Support Notes, Flag for manager and Submit note, the indicator, the <h1> and the hidden Reason no
+    // stops.
     await expectStops(page, 'Tab', [
       'Past notes',
+      'Not In',
+      'Late Notice',
+      'Sick',
       breakfast.text,
       bus.text,
-      '3. Guided notes',
+      'Daily Support Notes',
       'Flag for manager',
       'Submit note',
       'outside the page',
@@ -993,20 +1026,31 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Shift+Tab', [
       'Submit note',
       'Flag for manager',
-      '3. Guided notes',
+      'Daily Support Notes',
       bus.text,
       breakfast.text,
+      'Sick',
+      'Late Notice',
+      'Not In',
       'Past notes',
       'Today',
       ...[...shell].reverse(),
     ]);
-    await expectStops(page, 'Tab', [...shell.slice(1), 'Today', 'Past notes', breakfast.text]);
+    await expectStops(page, 'Tab', [
+      ...shell.slice(1),
+      'Today',
+      'Past notes',
+      'Not In',
+      'Late Notice',
+      'Sick',
+      breakfast.text,
+    ]);
 
     // Space ticks the box with focus; typing in the box, then Tab out of it, saves at once.
     await page.keyboard.press('Space');
     await expect(goalBox(page, breakfast.text)).toBeChecked();
     await expect(saveStatus(page)).toHaveText('Saving…');
-    await expectStops(page, 'Tab', [bus.text, '3. Guided notes']);
+    await expectStops(page, 'Tab', [bus.text, 'Daily Support Notes']);
     await page.keyboard.type('Made toast.');
     await page.keyboard.press('Enter');
     await page.keyboard.type('Phoned her sister.');
@@ -1025,9 +1069,12 @@ for (const width of [375, 1280]) {
       'More actions',
       'Submit note',
       'Flag for manager',
-      '3. Guided notes',
+      'Daily Support Notes',
       bus.text,
       breakfast.text,
+      'Sick',
+      'Late Notice',
+      'Not In',
       'Past notes',
       'Today',
     ]);
@@ -1100,6 +1147,11 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
     tickedGoalIds: [template.goals[0].id],
     pickedGroupIds: [],
     tickedCommonItemIds: [],
+    commonItemDetails: {},
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     isFlagged: true,
     flagReason,
   });
@@ -1233,17 +1285,18 @@ test('Submit: the flag ticked, errors, each state of the confirmation and the co
   expect(store.saves.at(-1)).toMatchObject({ isFlagged: true, flagReason: null });
   await expectAxeToPass(page);
 
-  // Field errors: Guided notes empty and no reason, each inline above its field and in the summary, which is focused,
+  // Field errors: Daily Support Notes empty and no reason, each inline above its field and in the summary, which is
+  // focused,
   // with "Error: " in the title, and nothing opened or sent.
   await submitNote(page).click();
   await expect(summary(page)).toBeFocused();
   await expect(summary(page).getByRole('link')).toHaveText([
-    'Write your notes in the Guided notes box. The grey text is only a guide.',
+    'Write your notes in the Daily Support Notes box. The grey text is only a guide.',
     'Enter a reason for the flag',
   ]);
   await expect(page).toHaveTitle(`Error: ${title('Note')}`);
   await expect(notesError(page)).toHaveText(
-    'Error: Write your notes in the Guided notes box. The grey text is only a guide.',
+    'Error: Write your notes in the Daily Support Notes box. The grey text is only a guide.',
   );
   await expect(reasonError(page)).toHaveText('Error: Enter a reason for the flag');
   await expect(box(page)).toHaveAttribute('aria-invalid', 'true');
@@ -1450,9 +1503,18 @@ for (const width of [375, 1280]) {
     await page.keyboard.press('Enter');
     await expect(heading(page)).toBeFocused();
 
-    // note-form.md *Focus order (Tab)*: Flag for manager after Guided notes, then Reason only while it is ticked, then
+    // note-form.md *Focus order (Tab)*: Flag for manager after Daily Support Notes, then Reason only while it is
+    // ticked, then
     // Submit note; Space ticks the flag, with focus kept on it.
-    await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes']);
+    await expectStops(page, 'Tab', [
+      'Past notes',
+      'Not In',
+      'Late Notice',
+      'Sick',
+      breakfast.text,
+      bus.text,
+      'Daily Support Notes',
+    ]);
     await page.keyboard.type('Made toast.');
     await expectStops(page, 'Tab', ['Flag for manager']);
     await page.keyboard.press('Space');
@@ -1469,7 +1531,7 @@ for (const width of [375, 1280]) {
       'Submit note',
       'Reason',
       'Flag for manager',
-      '3. Guided notes',
+      'Daily Support Notes',
     ]);
     await expectStops(page, 'Tab', ['Flag for manager', 'Reason', 'Submit note']);
 
@@ -1718,6 +1780,11 @@ test('signed in for real at 375 px, two tabs on a draft: the older meets the ban
     tickedGoalIds: [breakfastId, busId],
     pickedGroupIds: [],
     tickedCommonItemIds: [],
+    commonItemDetails: {},
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     isFlagged: true,
     flagReason,
   });
@@ -1960,6 +2027,11 @@ test('signed in for real, a session ended mid-note: the same person signs in aga
     tickedGoalIds: [breakfastId],
     pickedGroupIds: [],
     tickedCommonItemIds: [],
+    commonItemDetails: {},
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     isFlagged: true,
     flagReason,
   });
@@ -2214,7 +2286,15 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Tab', [...shell, 'Find a participant', 'Jane Citizen']);
     await page.keyboard.press('Enter');
     await expect(heading(page)).toBeFocused();
-    await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes']);
+    await expectStops(page, 'Tab', [
+      'Past notes',
+      'Not In',
+      'Late Notice',
+      'Sick',
+      breakfast.text,
+      bus.text,
+      'Daily Support Notes',
+    ]);
     await page.keyboard.type('Went to the shops.');
     await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
 
@@ -2229,12 +2309,15 @@ for (const width of [375, 1280]) {
     store.saveElsewhere(jane.id, worker.today, elsewhere);
     await page.keyboard.type(' Bought bread.');
     await expect(takeover(page)).toBeVisible();
-    await expectFocusAt(page, '3. Guided notes');
+    await expectFocusAt(page, 'Daily Support Notes');
 
     // note-form.md *Focus order (Tab)*: the back link, then Keep and Load, then <main>, from Past notes.
     await expectStops(page, 'Shift+Tab', [
       bus.text,
       breakfast.text,
+      'Sick',
+      'Late Notice',
+      'Not In',
       'Past notes',
       'Load the other version',
       'Keep the text on this screen',
@@ -2246,7 +2329,7 @@ for (const width of [375, 1280]) {
     // Enter on Keep: the text on screen saved as a new clientId's save 1, the banner gone, and focus back in the box.
     await page.keyboard.press('Enter');
     await expect(takeover(page)).toHaveCount(0);
-    await expectFocusAt(page, '3. Guided notes');
+    await expectFocusAt(page, 'Daily Support Notes');
     await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
     expect(store.saves.at(-1)).toMatchObject({ seq: 1, narrative: 'Went to the shops. Bought bread.' });
     expect(store.draft(jane.id, worker.today)).toMatchObject({ narrative: 'Went to the shops. Bought bread.' });
@@ -2256,7 +2339,15 @@ for (const width of [375, 1280]) {
     store.saveElsewhere(jane.id, worker.today, elsewhere);
     await page.keyboard.type(' Walked home.');
     await expect(takeover(page)).toBeVisible();
-    await expectStops(page, 'Shift+Tab', [bus.text, breakfast.text, 'Past notes', 'Load the other version']);
+    await expectStops(page, 'Shift+Tab', [
+      bus.text,
+      breakfast.text,
+      'Sick',
+      'Late Notice',
+      'Not In',
+      'Past notes',
+      'Load the other version',
+    ]);
     await page.keyboard.press('Space');
     await expect(heading(page)).toBeFocused();
     await expect(takeover(page)).toHaveCount(0);
@@ -2264,9 +2355,12 @@ for (const width of [375, 1280]) {
     await expect(saveStatus(page)).toHaveText('Saved 4:20 pm');
     await expectStops(page, 'Tab', [
       'Past notes',
+      'Not In',
+      'Late Notice',
+      'Sick',
       breakfast.text,
       bus.text,
-      '3. Guided notes',
+      'Daily Support Notes',
       'Flag for manager',
       'Reason',
       'Submit note',
@@ -2822,7 +2916,15 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Tab', [...shell, 'Find a participant', 'Jane Citizen']);
     await page.keyboard.press('Enter');
     await expect(heading(page)).toBeFocused();
-    await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes']);
+    await expectStops(page, 'Tab', [
+      'Past notes',
+      'Not In',
+      'Late Notice',
+      'Sick',
+      breakfast.text,
+      bus.text,
+      'Daily Support Notes',
+    ]);
     await page.keyboard.type('Went to the shops.');
     await expectStops(page, 'Tab', ['Flag for manager', 'Submit note']);
     await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');

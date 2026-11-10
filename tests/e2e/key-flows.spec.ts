@@ -51,7 +51,7 @@ const dialogButton = (page: Page, name: string) => dialog(page).getByRole('butto
 
 // The note form: the sections, Flag for manager, Submit note, and More actions with Discard draft in its panel.
 const saveStatus = (page: Page) => page.locator('#save-status');
-const guidedNotes = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
+const guidedNotes = (page: Page) => main(page).getByRole('textbox', { name: 'Daily Support Notes' });
 const flagBox = (page: Page) => checkbox(page, 'Flag for manager');
 const reasonBox = (page: Page) => main(page).getByRole('textbox', { name: 'Reason', exact: true });
 const submitNote = (page: Page) => button(page, 'Submit note');
