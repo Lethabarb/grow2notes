@@ -1,5 +1,14 @@
 import { useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
-import { useId, useRef, useState, type FormEvent, type MouseEvent, type Ref, type RefObject } from 'react';
+import {
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { ApiError } from '../api/api.ts';
 import { msg } from '../copy/messages.ts';
@@ -37,7 +46,19 @@ export type ListRow = {
   archivedAtUtc: string | null;
   /** The row's `RowVersion` as base64, which a change to the row sends as `If-Match` (D78). */
   rowVersion: string;
+  /** A goal's term: true for Medium or long term, and else Short term (A150). Goals only. */
+  isMediumOrLongTerm?: boolean;
+  /** Whether ticking a common item on a note asks for details (A151). Common items only. */
+  needsDetail?: boolean;
 };
+
+/**
+ * What a row's edit form may change besides its text (list-editor.md *Behaviour*): the group it is moved to, on Common
+ * items, and the value of its list's setting, when it has one (`RowSetting`). Each is left out when the form has no
+ * such
+ * control.
+ */
+export type RowChanges = { groupId?: string; setting?: boolean };
 
 /** How the editor writes to one list's API (list-editor.md *Implementation notes*): its writes, and their scope. */
 type ListWrites = {
@@ -50,10 +71,11 @@ type ListWrites = {
   add: (text: string) => Promise<unknown>;
   /**
    * Rewords a row, with its `rowVersion` as `If-Match`, as the API's `PUT` does, and, on Common items, puts it in the
-   * group of `groupId`, its own unless the Group radios chose another (`RowGroups`); the editor reads nothing of the
-   * answer, as it reads the row's next version, and its group, from the list.
+   * group of `changes.groupId`, its own unless the Group radios chose another (`RowGroups`), and sets the list's
+   * setting to `changes.setting` where its edit form has a control for it (`RowSetting`); the editor reads nothing of
+   * the answer, as it reads the row's next version, its group and its setting from the list.
    */
-  update: (id: string, text: string, rowVersion: string, groupId?: string) => Promise<unknown>;
+  update: (id: string, text: string, rowVersion: string, changes: RowChanges) => Promise<unknown>;
   /**
    * Puts the list's active rows in the order of `ids`, each active row's ID once, as the API's `PUT …/order` does; the
    * editor reads nothing of the answer, as it reads the new order, and each row's next version, from the list.
@@ -96,6 +118,23 @@ type RowGroups = {
   fieldName: (rowId: string) => string;
 };
 
+/**
+ * A list's one on-or-off setting per row, which the row's edit form changes with the text and the row's version
+ * (list-editor.md *Behaviour*): a goal's term and a common item's Ask for details. It starts at the row's stored value,
+ * is sent with Save under `If-Match`, and a row with it on shows `line`, muted, under its text.
+ */
+export type RowSetting = {
+  /** Whether the row has it on, as the list read it. */
+  isOn: (row: ListRow) => boolean;
+  /** The muted second line of a row with it on, such as "Asks for details". */
+  line: string;
+  /**
+   * Its control in the edit form, native and labelled: `idPrefix` starts the ids of its inputs, and `onChange` is
+   * given the new value; choosing sends nothing until Save (SC 3.2.2).
+   */
+  control: (props: { idPrefix: string; on: boolean; onChange: (on: boolean) => void }) => ReactNode;
+};
+
 type ListEditorProps<TData> = {
   kind: ListKind;
   api: ListApi<TData>;
@@ -117,6 +156,8 @@ type ListEditorProps<TData> = {
   editFieldId?: (rowId: string) => string;
   /** On Common items alone, the groups that a row can be moved to from its edit form. */
   groups?: RowGroups;
+  /** The list's setting, where its rows have one: a goal's term and a common item's Ask for details. */
+  setting?: RowSetting;
   /** For an archived participant's goals (participants.md B6): the rows' text alone, with no controls. */
   readOnly?: boolean;
 };
@@ -150,6 +191,7 @@ type ListContext = MoveList & {
   api: ListWrites;
   editFieldId: ((rowId: string) => string) | undefined;
   groups: RowGroups | undefined;
+  setting: RowSetting | undefined;
   helpId: string;
   /** The rows as the list was last read, which a write reads as it runs. */
   latest: () => ListRow[];
@@ -238,8 +280,9 @@ function archivedRow(rows: ListRow[], id: string): ListRow | undefined {
  * API's order, which the editor never sorts again, as the API breaks ties in `SortOrder` as the reorder reads them;
  * or, with no active row, the kind's empty sentence; then the add form; then the archived rows, newest archived first,
  * each with Restore, as a `<ul>` in a `<details>`, closed as it loads and left to the person from then on but for an
- * Archive, which opens it, and left out while none is archived (decision 7). Read-only, each row is its text alone,
- * and the add form is left out, as nothing can be changed.
+ * an Archive, which opens it, and left out while none is archived (decision 7). A row with its list's setting on has a
+ * second line under its text, muted. Read-only, each row is its text alone, and the add form is left out, as nothing
+ * can be changed.
  *
  * The page loads the list before rendering the editor, in its load region, or puts it in the query itself, as Add
  * participant does with a new participant's empty one, so the editor reads it from the query and never fetches it as
@@ -252,6 +295,7 @@ export function ListEditor<TData>({
   addFieldId,
   editFieldId,
   groups,
+  setting,
   readOnly = false,
 }: ListEditorProps<TData>) {
   const copy = strings.listEditor[kind];
@@ -282,6 +326,7 @@ export function ListEditor<TData>({
     api,
     editFieldId,
     groups,
+    setting,
     helpId: frame.helpId,
     latest,
     order: () => latest().flatMap((listed) => (listed.archivedAtUtc === null ? [listed.id] : [])),
@@ -427,6 +472,7 @@ function ActiveRow({ row, list, first, last }: ActiveRowProps) {
       ) : (
         <div className={styles.rowInner}>
           <p className={styles.text}>{row.text}</p>
+          {list.setting?.isOn(row) === true && <p className={styles.setting}>{list.setting.line}</p>}
           <div className={styles.side}>
             <RequestAlert>{failure}</RequestAlert>
             <div className={styles.actions}>
@@ -659,10 +705,11 @@ type EditFormProps = {
 /**
  * A row's edit form (list-editor.md *Behaviour*, participants.md B6, common-items.md component 6): the row's text
  * field, filled with its text, then, on Common items while two or more groups are active, the Group radios, the row's
- * own group chosen, then the alert for a request that failed, then Save, primary, and Cancel, which drops what was
- * typed and chosen, both label width. Save checks the text as Add does, sending nothing while it fails; then, when the
- * text as Save would send it is the row's own, and its group too, it closes the form as Cancel does and sends nothing,
- * as there is nothing to save. Otherwise it sends the text, and the group chosen, with the row's version as the write
+ * own group chosen, then the list's setting control, where it has one, at the row's stored value, then the alert for a
+ * request that failed, then Save, primary, and Cancel, which drops what was typed and chosen, both label width. Save
+ * checks the text as Add does, sending nothing while it fails; then, when the text as Save would send it is the row's
+ * own, and its group and setting too, it closes the form as Cancel does and sends nothing, as there is nothing to save.
+ * Otherwise it sends the text, the group chosen and the setting, with the row's version as the write
  * runs, the box read-only while it is out, and once the list is read again, closes the form, focus going to Edit,
  * which a row moved to another group has at the end of that group's list, unless the person has gone elsewhere
  * meanwhile, and the page's status region says so, naming the group that a moved row went to. A failure keeps the text
@@ -683,11 +730,13 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
   const box = useFieldText(row.text, textRule(list.kind), 'text', field);
   // The group chosen in the Group radios, the row's own until another is chosen, on Common items alone.
   const [groupId, setGroupId] = useState(list.groups?.own);
+  // The list's setting as its control shows it, the row's stored value until the person changes it.
+  const [on, setOn] = useState(() => list.setting?.isOn(row));
   // The group chosen while it is still active, or else the row's own, as a group archived meanwhile leaves the radios.
   const chosen = list.groups?.active.some(({ id }) => id === groupId) ? groupId : list.groups?.own;
   // The alert's words while it holds a request's failure, which the next press clears.
   const [failure, setFailure] = useState<string>();
-  const save = useListWrite(list, async ({ text, to }: { text: string; to: string | undefined }) => {
+  const save = useListWrite(list, async ({ text, to, setting }: { text: string; to?: string; setting?: boolean }) => {
     // The version as the write runs, which the list read after the write before it may have changed.
     const current = activeRow(list.latest(), row.id);
     if (current === undefined) {
@@ -695,7 +744,9 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
     }
 
     try {
-      await sendUnlessListChanged(list, 409, () => list.api.update(row.id, text, current.rowVersion, to));
+      await sendUnlessListChanged(list, 409, () =>
+        list.api.update(row.id, text, current.rowVersion, { groupId: to, setting }),
+      );
     } catch (failed) {
       if (!(failed instanceof ApiError && failed.status === 412)) {
         throw failed;
@@ -716,7 +767,7 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
       return;
     }
 
-    if (sent === row.text && chosen === list.groups?.own) {
+    if (sent === row.text && chosen === list.groups?.own && on === list.setting?.isOn(row)) {
       onClose(true);
       return;
     }
@@ -724,7 +775,7 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
     // The group as its radio names it as Save is pressed, or nothing while the row stays in its own.
     const movedTo = chosen === list.groups?.own ? undefined : list.groups?.active.find(({ id }) => id === chosen);
     save.mutate(
-      { text: sent, to: chosen },
+      { text: sent, to: chosen, setting: on },
       {
         onSuccess: () => {
           onClose(focusStayedIn(form.current));
@@ -764,6 +815,11 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
           chosen={chosen}
           onChoose={setGroupId}
         />
+      )}
+      {list.setting !== undefined && on !== undefined && (
+        <div className={styles.field}>
+          {list.setting.control({ idPrefix: `${fieldId}-setting`, on, onChange: setOn })}
+        </div>
       )}
       <RequestAlert>{failure}</RequestAlert>
       <div className={styles.actions}>
