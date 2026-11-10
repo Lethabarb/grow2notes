@@ -17,6 +17,15 @@ Evidence grades: **[Research]** studies and usability testing · **[Standard]** 
 design.md · **(N)** design.md wording normalised as `microcopy.md` directs · **(P)** proposed. Every (P) string here
 on 9 October 2026 was approved as written (D67, Open question 4); a (P) string added later still needs owner sign-off.
 
+**T44 (D104, A159): the read view's sections.** Where the rest of this file differs, this block wins. The read view
+(view B) and a manager's read of someone else's draft (view C) show, in this order and under `<h2>`s: **Attendance**
+(Not In, Late Notice, Sick, each read as ticked or not ticked); the goals under **Short term goals** and **Medium or Long
+term goal**, or **No goals set** alone; **Medication** and its text, only for a version with the box; each shown group
+under its own name, with **Details: [text]** under a ticked item that has details, or **No common items set** alone;
+and **Daily Support Notes**. "1. Goals", "2. Common items" and "3. Guided notes" are gone, and the groups are `<h2>`s, not
+`<h3>`s. The specification is in note-read-view.md. The history list (view A) is unchanged: its rows say nothing of
+attendance, Medication or details, which are note content, not status.
+
 ---
 
 ## Purpose and who uses it

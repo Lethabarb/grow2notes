@@ -18,6 +18,14 @@ Other components own these pieces, and this file only uses them:
 - the **read-only goal and common-item lists** (`TickListRead`): `checkbox-list.md`
 - **page titles**, focus on route change, the header, and the "Page not found" screen: `app-shell-nav.md`
 
+**T44 (D104, A159): "version history" means the version page.** Where the rest of this file differs, this block wins.
+A version page (page B) reuses the read view's sections (note-read-view.md), so it shows **Attendance**, the goals
+under their terms, **Medication** where the version has the box, each shown group under its own name with **Details:
+[text]** under a ticked item that has details, and **Daily Support Notes**. An earlier version keeps the wording, terms
+and details it was saved with (A3). The version list's rows (page A) are unchanged: they say who saved a version, when,
+and whether it was flagged, and nothing of the note's content. A version saved before T44 reads with no ticks, Short term
+goals, no Medication heading and no details.
+
 ---
 
 ## Where it's used

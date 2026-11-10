@@ -17,6 +17,27 @@ Copy marks used below: **(V)** word for word from design.md. **(N)** design.md w
 punctuation format normalised to the rules here. **(P)** proposed, not in design.md. Every (P) string follows a
 pattern already used in design.md and adds no feature, screen, setting or data.
 
+**T44 (D104, A145 to A163): the Word template's words.** Where the rest of this file differs, this block wins.
+
+- **Glossary (§2) additions.** **Attendance** (the note's three ticks): **Not In**, **Late Notice**, **Sick**. **Short term
+  goals**, **Medium or Long term goal** (the note's headings) and **Short term**, **Medium or long term** (the goal editor's
+  radios). **Medication** (the note's box) and **Medication box on notes** (the participant's switch). **Details** (the
+  box under a ticked item), **Ask for details when ticked** and **Asks for details** (the manager's setting). **Week A**,
+  **Week B** (the report's title label). **Daily Support Notes** is the screen label of the design term **Guided notes**,
+  which stays the design term (D12, D34); the screens, the messages and the files say "Daily Support Notes", and never "Guided
+  notes".
+- **One set of words.** The labels a note shares with its report files are the Word template's and are held to
+  `NoteWords.cs` by a test (T40): Not In, Late Notice, Sick, Short term goals, Medium or Long term goal, Medication,
+  Details, Daily Support Notes, **No goals set**, **No common items set**.
+- **New strings (P).** Attendance; What was taken, and when.; Enter the details for [item]; Details: [text]; Medication
+  box on notes; Shows a Medication box on notes started from now on.; Term; Short term; Medium or long term; Ask for
+  details when ticked; Notes started from now on show a Details box under this item when it is ticked. It must be filled in
+  to submit.; Asks for details; Week; Printed in the title of the file; None; Week A; Week B; When Word asks to update the
+  fields, choose Yes to fill in the page numbers. The section numbers "1.", "2." and "3." are gone from the note's
+  headings, and the older **Write your notes in the Guided notes box** is **Write your notes in the Daily Support Notes
+  box**.
+- **File names (§11).** The daily report is `<Weekday> dd.mm.yyyy.<format>`, such as `Monday 14.09.2026.docx` (A19).
+
 ---
 
 ## Where it's used

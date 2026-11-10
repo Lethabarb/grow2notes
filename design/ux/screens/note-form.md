@@ -37,6 +37,57 @@ straight quotes for readability (`microcopy.md` §1).
 **[Convention]** established design systems · **[Opinion]** reasoned judgement. Each grade is backed by the cited
 component file, which holds the full evidence and URLs; the key sources are repeated under **Sources**.
 
+**T44 (D104, A145 to A163): the note form follows the Word template.** Where the rest of this file differs, this block
+wins. "Guided notes" below is the design term (D12, D34); its screen label is now **Daily Support Notes**, and every
+message that names it follows. New strings are marked **(P)** and ship as proposed (D67); the words of `noteWords`
+(Not In, Late Notice, Sick, Short term goals, Medium or Long term goal, Medication, Details, Daily Support Notes, and the
+two empty sentences) are the Word template's, are held to `NoteWords.cs` by a test (T40), and so are the owner's.
+
+- **Order, top to bottom:** the lists-changed notice; **Attendance**; the goals under **Short term goals** and **Medium
+  or Long term goal**; **Medication**, only for a note that has the box; the common items; **Daily Support Notes**;
+  Flag for manager; the actions. The section numbers "1.", "2." and "3." are gone, so no heading is "Goals" or "Common
+  items": each common item list is headed by its group's name, as an `<h2>`, and the picker keeps its fieldset and its
+  legend **Which of these happened?**, now an `<h2>` too. Headings run `<h1>` then `<h2>` with no level skipped.
+- **Attendance** (`AttendanceField`). A `<fieldset>` whose legend is the `<h2>` **Attendance** (P), then three
+  independent native tick boxes, **Not In**, **Late Notice** and **Sick**, in the tick lists' 56 px rows and 40 px
+  boxes. Each change autosaves and is versioned like any tick. They hide nothing, a new note starts with all three
+  unticked, and a note ticked Not In still needs its Daily Support Notes text to submit (A153). The legend exists for
+  the fieldset's sake (SC 1.3.1); the Word file has no such heading.
+- **Goals under their terms.** `goalsByTerm` splits the snapshot's goals into two `TickListField`s, each under an `<h2>`
+  (**Short term goals**, **Medium or Long term goal**), the snapshot's order kept within each, and a term with no goal
+  is left out. The first list shown carries the hint **Ticked means reached.**; the second is described by it
+  (`aria-describedby`), so the hint is said once. With no goals at all, the existing sentence stands alone, with no
+  heading: **No goals set up for Jane yet. A manager can add them.** (V), or **No goals set** while editing.
+- **Medication** (`MedicationField`), when `draft.medication` is not `null` (`null` means no box; `""` means the box
+  with nothing written). The `<h2>` is the box's label: **Medication**; under it the hint **What was taken, and when.**
+  (P); then a four-row text area the person can resize, with the shared count (up to 1,000 characters, `limits.medication`).
+  Optional, autosaved and versioned, free text only (D14 stands: no times or hours as claim evidence). It shows only for
+  a participant whose manager switched it on before the note was started (A152); a pending edit keeps its version's box
+  (A3). After a press of Submit or Save changes found it too long, **Medication must be 1,000 characters or less**
+  sits between the hint and the box, with the 4 px error bar down the section.
+- **Details** (`ItemDetailField`), directly after a ticked common item that a manager marked **Ask for details when
+  ticked** (A151), in DOM order, so Tab reaches it next. A visible label **Details**, which a screen reader hears with
+  the item's wording after it ("Details, Other (staff to complete if different from above)"); a single-line text
+  field with the count (up to 200 characters, `limits.itemDetail`). Unticking the item, or unpicking its group, takes
+  the box and its text away with no question, focus staying on the tick box; ticking it again starts empty, as the
+  server's copy does. A draft saves a blank box; **Submit note** and **Save changes** require text.
+- **Validation** (form-validation.md rules, in page order in the summary): Medication too long; each Details box that
+  is blank, **Enter the details for [item]** (P), linked to `#detail-[item ID]`, or over 200 characters, **Details must
+  be 200 characters or less**; Daily Support Notes blank, **Write your notes in the Daily Support Notes box** (the
+  second sentence, **The grey text is only a guide.**, only while guide prompts are set) or too long, **Daily Support
+  Notes must be 20,000 characters or less**; then Reason. A box's message goes with the input that fixes it, silently.
+  A server `422` under `commonItemDetails` is shown on the first ticked item whose box fails the checks, or, if none
+  does, such as a box of U+0085 alone, which .NET counts as blank, on the first ticked item that asks; under `medication`
+  on the Medication box; both with their links in the summary. Any other `422` stays the summary's one unlinked item.
+- **Focus order (Tab):** Past notes, Not In, Late Notice, Sick, each goal's box, Medication, Every note's boxes (each
+  followed by its Details box while ticked), the picker, the picked groups' boxes, Daily Support Notes, Flag for
+  manager, Submit note.
+- **Autosave and Submit send** `isNotIn`, `isLateNotice`, `isSick`, `medication` (`null` for no box) and
+  `commonItemDetails` (an object by item ID, for the ticked items that ask) with the rest, as the whole working copy
+  (A153). Takeover, conflict reloads and Load the other version carry them too.
+- **Report words.** The downloaded report uses the same headings (D104, A155): the screen and the files never name a
+  section differently.
+
 ---
 
 ## Purpose and who uses it

@@ -23,6 +23,22 @@ sentence with both buttons unavailable, where T15 showed it as the failure line;
 empty day and while the field is in error; and the Tab order, which is the field, Previous day, Next day, Download
 Word, Download PDF, where T15's was the two buttons alone.
 
+**T44 (D104, A155, A156, A158): the Week choice, the Word hint and the file name.** Where the rest of this file differs,
+this block wins. New strings are marked **(P)** and ship as proposed (D67).
+
+- **Week.** Between the date status and the download buttons, a `<fieldset>` whose legend is **Week** (P) and whose hint
+  is **Printed in the title of the file** (P), holding three radios: **None** (the default), **Week A** (P) and **Week
+  B** (P). One Tab stop; the arrow keys choose. It is enabled on a day with no notes, is kept as the date steps, and is
+  not remembered after a reload (A158). A press of Download Word or Download PDF adds `&week=A` or `&week=B` to the
+  export request; with None it adds nothing. Choosing sends nothing.
+- **Hint under the buttons:** **When Word asks to update the fields, choose Yes to fill in the page numbers.** (P), a
+  small `<p>` after the buttons, because the Word file's index page numbers are fields that Word fills in (A156).
+- **File name.** The saved file is named by the weekday and the date, `Thursday 01.10.2026.docx`, which the server's
+  `Content-Disposition` gives; where it gives none, the screen's fallback is `fileDay(date)` plus the format, the same
+  name (A19, A80 amended). The name never carries the week. The status line says `Thursday 01.10.2026.docx is ready.
+  Look in your downloads.`
+- The report's own layout (title, DATE and STAFF rows, the index, a page per participant) is design.md §11.
+
 ---
 
 ## Purpose and who uses it
