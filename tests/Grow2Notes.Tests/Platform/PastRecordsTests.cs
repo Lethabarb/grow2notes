@@ -251,6 +251,80 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
         Assert.Single(events, type => type == AuditEventTypes.User.Reactivated);
     }
 
+    // T24: the set-up moves on after a note is submitted, and the note, its version, the day's report in both formats
+    // and the participant's record keep the wording, the group names and the order the note was written with (A2, A3).
+    [Fact]
+    public async Task Rewording_an_item_renaming_a_group_and_moving_an_item_changes_none_of_the_submitted_record()
+    {
+        var org = await app.Services.AddOrganisationAsync();
+        var participant = await app.Services.AddParticipantAsync(org, givenName: GivenName, familyName: "Blake");
+        var kitchen = await app.Services.AddGroupAsync(org.OrganisationId, new("Kitchen skills", 1));
+        var laundry = await app.Services.AddGroupAsync(org.OrganisationId, new("Laundry", 2));
+        var wash = await app.Services.AddItemAsync(org.OrganisationId, kitchen.Id, new("Wash the dishes", 0));
+        var dry = await app.Services.AddItemAsync(org.OrganisationId, kitchen.Id, new("Dry the dishes", 1));
+        var fold = await app.Services.AddItemAsync(org.OrganisationId, laundry.Id, new("Fold clothes", 0));
+        var first = Today().AddDays(-3);
+        var now = clock.GetUtcNow().UtcDateTime;
+        await app.Services.AddSubmittedAsync(
+            org,
+            new(
+                participant.Id,
+                first,
+                org.WorkerId,
+                now.AddDays(-3),
+                now.AddDays(-3).AddHours(1),
+                Groups:
+                [
+                    new(
+                        kitchen.Id,
+                        "Kitchen skills",
+                        false,
+                        true,
+                        [new(wash.Id, "Wash the dishes", true), new(dry.Id, "Dry the dishes", false)]),
+                    new(laundry.Id, "Laundry", false, false, [new(fold.Id, "Fold clothes", false)]),
+                ]));
+        using var manager = app.CreateHttpsClient().SignInAs(org.ManagerId);
+        var version = await BodyAsync(manager, $"{NotePath(participant.Id, first)}/versions/1");
+        var read = await BodyAsync(manager, NotePath(participant.Id, first));
+        var word = await ReportTextAsync(manager, first);
+        var pdf = await ReportPdfTextAsync(manager, first);
+        var export = await ExportTextAsync(manager, participant.Id, first, first);
+        string[] oldWording = ["Kitchen skills", "Wash the dishes", "Dry the dishes", "Laundry", "Fold clothes"];
+        foreach (var text in oldWording)
+        {
+            Assert.Contains(text, word);
+            Assert.Contains(text, pdf);
+        }
+
+        await PutNoContentAsync(
+            manager, $"/api/admin/common-items/{wash.Id}", new { text = "Rinse the dishes" }, wash.ETag);
+        await PutNoContentAsync(
+            manager, $"/api/admin/common-item-groups/{kitchen.Id}", new { name = "Kitchen duties" }, kitchen.ETag);
+        await PutNoContentAsync(
+            manager,
+            $"/api/admin/common-items/{dry.Id}",
+            new { text = "Dry the dishes", groupId = laundry.Id },
+            dry.ETag);
+
+        Assert.Equal(version, await BodyAsync(manager, $"{NotePath(participant.Id, first)}/versions/1"));
+        Assert.Equal(read, await BodyAsync(manager, NotePath(participant.Id, first)));
+        Assert.Equal(word, await ReportTextAsync(manager, first));
+        Assert.Equal(pdf, await ReportPdfTextAsync(manager, first));
+        Assert.Equal(export, await ExportTextAsync(manager, participant.Id, first, first));
+        foreach (var text in new[] { "Rinse the dishes", "Kitchen duties" })
+        {
+            Assert.DoesNotContain(text, word);
+            Assert.DoesNotContain(text, pdf);
+            Assert.DoesNotContain(text, export);
+        }
+
+        // The order is the note's: the kitchen group before the laundry group, and the dishes in their order.
+        Assert.True(word.IndexOf("Wash the dishes", StringComparison.Ordinal)
+            < word.IndexOf("Dry the dishes", StringComparison.Ordinal));
+        Assert.True(word.IndexOf("Dry the dishes", StringComparison.Ordinal)
+            < word.IndexOf("Laundry", StringComparison.Ordinal));
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 
     private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -290,6 +364,12 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
     private static async Task<string> ReportTextAsync(HttpClient manager, DateOnly date) =>
         TextOf(await manager.GetByteArrayAsync(
             $"/api/reports/daily/{Iso(date)}/export?format=docx", TestContext.Current.CancellationToken));
+
+    private static async Task<string> ReportPdfTextAsync(HttpClient manager, DateOnly date) =>
+        ReportText.Normalised(string.Join(
+            ' ',
+            ReportText.PdfWords(await manager.GetByteArrayAsync(
+                $"/api/reports/daily/{Iso(date)}/export?format=pdf", TestContext.Current.CancellationToken))));
 
     private static async Task<string> ExportTextAsync(
         HttpClient manager, Guid participantId, DateOnly from, DateOnly to) =>
@@ -348,6 +428,12 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
     {
         using var response = await client.PostWithTokenAsync(path, await client.FetchTokenAsync(), ifMatch: etag);
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    private static async Task PutNoContentAsync(HttpClient client, string path, object body, string etag)
+    {
+        using var response = await client.PutWithTokenAsync(path, await client.FetchTokenAsync(), body, etag);
+        Assert.True(response.IsSuccessStatusCode, $"{path} answered {(int)response.StatusCode}.");
     }
 
     // Whether the participant is in the day's list. TodayPage filters exactly this list in memory for Find a
