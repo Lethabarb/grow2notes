@@ -8,10 +8,11 @@ namespace Grow2Notes.Tests.Features.Reports;
 
 /// <summary>
 /// How long a manager waits for the daily report (S04.01.06, design.md §7.1): a made-up day (A35) of 20 notes, each
-/// with three goals, 16 groups of about 10 items each (the size of the Word-template set-up list, which the report
-/// prints in full for every note, A161), Every note and two of the others picked, and about 2,000 characters of
-/// guided notes, which is well under <c>Limits.GuidedNotes</c>; with every 4th note flagged, half of those reviewed, and every 5th note
-/// edited. Each format is downloaded once, Word first, through the real endpoint on a host that is already running.
+/// with three goals, 16 groups of which 12 hold 10 items each (the size of the Word-template set-up list, which the
+/// report prints in full for every note, A161), Every note and two of the others picked, and about 2,000 characters
+/// of guided notes, which is well under <c>Limits.GuidedNotes</c>; with every 4th note flagged, half of those
+/// reviewed, and every 5th note edited. Each format is downloaded once, Word first, through the real endpoint on a
+/// host that is already running.
 /// The first call of each is the cold path: compiling the queries, loading the font and the libraries all count.
 /// The ceiling is 10 seconds against a time that is expected to be well under a second, a margin that shared build
 /// machines, which run other test collections at the same time, can be trusted to keep. Both timings go to the test
