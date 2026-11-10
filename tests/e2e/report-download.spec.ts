@@ -20,6 +20,7 @@ for (const { button, format } of [
   test(`${button} saves ${reportFileDay}.${format}, asking for ?format=${format}, with no new page`, async ({
     page,
     context,
+    browserName,
   }) => {
     await serveMe(page, manager);
     await serveHasNotes(page);
@@ -35,7 +36,10 @@ for (const { button, format } of [
     const download = page.waitForEvent('download');
     await page.getByRole('main').getByRole('button', { name: button, exact: true }).click();
 
-    expect((await download).suggestedFilename()).toBe(`${reportFileDay}.${format}`);
+    // WebKit swaps the spaces in a suggested name for underscores, so the header's name is compared as that engine
+    // shows it. The server's tests check the header itself.
+    const suggested = (await download).suggestedFilename();
+    expect(browserName === 'webkit' ? suggested.replace(/_/g, ' ') : suggested).toBe(`${reportFileDay}.${format}`);
     expect(sent).toEqual([`?format=${format}`]);
     expect(pagesOpened).toBe(0);
     expect(context.pages()).toHaveLength(1);

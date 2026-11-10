@@ -166,7 +166,8 @@ accessibility steps. Besides the kit in *Before you start*, they need an Android
 and TalkBack, and Dragon on the laptop if you have it.
 
 20. As a manager, on the Report screen, download a day's Word file and PDF on each of iPhone Safari, iPhone Chrome,
-    Android Chrome and Samsung Internet. Look for each file saved. On the iPhone, choose a future date in the picker
+    Android Chrome and Samsung Internet. Look for each file saved, named like 'Monday 14.09.2026.docx' (Safari may
+    show underscores for the spaces; that is the browser, not the app). On the iPhone, choose a future date in the picker
     and look for the error once you leave the field; on Android, pick a date in the dialog and look for it to take
     effect within about a second, without leaving the field. If a browser cannot save a file, tell the developer: the
     plain-link contingency in file-download.md is then built for that case. (S04.02.05; daily-report.md's *Real
