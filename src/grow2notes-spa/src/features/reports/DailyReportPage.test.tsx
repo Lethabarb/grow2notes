@@ -95,7 +95,7 @@ function serve(path: string, init?: RequestInit): Promise<Response> {
     return json({ date: check[1], hasNotes: true });
   }
 
-  const report = /^\/api\/reports\/daily\/([\d-]+)\/export\?format=(docx|pdf)$/.exec(path);
+  const report = /^\/api\/reports\/daily\/([\d-]+)\/export\?format=(docx|pdf)(?:&week=[AB])?$/.exec(path);
   if (report !== null) {
     return file(report[2], report[1]);
   }

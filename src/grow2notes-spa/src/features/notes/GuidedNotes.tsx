@@ -27,13 +27,12 @@ type GuidedNotesProps = {
 
 /**
  * The Daily Support Notes box of the note form (guided-notes-textarea.md): its `<h2>`, which is the box's label, then
- * the box, in the
- * shared text box's look, with the guide prompts as its placeholder, gone at the first character typed and back when
- * the box is emptied (D34), and none when no prompts are saved. The box is uncontrolled, so that nothing but typing
- * changes what it holds; it grows with its text, never shorter than the prompts or about 6 lines, so that the page
- * scrolls rather than the box. Nothing stops the typing: there is no `maxlength`, and the count shows from 18,000
- * characters, counted as the server counts them. After a press of Submit that found the box blank or too long, its
- * message sits between the heading and the box, where a phone's keyboard never hides it, with a 4 px bar down the
+ * the box, in the shared text box's look, with the guide prompts as its placeholder, gone at the first character typed
+ * and back when the box is emptied (D34), and none when no prompts are saved. The box is uncontrolled, so that nothing
+ * but typing changes what it holds; it grows with its text, never shorter than the prompts or about 6 lines, so that
+ * the page scrolls rather than the box. Nothing stops the typing: there is no `maxlength`, and the count shows from
+ * 18,000 characters, counted as the server counts them. After a press of Submit that found the box blank or too long,
+ * its message sits between the heading and the box, where a phone's keyboard never hides it, with a 4 px bar down the
  * section and the box's border thicker, both in the error colour (note-form.md *Validation*).
  */
 export function GuidedNotes({ initialText, prompts, boxRef, onChange, error }: GuidedNotesProps) {

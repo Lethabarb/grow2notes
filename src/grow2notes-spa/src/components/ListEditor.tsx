@@ -55,8 +55,7 @@ export type ListRow = {
 /**
  * What a row's edit form may change besides its text (list-editor.md *Behaviour*): the group it is moved to, on Common
  * items, and the value of its list's setting, when it has one (`RowSetting`). Each is left out when the form has no
- * such
- * control.
+ * such control.
  */
 export type RowChanges = { groupId?: string; setting?: boolean };
 
@@ -280,7 +279,7 @@ function archivedRow(rows: ListRow[], id: string): ListRow | undefined {
  * API's order, which the editor never sorts again, as the API breaks ties in `SortOrder` as the reorder reads them;
  * or, with no active row, the kind's empty sentence; then the add form; then the archived rows, newest archived first,
  * each with Restore, as a `<ul>` in a `<details>`, closed as it loads and left to the person from then on but for an
- * an Archive, which opens it, and left out while none is archived (decision 7). A row with its list's setting on has a
+ * Archive, which opens it, and left out while none is archived (decision 7). A row with its list's setting on has a
  * second line under its text, muted. Read-only, each row is its text alone, and the add form is left out, as nothing
  * can be changed.
  *

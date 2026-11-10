@@ -10,8 +10,10 @@ import styles from './TickList.module.css';
 export type TickedItem = { text: string; isTicked: boolean; detail?: string };
 
 type TickListReadProps = {
-  /** The list's heading, the form's own for it, such as "Short term goals" or, among the common items, a group's
-  /** name. */
+  /**
+   * The list's heading, the form's own for it, such as "Short term goals" or, among the common items, a group's
+   * name.
+   */
   heading: string;
   /** In place of the list when it has no items, such as "No goals set". */
   emptyText?: string;

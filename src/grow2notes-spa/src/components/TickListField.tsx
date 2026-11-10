@@ -21,8 +21,10 @@ type TickListFieldProps<T extends TickItem> = {
   ticked: ReadonlySet<string>;
   /** A box ticked or unticked, as the person's own tap on it or its text did. */
   onToggle: (itemId: string, isTicked: boolean) => void;
-  /** Rendered directly after an item's row, in DOM order, such as the Details box of a ticked item that asks for
-  /** them. */
+  /**
+   * Rendered directly after an item's row, in DOM order, such as the Details box of a ticked item that asks for
+   * them.
+   */
   after?: (item: T) => ReactNode;
   className?: string;
 };

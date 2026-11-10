@@ -2157,6 +2157,7 @@ describe('Common items, asking for details', () => {
 
   it('sends the tick with the text and the group, under the item version, then shows a second line', async () => {
     await openPage();
+    serveGroups(groups);
     openEdit('Community outing', paid);
 
     fireEvent.click(tick(paid.id));

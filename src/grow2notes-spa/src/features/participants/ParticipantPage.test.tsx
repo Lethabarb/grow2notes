@@ -2007,8 +2007,8 @@ describe('The Medication box switch', () => {
 
     expect(tick()).not.toBeChecked();
     expect(tick()).toHaveAccessibleDescription('Shows a Medication box on notes started from now on.');
-    expect(follows(tick(), field('Year'))).toBe(true);
-    expect(follows(saveButton(), tick())).toBe(true);
+    expect(follows(field('Year'), tick())).toBe(true);
+    expect(follows(tick(), saveButton())).toBe(true);
   });
 
   it('is ticked for a participant who has it', async () => {
@@ -2033,7 +2033,7 @@ describe('The Medication box switch', () => {
       },
     ]);
     expect(tick()).toBeChecked();
-    expect(saveStatus()).toHaveTextContent(`Saved 4:12${nbsp}pm`);
+    expect(saveStatus().textContent).toBe(`Saved 4:12${nbsp}pm`);
   });
 
   it('empties the save status when it changes, as any edit to the Details does', async () => {

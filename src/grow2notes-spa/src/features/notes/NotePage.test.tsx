@@ -7948,7 +7948,7 @@ describe('Details of an item that asks for them', () => {
     expect(itemBox(other).closest('label')!.nextElementSibling).toContainElement(box);
     expect(itemBox(other)).toHaveFocus();
     expect(within(main()).queryByRole('textbox', { name: `Details, ${showered.text}` })).toBeNull();
-    expect(within(main()).getByText('You can enter up to 200 characters')).toBeInTheDocument();
+    expect(within(box.closest('div')!).getByText('You can enter up to 200 characters')).toBeInTheDocument();
   });
 
   it('autosaves the details with the ticks, and drops them with the untick, a re-tick starting empty', async () => {
