@@ -171,7 +171,8 @@ with runs of spaces collapsed. Never split a name.
 Show the plan, get one yes, then add the goals.
 
 The result of get_participant also says whether the participant has the Medication box on their notes
-(hasMedicationLine). This skill cannot switch it, so when the owner says a participant needs it and it is false,
+(hasMedicationLine). This skill does not switch it, by decision: it is a manager's choice for each participant, and
+rule 7 stands. So when the owner says a participant needs it and it is false,
 list that person for a manager to switch on in Participant Details in the app. Say nothing about what the box holds:
 it holds what a worker writes on a note, which this skill never sees.
 

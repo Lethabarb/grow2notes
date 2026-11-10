@@ -518,7 +518,7 @@ DECLARE @b8Expected int = (
                           N'20261017230811_AddCommonItems', N'20261017231729_AddNote',
                           N'20261018085706_AddNoteVersion',
                           N'20261020054950_AddNoteVersionGroup', N'20261023003611_AddNoteReview',
-                          N'20261026094320_AddOpenIddict'));
+                          N'20261026094320_AddOpenIddict', N'20261110091317_AddWordTemplateParity'));
 
 ------------------------------------------------------------------------------------------------------------------------
 -- C. The Data Protection key ring in SQL, wrapped by the Key Vault key
@@ -755,9 +755,10 @@ WITH checks AS (
                      N'20261018085706_AddNoteVersion (EF Core 10.0.12), ',
                      N'20261020054950_AddNoteVersionGroup (EF Core 10.0.12), ',
                      N'20261023003611_AddNoteReview (EF Core 10.0.12), ',
-                     N'20261026094320_AddOpenIddict (EF Core 10.0.12)'),
+                     N'20261026094320_AddOpenIddict (EF Core 10.0.12), ',
+                     N'20261110091317_AddWordTemplateParity (EF Core 10.0.14)'),
               ISNULL(@b8, N'(empty)'),
-              CASE WHEN @b8Expected = 10 THEN 1 ELSE 0 END),
+              CASE WHEN @b8Expected = 11 THEN 1 ELSE 0 END),
 
         (301, N'C1', N'Key ring table dbo.DataProtectionKeys and its columns',
               N'Id int, FriendlyName nvarchar(max), Xml nvarchar(max)',

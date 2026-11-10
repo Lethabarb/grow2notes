@@ -219,9 +219,10 @@ public sealed class AddParticipantEndpointTests : IClassFixture<Grow2NotesFactor
         Assert.Null(await StoredAsync(seeded.B, id));
         var columns = await StoredColumnsAsync(id);
         Assert.Equal(
-            ["ArchivedAtUtc", "CreatedAtUtc", "DateOfBirth", "FamilyName", "GivenName", "Id", "OrganisationId",
-                "RowVersion", "Status"],
+            ["ArchivedAtUtc", "CreatedAtUtc", "DateOfBirth", "FamilyName", "GivenName", "HasMedicationLine", "Id",
+                "OrganisationId", "RowVersion", "Status"],
             columns.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(false, columns["HasMedicationLine"]);
         Assert.DoesNotContain(columns.Values, value => value?.ToString()?.Contains(ndisNumber) == true);
     }
 
