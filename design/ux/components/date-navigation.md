@@ -433,7 +433,7 @@ function WritePastDayNote({ participant }: { participant: { id: string; givenNam
 - The status line is the **only** place the chosen date appears in words. Don't add a second copy in the heading.
 - Back after Previous day → the day you were on. Back after a calendar pick → the date shown before the pick. Back from the first report date → the screen you came from.
 - iPhone managers can pick a future date (WebKit 225639). They get "Date must be today or in the past" when the picker closes, and Previous day still works from the last good date.
-- The downloaded file name already carries the date (`daily-notes_2026-10-01.pdf`, §11.5). Nothing else is needed to confirm which day was downloaded.
+- The downloaded file name already carries the date (`Thursday 01.10.2026.pdf`, §11.5). Nothing else is needed to confirm which day was downloaded.
 
 **4.8 Participant detail and 4.4 Participant notes: Write past-day note.**
 - Both pages link to the same past-day page. Neither shows the field inline (primary-actions.md lists "Write past-day note" as a link).

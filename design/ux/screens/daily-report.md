@@ -175,7 +175,7 @@ screen.
 | +--------------------+  +----------------+  +--------------+                         |
 | Wednesday 30 September 2026                                                          |
 |                                                                                      |
-| daily-notes_2026-09-30.docx is ready. Look in your downloads.                        |
+| Wednesday 30.09.2026.docx is ready. Look in your downloads.                        |
 | +------------------+  +------------------+                                           |
 | |  Download Word   |  |  Download PDF    |   side by side, left-aligned, same width   |
 | +------------------+  +------------------+                                           |
@@ -295,7 +295,7 @@ Specs: [file-download.md](../components/file-download.md), [primary-actions.md](
 | Style | Both **primary**, same width. Deliberately breaks "one primary per page": they are one action in two formats, and §11.5 makes Word the accessible version and PDF the filing version, so neither is secondary [Opinion, primary-actions.md] |
 | `aria-describedby` | Always `report-date-status` (the day in words, or the reason) |
 | Request | `GET /api/reports/daily/{date}/export?format=docx|pdf` through the shared `api()` wrapper's raw-`Response` form, with the screen's `AbortController` and the wrapper's per-call option `timeoutMs: 30_000` instead of the default 10 s (empty-loading-error.md; M4 allows up to 10 s for 20 notes). Export record passes the same option [Opinion] |
-| Save | Blob → same-origin `blob:` object URL → a temporary hidden `<a download rel="noopener">` with **no** `target` → click → remove → revoke after 60 s. File name from `Content-Disposition` (`daily-notes_2026-10-01.docx`), falling back to the same pattern [Standard] MDN `<a download>`, https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a · WebKit bug 190351 (never `target="_blank"`), https://bugs.webkit.org/show_bug.cgi?id=190351 |
+| Save | Blob → same-origin `blob:` object URL → a temporary hidden `<a download rel="noopener">` with **no** `target` → click → remove → revoke after 60 s. File name from `Content-Disposition` (`Thursday 01.10.2026.docx`), falling back to the same pattern [Standard] MDN `<a download>`, https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a · WebKit bug 190351 (never `target="_blank"`), https://bugs.webkit.org/show_bug.cgi?id=190351 |
 | Available | When the day has notes, **while the has-notes check is still running**, and when the check failed. The export endpoint has the final say (`404 report.no_notes`) |
 | Unavailable (design: "disabled") | Only for a definite reason: the check said `hasNotes: false` for the URL date, or the field is in error. `aria-disabled="true"`, never `disabled`; still in the Tab order; `--colour-surface-muted` fill, `--colour-text-secondary` label (8.1:1), 2 px dashed border, `cursor: not-allowed`; `GrayText` in forced colours |
 | Busy | From the press: an `inFlight` ref plus `aria-disabled` on **both** buttons, so a second tap does nothing and only one file is made at a time. The pressed button shows "Downloading…" (P) after 400 ms in the same grid cell as its label (no size change). The other button keeps its normal look. No spinner, no motion (foundations.md). `announceBusy={false}`: the download status line says the wait instead, so the page status region does not read it twice (app-shell.md component 3) |
@@ -310,7 +310,7 @@ Spec: [file-download.md](../components/file-download.md).
   failure alert: the same position as on Export record, so the line is in view whenever the buttons are.
 - Text, word for word the same shapes as Export record: "Preparing the Word file… Keep this page open." or
   "Preparing the PDF file… Keep this page open." (P; the format of the pressed button) while a download has taken
-  400 ms or more; then "daily-notes_2026-10-01.docx is ready. Look in your downloads." (P) with the real file name.
+  400 ms or more; then "Thursday 01.10.2026.docx is ready. Look in your downloads." (P) with the real file name.
   Stays until the next press or date change; never times out (SC 2.2.1). Body text, `--colour-text` (the preparing
   line in `--colour-text-secondary`), `overflow-wrap: anywhere` so the file name cannot cause sideways scrolling at
   320 px or 200% text.
@@ -430,7 +430,7 @@ Exact copy is in the cells; dates in the examples are Thursday 1 October 2026 (t
 | S7 | **Field error: empty or incomplete** | Enter, blur or a download press with an incomplete value | "Enter a date" (P) above the input; red bar and border; `aria-invalid="true"`. Links still work and clear the error | Visible text empty; hidden copy: Enter a date | Unavailable. A press moves focus to the field | – |
 | S8 | **Field error: future date** | Enter, blur or a download press with a date after today (iOS picker; desktop typing) | "Date must be today or in the past" (P) | Hidden copy: Date must be today or in the past | Unavailable. A press moves focus to the field | – |
 | S9 | **Preparing** | A download has run for 400 ms or more | Unchanged; links still work (a step cancels the download) | Unchanged | Pressed button reads "Downloading…" (P); both `aria-disabled`; the other looks normal | – / Preparing the Word file… Keep this page open. (or "PDF", the pressed format) (P) |
-| S10 | **Ready** | The file was handed to the browser | Unchanged | Unchanged | Available | – / daily-notes_2026-09-30.docx is ready. Look in your downloads. (P; real file name) |
+| S10 | **Ready** | The file was handed to the browser | Unchanged | Unchanged | Available | – / Wednesday 30.09.2026.docx is ready. Look in your downloads. (P; real file name) |
 | S11 | **Failed: no connection or timeout** | `fetch` rejected, connection dropped mid-file, or 30 s timeout | Unchanged | Unchanged | Available; focus stays on the pressed button | Not downloaded: no connection. Try again. (P) / empty |
 | S12 | **Failed: server** | `5xx` or anything unexpected | Unchanged | Unchanged | Available | Not downloaded: something went wrong. Try again. (P) / empty |
 | S13 | **Failed: too many** | `429` (10 exports a minute per user, §9.9; for example a week caught up in both formats) | Unchanged | Unchanged | Available | Not downloaded: too many downloads in the last minute. Wait a minute, then try again. (P) / empty |
@@ -485,7 +485,7 @@ is a change of content, not of context, so SC 3.2.2 is met [Standard] https://ww
 | **Enter in the field** | Commit with checks; shows the error if any. Enter never submits anything (there is no form) | Stays | Error: through the field's `aria-describedby` when focus returns; hidden copy in the date status |
 | **Leave the field** (Tab, tap elsewhere) | Commit with checks | Moves where the user moved it | Error: hidden copy in the date status line |
 | **Browser Back / Forward** | Steps through the report dates viewed (one entry per step or per picking visit), then back to the previous screen | Unchanged within the screen | Date status: the date in words |
-| **Download Word / Download PDF** (available, field matches URL) | `inFlight` set; both `aria-disabled`; request sent. After 400 ms: "Downloading…" on the pressed button and "Preparing the Word file… Keep this page open." / "Preparing the PDF file… Keep this page open." in the download status. Success: the browser saves or prompts (iPhone Safari may offer View or Download; that is the browser's own UI) | **Stays on the pressed button** | Download status: "Preparing the Word file… Keep this page open." / "Preparing the PDF file… Keep this page open." (only if slow), then "daily-notes_2026-10-01.docx is ready. Look in your downloads." |
+| **Download Word / Download PDF** (available, field matches URL) | `inFlight` set; both `aria-disabled`; request sent. After 400 ms: "Downloading…" on the pressed button and "Preparing the Word file… Keep this page open." / "Preparing the PDF file… Keep this page open." in the download status. Success: the browser saves or prompts (iPhone Safari may offer View or Download; that is the browser's own UI) | **Stays on the pressed button** | Download status: "Preparing the Word file… Keep this page open." / "Preparing the PDF file… Keep this page open." (only if slow), then "Thursday 01.10.2026.docx is ready. Look in your downloads." |
 | Download press **while the field holds an uncommitted date** | Commit it with Enter's checks. Valid: the URL moves to it (push or replace per the visit rule) and that date downloads. Invalid: the field error shows, nothing is sent | Valid: stays on the button. Invalid: **moves to the field** | Valid: the new date in words, then the download messages. Invalid: the field reads its label, "invalid entry", and the error |
 | Download press **on an empty day** | Nothing; no request | Stays | Nothing new: the reason was announced on the date change and is read with the button (`aria-describedby`) |
 | Download press **while the field is in error** | Nothing is sent | **Moves to the field** | The field's label, invalid state and error |
@@ -631,7 +631,7 @@ is never cleared by the app) · 4.1.2 · 4.1.3. 3.3.4 does not apply: nothing is
 - [ ] A download answered `404 report.no_notes` turns the screen into the empty state without an error message.
 
 **Downloads**
-- [ ] Download Word saves `daily-notes_{date}.docx`; Download PDF saves `daily-notes_{date}.pdf` (name from
+- [ ] Download Word saves `<Weekday> dd.mm.yyyy.docx`; Download PDF saves the same name with `.pdf` (name from
       `Content-Disposition`), in Chromium, Firefox and WebKit (Playwright `waitForEvent('download')`).
 - [ ] A double click or double tap sends exactly one request and writes one `report.downloaded` audit event.
 - [ ] While one format is downloading, the other button sends nothing when pressed.

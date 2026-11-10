@@ -6,7 +6,8 @@ importable later), D53 (2-week sprints), D54 (about 20 hours a week, one develop
 R2 is the admin MCP server, after go-live). It adds no feature. A decision in [decisions.md](../decisions.md) can
 override anything here.
 
-**From 14 October 2026 the remaining work is delivered as tasks** (D87): the 39 tasks in [tasks.md](tasks.md), one
+**From 14 October 2026 the remaining work is delivered as tasks** (D87): the tasks in [tasks.md](tasks.md) (39 when
+this was decided, 44 with T40 to T44), one
 pull request each, in that file's order and lanes, which supersede the numbered backlog order in releases.md. The
 stories each task absorbs stay in their epic files as its acceptance criteria. Per-story refinement, pull-in rows in
 sprint files and per-story close-outs no longer apply to tasks: a task is planned briefly into its *Steps* when its

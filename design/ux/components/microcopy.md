@@ -56,7 +56,7 @@ pattern already used in design.md and adds no feature, screen, setting or data.
 | 4.8 to 4.10 Manage: participants and goals, common items, guide prompts | Given name, Family name, Date of birth, Add goal, Add item, New group, Add group, Group name, Rename, Move up, Move down, Archive, Restore, help text, Guide prompts | Laptop-first managers. One-sentence help text is allowed here; the consequence ("notes started from now on") is the key message. |
 | 4.11 Users (managers) | Invite user, Send invite, Resend invite, Reset sign-in, Deactivate, Reactivate, Invited / Active / Deactivated, Worker / Manager | Security-sensitive actions. Consequences must be stated in the confirmation, with the person's name. |
 | 4.12 Export record (managers) | From date, To date, Format, PDF, Word, Include earlier versions of edited notes, Export | Date ranges. "Export" here, "Download" on the report: two different actions, two different words. |
-| Downloaded files and the setup email (§11, A23) | "Daily progress notes", footer, file names | Not screens. §11 owns them. The glossary, spelling and the D42 name rule still apply. |
+| Downloaded files and the setup email (§11, A23) | "SUPPORT NOTES", its labels, footer, file names | Not screens. §11 owns them. The glossary, spelling and the D42 name rule still apply. |
 
 ---
 
@@ -762,7 +762,7 @@ NHS App; [Research] NN/g, https://www.nngroup.com/articles/error-message-guideli
 
 ### Downloaded files and the setup email (§11, A23)
 
-- Not screens. §11 fixes their exact layout and strings ("Daily progress notes", the footer, file names with dates only).
+- Not screens. §11 fixes their exact layout and strings ("SUPPORT NOTES", the Word labels, the footer, file names with the weekday and date only).
 - The glossary, Australian spelling, the D42 name rule and the comma before a time apply. One alignment for the file
   owner: §11.3 writes "Fri 2 Oct 9:01 am" in one place and "Fri 2 Oct, 8:05 am" in another; use the comma in both.
 
