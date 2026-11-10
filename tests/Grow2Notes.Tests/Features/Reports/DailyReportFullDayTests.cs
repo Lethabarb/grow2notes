@@ -99,7 +99,7 @@ public sealed partial class DailyReportFullDayTests(Grow2NotesFactory factory) :
         for (var i = 0; i < entries.Count; i++)
         {
             Assert.Equal($"PAGEREF p{i + 1} \\h", entries[i].Descendants<FieldCode>().Single().Text.Trim());
-            Assert.Equal(expected[i] + "–", entries[i].InnerText);
+            Assert.Equal(expected[i] + "–", string.Concat(entries[i].Descendants<Text>().Select(t => t.Text)));
         }
 
         Assert.True(main.DocumentSettingsPart!.Settings!.Elements<UpdateFieldsOnOpen>().Single().Val!.Value);

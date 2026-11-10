@@ -42,4 +42,16 @@ internal sealed record ReportBlock(ReportBlockKind Kind, string Text, bool IsTic
 
     /// <summary>The boxes of a <see cref="ReportBlockKind.TickRow"/>.</summary>
     public IReadOnlyList<ReportTick> Ticks { get; init; } = [];
+
+    /// <summary>Two blocks are equal when they say the same, the boxes of a tick row included.</summary>
+    public bool Equals(ReportBlock? other)
+        => other is not null
+            && Kind == other.Kind
+            && Text == other.Text
+            && IsTicked == other.IsTicked
+            && PageBreakBefore == other.PageBreakBefore
+            && Anchor == other.Anchor
+            && Ticks.SequenceEqual(other.Ticks);
+
+    public override int GetHashCode() => HashCode.Combine(Kind, Text, IsTicked, PageBreakBefore, Anchor, Ticks.Count);
 }

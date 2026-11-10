@@ -166,9 +166,9 @@ internal sealed record DailyReportModel(
 
 /// <summary>
 /// One submitted note as a report shows it, in a daily report or in a participant's record: the participant's name,
-/// who wrote the note, by name and ID, when it was started if that was on a later day than its date, as a past-day note is, when it
-/// was first submitted, and the version that was current when the report was read; who saved that version and when,
-/// when the note has been edited; and its flag, when it has one.
+/// who wrote the note, by name and ID, when it was started if that was on a later day than its date, as a past-day
+/// note is, when it was first submitted, and the version that was current when the report was read; who saved that
+/// version and when, when the note has been edited; and its flag, when it has one.
 /// </summary>
 internal sealed record DailyReportNote(
     string ParticipantName,

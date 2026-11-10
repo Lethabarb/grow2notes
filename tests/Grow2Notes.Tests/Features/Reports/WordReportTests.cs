@@ -319,7 +319,7 @@ public sealed class WordReportTests
                 paragraph.ParagraphProperties!.GetFirstChild<Tabs>()!.GetFirstChild<TabStop>()!.CloneNode(true),
                 paragraph.Descendants<FieldChar>().Select(c => c.FieldCharType!.Value).ToList(),
                 paragraph.Descendants<FieldCode>().Single().Text,
-                paragraph.InnerText);
+                string.Concat(paragraph.Descendants<Text>().Select(t => t.Text)));
         });
 
         var stop = (TabStop)tab;

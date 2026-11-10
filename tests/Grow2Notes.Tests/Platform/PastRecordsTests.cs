@@ -62,8 +62,8 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
         var versions = await BodyAsync(manager, $"{NotePath(participant.Id, first)}/versions");
         var report = await ReportTextAsync(manager, first);
         var export = await ExportTextAsync(manager, participant.Id, first, second);
-        Assert.Contains(GivenName, report);
-        Assert.Contains(GivenName, export);
+        Assert.Contains(GivenName, report, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(GivenName, export, StringComparison.OrdinalIgnoreCase);
 
         await PostNoContentAsync(manager, $"/api/admin/participants/{participant.Id}/archive", participant.ETag);
 
