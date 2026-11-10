@@ -19,7 +19,7 @@ import { limits } from '../../limits.ts';
 import styles from './CreatePassword.module.css';
 import { NoLinkMessage, SetupMessage } from './SetupMessage.tsx';
 import { useSetup, type SetupAccount } from './setupContext.ts';
-import { creationOptions, passkeyAlertFor } from './setupPasskey.ts';
+import { creationOptions, passkeyAlertFor, recordPasskeyFailure } from './setupPasskey.ts';
 
 const fieldId = 'password';
 
@@ -213,6 +213,10 @@ function PasswordForm({ account, onTimedOut }: PasswordFormProps) {
       // The view has gone, and its prompt with it.
       if (!mounted.current) {
         return;
+      }
+
+      if (withPasskey) {
+        recordPasskeyFailure(failed);
       }
 
       setBusy(false);

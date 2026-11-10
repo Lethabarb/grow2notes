@@ -29,7 +29,8 @@ const mePath = '/api/auth/me';
 const startPath = '/api/auth/setup/start';
 const optionsPath = '/api/auth/setup/passkey/options';
 const passkeyPath = '/api/auth/setup/passkey';
-const title = 'Grow2Notes – Set up your account';
+const failurePath = '/api/auth/setup/passkey/failure';
+const title ='Grow2Notes – Set up your account';
 // Between a day and its month, so that the two never split across lines (microcopy.md §3).
 const nbsp = ' ';
 
@@ -241,6 +242,11 @@ beforeEach(() => {
     if (path === optionsPath) {
       served += 1;
       return json(creationOptions(`challenge-${served}`));
+    }
+
+    // The record of a prompt that failed, which answers nothing the page reads.
+    if (path === failurePath) {
+      return Promise.resolve(new Response(null, { status: 204 }));
     }
 
     throw new Error('The test gave no answer for this request.');
@@ -522,9 +528,52 @@ describe('ChooseMethod (view E)', () => {
       expect(sent(optionsPath)).toHaveLength(2);
       expect(screen.getByRole('link', { name: 'Use a password and authenticator app' })).toBeInTheDocument();
       expect(window.location.pathname).toBe('/setup');
+      // Only the prompt's error goes to the server's log (D103): the server gave the rest.
+      expect(sent(failurePath)).toEqual(
+        prompt === undefined ? [] : [{ name: prompt.name, message: prompt.message }],
+      );
 
       pressPasskey();
       expect(webAuthn.startRegistration).toHaveBeenLastCalledWith({ optionsJSON: creationOptions('challenge-2') });
+    });
+
+    // SimpleWebAuthn's error keeps the browser's as its cause, under a code and words of its own.
+    it('records the browser\'s words with SimpleWebAuthn\'s code, cut to the lengths the server takes', async () => {
+      const cause = browserError('NotAllowedError');
+      const wrapped = Object.assign(new Error('x'.repeat(600), { cause }), {
+        name: 'NotAllowedError',
+        code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY',
+      });
+      webAuthn.startRegistration.mockRejectedValueOnce(wrapped);
+      await openViewE();
+
+      pressPasskey();
+      await wait(0);
+
+      expect(sent(failurePath)).toEqual([
+        { name: 'NotAllowedError', code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY', message: 'x'.repeat(500) },
+      ]);
+      expect(alert().textContent).toBe(notSetUp);
+    });
+
+    it('records the cause\'s words after SimpleWebAuthn\'s own where they differ', async () => {
+      const wrapped = Object.assign(new Error('Not allowed.', { cause: browserError('NotAllowedError') }), {
+        name: 'NotAllowedError',
+        code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY',
+      });
+      webAuthn.startRegistration.mockRejectedValueOnce(wrapped);
+      await openViewE();
+
+      pressPasskey();
+      await wait(0);
+
+      expect(sent(failurePath)).toEqual([
+        {
+          name: 'NotAllowedError',
+          code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY',
+          message: 'Not allowed. (NotAllowedError: A made-up NotAllowedError.)',
+        },
+      ]);
     });
 
     it('says "Not set up: no connection" when the options for the press do not come', async () => {

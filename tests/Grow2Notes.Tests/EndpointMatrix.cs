@@ -145,6 +145,9 @@ internal static class EndpointMatrix
             Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized),
         new(Post,      "/api/auth/setup/passkey", Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/setup/passkey", new { credentialJson = "{}", name = "Grow2Notes" })),
+        new(Post,      "/api/auth/setup/passkey/failure",
+            Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+            WithJson("/api/auth/setup/passkey/failure", new { name = "NotAllowedError" })),
 
         // Anyone may ask for the options to sign in with a passkey (§6.2), signed in or not: they name no user. Anyone
         // may sign in with a passkey too, and a passkey that no account holds is refused, whoever sends it.

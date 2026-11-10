@@ -31,6 +31,7 @@ const keyPath = '/api/auth/setup/authenticator';
 const optionsPath = '/api/auth/setup/passkey/options';
 const passwordOnlyPath = '/api/auth/setup/password-only';
 const passwordAndPasskeyPath = '/api/auth/setup/password-and-passkey';
+const failurePath = '/api/auth/setup/passkey/failure';
 const appLink = 'Use a password and authenticator app';
 const passwordOnlyLink = 'Use a password only';
 const passwordAndPasskeyLink = 'Use a password and a passkey';
@@ -335,6 +336,11 @@ beforeEach(() => {
     if (path === optionsPath) {
       served += 1;
       return json(creationOptions(`challenge-${served}`));
+    }
+
+    // The record of a prompt that failed, which answers nothing the page reads.
+    if (path === failurePath) {
+      return Promise.resolve(new Response(null, { status: 204 }));
     }
 
     throw new Error('View F sends no request.');
@@ -880,6 +886,8 @@ describe('CreatePassword (view F)', () => {
       expect(sent(passwordAndPasskeyPath)).toEqual([]);
       expect(sent(optionsPath)).toHaveLength(requests + 1);
       expect(document.title).toBe(`Error: ${title}`);
+      // The server's log gets the browser's words, never the password (D103).
+      expect(sent(failurePath)).toEqual([{ name: 'NotAllowedError', message: 'A made-up NotAllowedError.' }]);
 
       fireEvent.click(button);
       expect(webAuthn.startRegistration).toHaveBeenLastCalledWith({ optionsJSON: creationOptions('challenge-3') });
@@ -898,6 +906,8 @@ describe('CreatePassword (view F)', () => {
       expect(button).toHaveFocus();
       expect(field()).toHaveValue(longPassword);
       expect(field()).not.toHaveAttribute('aria-invalid');
+      // The server gave the refusal, so it has it already.
+      expect(sent(failurePath)).toEqual([]);
     });
 
     it('shows the refusal of the password on the field, not as a passkey that was not set up', async () => {

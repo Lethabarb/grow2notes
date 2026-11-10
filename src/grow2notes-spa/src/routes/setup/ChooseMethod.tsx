@@ -14,7 +14,7 @@ import { strings } from '../../copy/strings.ts';
 import { cancelPasskey, useOneOptions } from '../../features/auth/passkey.ts';
 import styles from './ChooseMethod.module.css';
 import { useSetup, type PasswordChoice, type SetupAccount } from './setupContext.ts';
-import { creationOptions, passkeyAlertFor } from './setupPasskey.ts';
+import { creationOptions, passkeyAlertFor, recordPasskeyFailure } from './setupPasskey.ts';
 
 // Sent with every passkey, as design.md §6.2's body has it, and never shown (D70); the server stores each under this
 // name whatever it gets.
@@ -124,6 +124,7 @@ export function ChooseMethod({ account, onTimedOut }: ChooseMethodProps) {
         return;
       }
 
+      recordPasskeyFailure(error);
       const words = passkeyAlertFor(error);
       if (words === undefined) {
         onTimedOut();
