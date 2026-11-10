@@ -87,4 +87,15 @@ internal static class Limits
 
     /// <summary>Where an approved assistant keeps the data it is given, in the operator's words (§11.2).</summary>
     public const int McpDataLocation = 200;
+
+    /// <summary>
+    /// The name of the error that a passkey prompt failed with at setup, such as <c>NotAllowedError</c> (D103).
+    /// </summary>
+    public const int PasskeyFailureName = 100;
+
+    /// <summary>SimpleWebAuthn's code for that error, such as <c>ERROR_CEREMONY_ABORTED</c> (D103).</summary>
+    public const int PasskeyFailureCode = 100;
+
+    /// <summary>The words of that error, SimpleWebAuthn's with the browser's after them (D103).</summary>
+    public const int PasskeyFailureMessage = 500;
 }

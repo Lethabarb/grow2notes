@@ -1242,6 +1242,7 @@ ASP.NET Core Identity's `MapIdentityApi()` is **not** used: it exposes self-regi
 | POST | /api/auth/setup/password | Enrolment cookie | Finish setup with password + authenticator (§8.1). | `{password, totpCode}` → `200 Me`, or `422 validation.failed` with `errors.totpCode` for a wrong code (D70) |
 | POST | /api/auth/setup/passkey/options | Enrolment cookie | `MakePasskeyCreationOptionsAsync`. | → WebAuthn creation options |
 | POST | /api/auth/setup/passkey | Enrolment cookie | Finish setup with a passkey (§8.1). `name` is always "Grow2Notes", which no screen shows or asks for (D70). | `{credentialJson, name}` → `200 Me`, or `422 validation.failed` with `errors.credentialJson` for a refused passkey (A52) |
+| POST | /api/auth/setup/passkey/failure | Enrolment cookie | Log why the browser made no passkey at setup, as its passkey prompt's error gave it, at `Information` with control, format and separator characters made spaces and "none" for a missing code (D103). It changes nothing and writes no audit event. The SPA sends it when the prompt fails on view E or F, and does not wait for it. | `{name, code?, message?}`, at most 100, 100 and 500 characters → `204`, or `422 validation.failed` |
 | POST | /api/auth/setup/password-only | Enrolment cookie | Finish setup with a password only (§8.1, D97). Two-factor stays off. | `{password}` → `200 Me`, or `422 validation.failed` with `errors.password` |
 | POST | /api/auth/setup/password-and-passkey | Enrolment cookie | Finish setup with a password and a passkey, in one transaction: the password, the passkey (its attestation checked against the enrolment cookie's user) and two-factor on (§8.1, D97). `name` is always "Grow2Notes", as for a passkey alone (D70). Its creation options come from `POST /api/auth/setup/passkey/options`. | `{password, credentialJson}` → `200 Me`, or `422 validation.failed` with `errors.password` or `errors.credentialJson` |
 
@@ -1724,7 +1725,7 @@ There is one long-lived credential, the Resend API key (D92, D94). It sits in Ke
 ### 9.5 No participant data in logs or telemetry
 
 - **IDs only.** Logs carry GUIDs (user, organisation, participant, note), never names, email addresses, goal wording or note text.
-- **No browser telemetry.** The Application Insights JavaScript SDK is not used; there are no third-party analytics or fonts.
+- **No browser telemetry.** The Application Insights JavaScript SDK is not used; there are no third-party analytics or fonts. The browser reports one thing itself, to the app's own API: why its passkey prompt failed at setup, in the browser's words (D103).
 - **Server telemetry:** the Azure Monitor OpenTelemetry distro (requests, dependencies, exceptions) with `ILogger` at `Warning` (app namespace `Information`).
   - HTTP logging middleware is off, so bodies, headers and cookies are never captured. URLs contain only IDs.
   - `EnableSensitiveDataLogging` and `EnableDetailedErrors` are never enabled outside local development.

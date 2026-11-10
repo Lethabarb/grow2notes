@@ -13,4 +13,7 @@ export const limits = {
   guidedNotes: 20_000,
   flagReason: 200,
   reviewComment: 500,
+  passkeyFailureName: 100,
+  passkeyFailureCode: 100,
+  passkeyFailureMessage: 500,
 } as const;
