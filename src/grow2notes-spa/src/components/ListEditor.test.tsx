@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/api.ts';
 import { createQueryClient } from '../api/queryClient.ts';
-import { ListEditor, type ListApi, type ListRow } from './ListEditor.tsx';
+import { ListEditor, type ListApi, type ListRow, type RowChanges, type RowSetting } from './ListEditor.tsx';
 import { ListConflict, ListFrame } from './ListFrame.tsx';
 import { PageStatus } from './PageStatus.tsx';
 
@@ -13,7 +13,10 @@ const queryKey = ['admin', 'goals', participantId];
 const help =
   'Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written '
   + 'with.';
-const empty = 'No goals yet. Notes will show an empty Goals section.';
+const empty = 'No goals yet. Notes will show “No goals set”.';
+
+/** What a reword sends besides its text for a list whose rows have no setting and no group. */
+const noChanges: RowChanges = { groupId: undefined, setting: undefined };
 
 /** A made-up goal (A35), active unless it has the time it was archived at. */
 function goal(id: string, text: string, sortOrder: number, archivedAtUtc: string | null = null): ListRow {
@@ -35,7 +38,7 @@ type Rendered = {
   /** The adds sent, which nothing answers unless a test gives them an answer. */
   add: (text: string) => Promise<unknown>;
   /** The rewords sent, each with its goal's ID and version, which nothing answers unless a test does. */
-  update: (id: string, text: string, rowVersion: string) => Promise<unknown>;
+  update: (id: string, text: string, rowVersion: string, changes: RowChanges) => Promise<unknown>;
   /** The reorders sent, each with the active goals' IDs in a new order, which nothing answers unless a test does. */
   reorder: (ids: string[]) => Promise<unknown>;
   /** The archives sent, each with its goal's ID and version, which nothing answers unless a test does. */
@@ -50,12 +53,12 @@ type Rendered = {
  * it there, under a query client of its own, beside a button elsewhere on the page; gives the client, the query's
  * function and the writes' functions.
  */
-function renderEditor(rows: ListRow[], readOnly = false): Rendered {
+function renderEditor(rows: ListRow[], readOnly = false, setting?: RowSetting): Rendered {
   const client = createQueryClient();
   client.setQueryData(queryKey, rows);
   const queryFn = vi.fn<() => Promise<ListRow[]>>();
   const add = vi.fn<(text: string) => Promise<unknown>>();
-  const update = vi.fn<(id: string, text: string, rowVersion: string) => Promise<unknown>>();
+  const update = vi.fn<(id: string, text: string, rowVersion: string, changes: RowChanges) => Promise<unknown>>();
   const reorder = vi.fn<(ids: string[]) => Promise<unknown>>();
   const archive = vi.fn<(id: string, rowVersion: string) => Promise<unknown>>();
   const restore = vi.fn<(id: string, rowVersion: string) => Promise<unknown>>();
@@ -74,7 +77,7 @@ function renderEditor(rows: ListRow[], readOnly = false): Rendered {
       <PageStatus>
         <ListFrame helpId="goals-help" help={readOnly ? undefined : help}>
           <ListConflict />
-          <ListEditor kind="goal" api={api} readOnly={readOnly} />
+          <ListEditor kind="goal" api={api} readOnly={readOnly} setting={setting} />
         </ListFrame>
         <button type="button">Elsewhere</button>
       </PageStatus>
@@ -948,7 +951,7 @@ describe('ListEditor, rewording', () => {
       breakfast.id,
       'Makes own lunch',
       breakfast.rowVersion,
-      undefined,
+      noChanges,
     );
     expect(rendered.queryFn).toHaveBeenCalledOnce();
     expect(activeTexts()).toEqual(['Makes own lunch', bus.text]);
@@ -1100,7 +1103,7 @@ describe('ListEditor, rewording', () => {
 
     await press(save);
 
-    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', breakfast.rowVersion, undefined);
+    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', breakfast.rowVersion, noChanges);
     expect(rendered.queryFn).toHaveBeenCalledOnce();
     expect(within(item).getByRole('alert')).toHaveTextContent(changedWhileEditing);
     expect(box).toHaveValue('Makes own lunch');
@@ -1109,7 +1112,7 @@ describe('ListEditor, rewording', () => {
 
     await press(save);
 
-    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=', undefined);
+    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=', noChanges);
     expect(activeTexts()).toEqual(['Makes own lunch', bus.text]);
     expect(editButton('Makes own lunch')).toHaveFocus();
   });
@@ -1203,7 +1206,7 @@ describe('ListEditor, rewording', () => {
     answer.resolve(undefined);
     await wait(1);
 
-    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=', undefined);
+    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=', noChanges);
   });
 
   it('sends nothing for a Save whose goal the write before it found archived, showing the list conflict', async () => {
@@ -1267,6 +1270,102 @@ function recordAnnouncements(): () => string[] {
   }).observe(region, { childList: true, characterData: true, subtree: true });
   return () => written;
 }
+
+// A list's setting (list-editor.md *Behaviour*): a goal's term, as a participant's Goals has it.
+describe('ListEditor, with a setting', () => {
+  const mediumOrLong = { ...bus, isMediumOrLongTerm: true };
+  const term: RowSetting = {
+    isOn: (row) => row.isMediumOrLongTerm === true,
+    line: 'Medium or long term',
+    control: ({ idPrefix, on, onChange }) => (
+      <fieldset>
+        <legend>Term</legend>
+        <label>
+          <input type="radio" name={idPrefix} checked={!on} onChange={() => onChange(false)} />
+          Short term
+        </label>
+        <label>
+          <input type="radio" name={idPrefix} checked={on} onChange={() => onChange(true)} />
+          Medium or long term
+        </label>
+      </fieldset>
+    ),
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows its second line, muted, under the text of a row that has it on, and none under a row that has not', () => {
+    renderEditor([breakfast, mediumOrLong], false, term);
+
+    const [first, second] = activeItems();
+    expect(within(second).getByText('Medium or long term').tagName).toBe('P');
+    expect(within(first).queryByText('Medium or long term')).toBeNull();
+  });
+
+  it('shows its control in the edit form between the box and Save, at the value the row has', async () => {
+    renderEditor([breakfast, mediumOrLong], false, term);
+
+    await openEdit(bus.text);
+
+    const form = rowOf(bus.text).querySelector('form')!;
+    const termGroup = within(form).getByRole('group', { name: 'Term' });
+    expect(within(termGroup).getByRole('radio', { name: 'Short term' })).not.toBeChecked();
+    expect(within(termGroup).getByRole('radio', { name: 'Medium or long term' })).toBeChecked();
+    expect(Array.from(form.querySelectorAll('textarea, fieldset, button'), (control) => control.tagName)).toEqual([
+      'TEXTAREA',
+      'FIELDSET',
+      'BUTTON',
+      'BUTTON',
+    ]);
+  });
+
+  it('sends a change of the setting alone, with the text as it was, under the version of the row', async () => {
+    const rendered = renderEditor([breakfast, bus], false, term);
+    serveList(rendered, [breakfast, bus]);
+    await openEdit(bus.text);
+
+    await press(within(rowOf(bus.text)).getByRole('radio', { name: 'Medium or long term' }));
+    await press(saveButton(rowOf(bus.text)));
+
+    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(bus.id, bus.text, bus.rowVersion, {
+      groupId: undefined,
+      setting: true,
+    });
+  });
+
+  it('sends the setting as it was when only the text changes, and nothing when neither does', async () => {
+    const rendered = renderEditor([breakfast, mediumOrLong], false, term);
+    serveList(rendered, [breakfast, mediumOrLong]);
+    await openEdit(bus.text);
+    await press(saveButton(rowOf(bus.text)));
+    expect(rendered.update).not.toHaveBeenCalled();
+
+    retype(await openEdit(bus.text), 'Catches the bus');
+    await press(saveButton(rowOf('Catches the bus')));
+
+    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(bus.id, 'Catches the bus', bus.rowVersion, {
+      groupId: undefined,
+      setting: true,
+    });
+  });
+
+  it('drops a change of the setting on Cancel, the row’s own value back at the next Edit', async () => {
+    renderEditor([breakfast, bus], false, term);
+    await openEdit(bus.text);
+    await press(within(rowOf(bus.text)).getByRole('radio', { name: 'Medium or long term' }));
+
+    await press(cancelButton(rowOf(bus.text)));
+    await press(editButton(bus.text));
+
+    expect(within(rowOf(bus.text)).getByRole('radio', { name: 'Short term' })).toBeChecked();
+  });
+});
 
 describe('ListEditor, moving', () => {
   beforeEach(() => {

@@ -33,9 +33,16 @@ describe("Submit's words", () => {
   });
 
   it('say that a downloaded file is ready, by its name', () => {
-    expect(msg.fileReady('daily-notes_2026-10-01.docx')).toBe(
-      'daily-notes_2026-10-01.docx is ready. Look in your downloads.',
+    expect(msg.fileReady('Thursday 01.10.2026.docx')).toBe(
+      'Thursday 01.10.2026.docx is ready. Look in your downloads.',
     );
+  });
+
+  it('ask for the details of a ticked item by its wording, and show details written after Details', () => {
+    expect(msg.enterDetails('Other (staff to complete if different from above)')).toBe(
+      'Enter the details for Other (staff to complete if different from above)',
+    );
+    expect(msg.itemDetails('A haircut')).toBe('Details: A haircut');
   });
 
   it('say that it was not submitted, and why, and that the draft is saved', () => {

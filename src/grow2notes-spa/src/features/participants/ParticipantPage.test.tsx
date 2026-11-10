@@ -46,6 +46,7 @@ const jane: AdminParticipant = {
   givenName: 'Jane',
   familyName: 'Citizen',
   dateOfBirth: '1987-03-07',
+  hasMedicationLine: false,
   status: 'Active',
   rowVersion: 'AAAAAAAAB9E=',
 };
@@ -55,6 +56,7 @@ const priya: AdminParticipant = {
   givenName: 'Priya',
   familyName: 'Kumar',
   dateOfBirth: '1990-11-23',
+  hasMedicationLine: false,
   status: 'Active',
   rowVersion: 'AAAAAAAAB9I=',
 };
@@ -859,7 +861,7 @@ describe("A participant's page", () => {
       {
         path: `${participantsPath}/${jane.id}`,
         ifMatch: '"AAAAAAAAB9E="',
-        body: { givenName: 'Jane', familyName: 'Citizen-Hall', dateOfBirth: '1987-03-07' },
+        body: { givenName: 'Jane', familyName: 'Citizen-Hall', dateOfBirth: '1987-03-07', hasMedicationLine: false },
       },
     ]);
     const [, init] = fetchMock.mock.calls.find(([, sent]) => sent?.method === 'PUT')!;
@@ -1090,7 +1092,7 @@ describe('A participant just added', () => {
       {
         path: `${participantsPath}/${newId}`,
         ifMatch: '"AAAAAAAAB+A="',
-        body: { givenName: 'Jane', familyName: 'Citizen-Hall', dateOfBirth: '1987-03-07' },
+        body: { givenName: 'Jane', familyName: 'Citizen-Hall', dateOfBirth: '1987-03-07', hasMedicationLine: false },
       },
     ]);
     // Their version read first, as the add's answer gives none.
@@ -1871,7 +1873,7 @@ const goalsHelp =
   'Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written '
   + 'with.';
 
-const noGoals = 'No goals yet. Notes will show an empty Goals section.';
+const noGoals = 'No goals yet. Notes will show “No goals set”.';
 
 /** The Goals section, or `null` while the page has none. */
 function goalsSection(): HTMLElement | null {
@@ -1997,6 +1999,64 @@ async function openJaneWithGoals(goals: ListRow[]): Promise<Router> {
   return openJane();
 }
 
+describe('The Medication box switch', () => {
+  const tick = () => within(detailsSection()).getByRole('checkbox', { name: 'Medication box on notes' });
+
+  it('is a tick box in Details, off for a participant without it, described by its hint', async () => {
+    await openJane();
+
+    expect(tick()).not.toBeChecked();
+    expect(tick()).toHaveAccessibleDescription('Shows a Medication box on notes started from now on.');
+    expect(follows(tick(), field('Year'))).toBe(true);
+    expect(follows(saveButton(), tick())).toBe(true);
+  });
+
+  it('is ticked for a participant who has it', async () => {
+    await openJane([{ ...jane, hasMedicationLine: true }, priya]);
+
+    expect(tick()).toBeChecked();
+  });
+
+  it('is saved with the Details under the version that the page loaded, as an If-Match', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, corrected);
+    serve('GET', listPath, json([{ ...jane, hasMedicationLine: true, rowVersion: 'AAAAAAAAB+A=' }, priya]));
+
+    await press(tick());
+    await save();
+
+    expect(corrections()).toEqual([
+      {
+        path: `${participantsPath}/${jane.id}`,
+        ifMatch: '"AAAAAAAAB9E="',
+        body: { givenName: 'Jane', familyName: 'Citizen', dateOfBirth: '1987-03-07', hasMedicationLine: true },
+      },
+    ]);
+    expect(tick()).toBeChecked();
+    expect(saveStatus()).toHaveTextContent(`Saved 4:12${nbsp}pm`);
+  });
+
+  it('empties the save status when it changes, as any edit to the Details does', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, corrected);
+    serve('GET', listPath, json([jane, priya]));
+    await save();
+    expect(saveStatus()).toHaveTextContent('Saved');
+
+    await press(tick());
+
+    expect(saveStatus()).toBeEmptyDOMElement();
+  });
+
+  it('is not on the Add participant form', async () => {
+    serve('GET', listPath, json([jane, priya]));
+    renderApp('/manage/participants/new');
+    await settle();
+
+    expect(within(main()).queryByRole('checkbox', { name: 'Medication box on notes' })).toBeNull();
+  });
+});
+
 describe("A participant's goals", () => {
   it('are in Goals, between Details and Actions: the help text, then the active ones numbered, in order', async () => {
     await openJaneWithGoals(janesGoals);
@@ -2110,7 +2170,7 @@ describe("A participant's goals", () => {
         path: goalUpdatePath(breakfast.id),
         ifMatch: `"${breakfast.rowVersion}"`,
         token: 'token-1',
-        body: { text: 'Makes own lunch' },
+        body: { text: 'Makes own lunch', isMediumOrLongTerm: false },
       },
     ]);
     expect(requests().slice(-2)).toEqual([`PUT ${goalUpdatePath(breakfast.id)}`, `GET ${goalsPath(jane.id)}`]);
@@ -2118,6 +2178,54 @@ describe("A participant's goals", () => {
     expect(within(goalsSection()!).getByRole('button', { name: 'Edit, Makes own lunch' })).toHaveFocus();
     await wait(16);
     expect(pageStatus()).toHaveTextContent('Goal saved');
+  });
+
+  it('show a Medium or long term goal with that second line, and a Short term one with none', async () => {
+    await openJaneWithGoals([{ ...janesGoals[0], isMediumOrLongTerm: true }, janesGoals[2]]);
+
+    const [medium, short] = goalsSection()!.querySelectorAll('ol > li');
+    expect(within(medium as HTMLElement).getByText('Medium or long term').tagName).toBe('P');
+    expect(short.querySelectorAll('p')).toHaveLength(1);
+  });
+
+  it('have a Term fieldset in their Edit form, Short term chosen for a goal that is, sent with Save', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast] = janesGoals;
+    serve('PUT', goalUpdatePath(breakfast.id), goalReworded);
+    serve(
+      'GET',
+      goalsPath(jane.id),
+      json(janesGoals.map((goal) => (goal === breakfast ? { ...goal, isMediumOrLongTerm: true } : goal))),
+    );
+    await press(within(goalsSection()!).getByRole('button', { name: `Edit, ${breakfast.text}` }));
+
+    const term = within(goalsSection()!).getByRole('group', { name: 'Term' });
+    expect(within(term).getByRole('radio', { name: 'Short term' })).toBeChecked();
+    expect(within(term).getByRole('radio', { name: 'Medium or long term' })).not.toBeChecked();
+
+    await press(within(term).getByRole('radio', { name: 'Medium or long term' }));
+    await press(within(goalsSection()!).getByRole('button', { name: 'Save' }));
+
+    expect(goalRewords()).toEqual([
+      {
+        path: goalUpdatePath(breakfast.id),
+        ifMatch: `"${breakfast.rowVersion}"`,
+        token: 'token-1',
+        body: { text: breakfast.text, isMediumOrLongTerm: true },
+      },
+    ]);
+    expect(within(goalsSection()!).getByText('Medium or long term')).toBeInTheDocument();
+    expect(within(goalsSection()!).getByRole('button', { name: `Edit, ${breakfast.text}` })).toHaveFocus();
+  });
+
+  it('send nothing when Save finds the text and the term as they were', async () => {
+    await openJaneWithGoals(janesGoals);
+    await press(within(goalsSection()!).getByRole('button', { name: `Edit, ${janesGoals[0].text}` }));
+
+    await press(within(goalsSection()!).getByRole('button', { name: 'Save' }));
+
+    expect(goalRewords()).toEqual([]);
+    expect(within(goalsSection()!).queryByRole('group', { name: 'Term' })).toBeNull();
   });
 
   it('take one moved on the page: the order sent with token and no If-Match, the list read again', async () => {

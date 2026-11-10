@@ -846,7 +846,11 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
         return problem(409, 'config.group_archived')();
       }
 
-      const { text, groupId } = JSON.parse(init?.body as string) as { text: string; groupId: string };
+      const { text, groupId, needsDetail } = JSON.parse(init?.body as string) as {
+        text: string;
+        groupId: string;
+        needsDetail: boolean;
+      };
       const to = held.find((heldGroup) => heldGroup.id === groupId);
       if (to === undefined) {
         return problem(404)();
@@ -857,10 +861,10 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
       }
 
       if (to === from) {
-        from.items[at] = { ...listed, text, rowVersion: nextVersion() };
+        from.items[at] = { ...listed, text, needsDetail, rowVersion: nextVersion() };
       } else {
         from.items.splice(at, 1);
-        to.items.push({ ...listed, text, sortOrder: endOf(to.items), rowVersion: nextVersion() });
+        to.items.push({ ...listed, text, needsDetail, sortOrder: endOf(to.items), rowVersion: nextVersion() });
       }
 
       return reworded();
@@ -2135,6 +2139,51 @@ function openEdit(name: string, row: ListRow): HTMLTextAreaElement {
   return editField(row.id)!;
 }
 
+describe('Common items, asking for details', () => {
+  const tick = (itemId: string) =>
+    within(editForm(itemId)).getByRole('checkbox', { name: 'Ask for details when ticked' });
+
+  it('shows a tick box with its hint in an item’s edit form, unticked for an item that does not ask', async () => {
+    await openPage();
+
+    openEdit('Community outing', paid);
+
+    expect(tick(paid.id)).not.toBeChecked();
+    expect(tick(paid.id)).toHaveAccessibleDescription(
+      'Notes started from now on show a Details box under this item when it is ticked. It must be filled in to submit.',
+    );
+    expect(within(editForm(paid.id)).queryByText('Asks for details')).toBeNull();
+  });
+
+  it('sends the tick with the text and the group, under the item version, then shows a second line', async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+
+    fireEvent.click(tick(paid.id));
+    await press(saveButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([
+      {
+        ifMatch: `"${paid.rowVersion}"`,
+        body: { text: paid.text, groupId: outing.id, needsDetail: true },
+      },
+    ]);
+    expect(editField(paid.id)).toBeNull();
+    const row = activeItems(sectionOf('Community outing')).find((each) => textOf(each) === paid.text)!;
+    expect(within(row).getByText('Asks for details')).toBeInTheDocument();
+  });
+
+  it('closes the form and sends nothing when neither the text, the group nor the tick changed', async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+
+    await press(saveButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([]);
+    expect(editField(paid.id)).toBeNull();
+  });
+});
+
 describe('Common items, rewording an item', () => {
   it('turns the row into a form in place, still numbered: "Edit item", its text, caret at the end', async () => {
     await openPage();
@@ -2249,7 +2298,10 @@ describe('Common items, rewording an item', () => {
     await press(saveButton(paid.id));
 
     expect(rewordsOf(paid.id)).toEqual([
-      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: outing.id } },
+      {
+        ifMatch: `"${paid.rowVersion}"`,
+        body: { text: 'Paid at the machine', groupId: outing.id, needsDetail: false },
+      },
     ]);
     expect(listReads()).toBe(reads + 1);
     expect(editField(paid.id)).toBeNull();
@@ -2333,7 +2385,10 @@ describe('Common items, rewording an item', () => {
     await press(save);
 
     expect(rewordsOf(paid.id)).toEqual([
-      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: outing.id } },
+      {
+        ifMatch: `"${paid.rowVersion}"`,
+        body: { text: 'Paid at the machine', groupId: outing.id, needsDetail: false },
+      },
     ]);
     expect(editAlert(paid.id)).toHaveTextContent(
       'Someone else changed this item while you were editing. It now says: ‘Paid for a ticket online’. Save to '
@@ -2422,10 +2477,10 @@ describe('Common items, rewording an item', () => {
     ]);
     expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual(['Medication given', meal.text]);
     expect(rewordsOf(medication.id).map(({ body }) => body)).toEqual([
-      { text: 'Medication given', groupId: everyNote.id },
+      { text: 'Medication given', groupId: everyNote.id, needsDetail: false },
     ]);
     expect(rewordsOf(lunch.id).map(({ body }) => body)).toEqual([
-      { text: 'Bought lunch at the café', groupId: outing.id },
+      { text: 'Bought lunch at the café', groupId: outing.id, needsDetail: false },
     ]);
   });
 
@@ -2523,7 +2578,7 @@ describe('Common items, moving an item to another group', () => {
     await press(saveButton(meal.id));
 
     expect(rewordsOf(meal.id)).toEqual([
-      { ifMatch: `"${meal.rowVersion}"`, body: { text: 'Meal cooked', groupId: everyNote.id } },
+      { ifMatch: `"${meal.rowVersion}"`, body: { text: 'Meal cooked', groupId: everyNote.id, needsDetail: false } },
     ]);
     expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([medication.text, 'Meal cooked']);
     await wait(16);
@@ -2615,7 +2670,7 @@ describe('Common items, moving an item to another group', () => {
     await press(saveButton(paid.id));
 
     expect(rewordsOf(paid.id)).toEqual([
-      { ifMatch: `"${paid.rowVersion}"`, body: { text: paid.text, groupId: care.id } },
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: paid.text, groupId: care.id, needsDetail: false } },
     ]);
     expect(listReads()).toBe(reads + 1);
     expect(editField(paid.id)).toBeNull();
@@ -2642,7 +2697,7 @@ describe('Common items, moving an item to another group', () => {
     await press(saveButton(lunch.id));
 
     expect(rewordsOf(lunch.id).map(({ body }) => body)).toEqual([
-      { text: 'Bought lunch at the café', groupId: everyNote.id },
+      { text: 'Bought lunch at the café', groupId: everyNote.id, needsDetail: false },
     ]);
     expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([
       medication.text,
@@ -2706,8 +2761,8 @@ describe('Common items, moving an item to another group', () => {
     await press(save);
 
     expect(rewordsOf(paid.id)).toEqual([
-      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: care.id } },
-      { ifMatch: '"AAAAAAAAE999="', body: { text: 'Paid at the machine', groupId: care.id } },
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: care.id, needsDetail: false } },
+      { ifMatch: '"AAAAAAAAE999="', body: { text: 'Paid at the machine', groupId: care.id, needsDetail: false } },
     ]);
     expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual(['Paid at the machine']);
     expect(editButton('Personal care', 'Paid at the machine')).toHaveFocus();
@@ -2745,7 +2800,7 @@ describe('Common items, moving an item to another group', () => {
     await press(saveButton(paid.id));
 
     expect(rewordsOf(paid.id)).toEqual([
-      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: care.id } },
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: care.id, needsDetail: false } },
     ]);
     expect(listReads()).toBe(reads + 1);
     expect(listConflict()).toHaveFocus();

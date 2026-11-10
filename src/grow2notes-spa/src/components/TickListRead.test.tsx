@@ -9,28 +9,37 @@ const bus = { text: 'Catches bus to day program', isTicked: false };
 const unbroken = { text: 'x'.repeat(200), isTicked: false };
 
 function Goals({ items }: { items: readonly TickedItem[] }) {
-  return <TickListRead heading="1. Goals" emptyText="No goals set" items={items} />;
+  return <TickListRead heading="Short term goals" emptyText="No goals set" items={items} />;
 }
 
 describe('TickListRead', () => {
-  it('has an <h3> with headingLevel 3, and no <h2>', () => {
-    render(<TickListRead heading="Community outing" headingLevel={3} items={[breakfast]} />);
+  it('has an <h2> of its own name, as each group of the common items has', () => {
+    render(<TickListRead heading="Community outing" items={[breakfast]} />);
 
-    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Community outing');
-    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Community outing');
+    expect(screen.queryByRole('heading', { level: 3 })).toBeNull();
   });
 
   it('shows the heading alone, with no sentence, for no items and no emptyText', () => {
-    const { container } = render(<TickListRead heading="Community outing" headingLevel={3} items={[]} />);
+    const { container } = render(<TickListRead heading="Community outing" items={[]} />);
 
-    expect(screen.getByRole('heading', { level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument();
     expect(container.querySelector('p, ul')).toBeNull();
+  });
+
+  it('says Details: and the details under an item that has them, after its tick state', () => {
+    render(<Goals items={[{ text: 'Other', isTicked: true, detail: 'Went to the library' }, bus]} />);
+
+    const [other, notOther] = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(other.textContent).toBe('Other, ticked,Details: Went to the library');
+    expect(within(other).getByText('Details: Went to the library')).toBeInTheDocument();
+    expect(notOther.textContent).toBe('Catches bus to day program, not ticked');
   });
 
   it('lists each item under the <h2>, in the order given, read as its wording, then ticked or not ticked', () => {
     render(<Goals items={[breakfast, bus]} />);
 
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('1. Goals');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Short term goals');
     const list = screen.getByRole('list');
     expect(list).toHaveAttribute('role', 'list');
     expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
@@ -72,7 +81,7 @@ describe('TickListRead', () => {
   it('says its empty sentence under the heading in place of a list when it has no items', () => {
     render(<Goals items={[]} />);
 
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('1. Goals');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Short term goals');
     expect(screen.getByText('No goals set').tagName).toBe('P');
     expect(screen.queryByRole('list')).toBeNull();
   });

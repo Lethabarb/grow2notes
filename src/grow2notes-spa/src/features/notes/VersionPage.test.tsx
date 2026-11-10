@@ -81,6 +81,10 @@ function submittedNote(author: NoteAuthor = priya, versionNumber = 3, isPastDayN
     current: {
       versionNumber,
       narrative: 'Jane made toast.',
+      isNotIn: false,
+      isLateNotice: false,
+      isSick: false,
+      medication: null,
       goals: [],
       commonItemGroups: [],
       isFlagged: false,
@@ -94,7 +98,11 @@ function versionOf(row: VersionSummary): NoteVersion {
   return {
     versionNumber: row.versionNumber,
     narrative: `Wording of version ${row.versionNumber}.`,
-    goals: [{ text: 'Makes own breakfast', isTicked: true }],
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
+    goals: [{ text: 'Makes own breakfast', isTicked: true, isMediumOrLongTerm: false }],
     commonItemGroups: [],
     isFlagged: false,
     flagReason: null,
@@ -410,8 +418,8 @@ describe('A version once loaded', () => {
       json({
         ...versionOf(v2),
         goals: [
-          { text: 'Makes own breakfast', isTicked: true },
-          { text: 'Catches bus to day program', isTicked: false },
+          { text: 'Makes own breakfast', isTicked: true, isMediumOrLongTerm: false },
+          { text: 'Catches bus to day program', isTicked: false, isMediumOrLongTerm: false },
         ],
         commonItemGroups: [
           { name: 'Every note', items: [{ text: 'Medication prompted', isTicked: true }] },
@@ -421,21 +429,67 @@ describe('A version once loaded', () => {
     );
     await openVersion(2);
 
-    const groups = within(main()).getAllByRole('heading', { level: 3 });
-    expect(groups.map((group) => group.textContent)).toEqual(['Every note', 'Personal care']);
+    const headings = within(main()).getAllByRole('heading', { level: 2 });
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      'Attendance',
+      'Short term goals',
+      'Every note',
+      'Personal care',
+      'Daily Support Notes',
+    ]);
     expect(within(main()).queryByText('Community outing')).toBeNull();
     expect(within(main()).getByText(/Catches bus to day program/)).toBeInTheDocument();
     expect(within(main()).getByText('Wording of version 2.')).toBeInTheDocument();
   });
 
+  // version-history.md B: the version page shows what the read view shows (A159), the attendance row among it.
+  it('shows the Attendance ticks, the goals under their terms, Medication and the details of the version', async () => {
+    serveHistory();
+    serve(
+      paths.version(2),
+      json({
+        ...versionOf(v2),
+        isLateNotice: true,
+        medication: '8 am: two tablets.',
+        goals: [
+          { text: 'Makes own breakfast', isTicked: true, isMediumOrLongTerm: false },
+          { text: 'Plans a week of meals', isTicked: false, isMediumOrLongTerm: true },
+        ],
+        commonItemGroups: [
+          { name: 'Further supports', items: [{ text: 'Other', isTicked: true, detail: 'A haircut' }] },
+        ],
+      }),
+    );
+    await openVersion(2);
+
+    const ticks = within(main()).getByRole('heading', { level: 2, name: 'Attendance' }).parentElement!;
+    expect(within(ticks).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Not In, not ticked',
+      'Late Notice, ticked',
+      'Sick, not ticked',
+    ]);
+    expect(within(main()).getByRole('heading', { level: 2, name: 'Short term goals' })).toBeInTheDocument();
+    expect(within(main()).getByRole('heading', { level: 2, name: 'Medium or Long term goal' })).toBeInTheDocument();
+    const medication = within(main()).getByRole('heading', { level: 2, name: 'Medication' });
+    expect(medication.nextElementSibling).toHaveTextContent('8 am: two tablets.');
+    expect(within(main()).getByText('Details: A haircut')).toBeInTheDocument();
+  });
+
+  it('shows no Medication heading for a version with no Medication box', async () => {
+    serveHistory();
+    await openVersion(2);
+
+    expect(within(main()).queryByRole('heading', { name: 'Medication' })).toBeNull();
+  });
+
   // version-history.md B item 10: the stored text, as a text node, never trimmed.
-  it('shows the Guided notes exactly as stored, every space and line break kept', async () => {
+  it('shows the Daily Support Notes exactly as stored, every space and line break kept', async () => {
     const stored = '  Jane was keen.\n\n   She caught the bus <b>today</b>.  ';
     serveHistory();
     serve(paths.version(2), json({ ...versionOf(v2), narrative: stored }));
     await openVersion(2);
 
-    const heading = within(main()).getByRole('heading', { level: 2, name: '3. Guided notes' });
+    const heading = within(main()).getByRole('heading', { level: 2, name: 'Daily Support Notes' });
     const written = heading.nextElementSibling!;
     expect(written.textContent).toBe(stored);
     expect(written.children).toHaveLength(0);

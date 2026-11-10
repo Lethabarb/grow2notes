@@ -28,29 +28,52 @@ describe('capped', () => {
 });
 
 describe('sentContent', () => {
-  const content = {
+  const content: DraftContent = {
     narrative: 'Jane made toast.',
+    isNotIn: false,
+    isLateNotice: true,
+    isSick: false,
+    medication: '8 am: two tablets.',
     tickedGoalIds: ['g1'],
     pickedGroupIds: ['p1'],
     tickedCommonItemIds: ['c1'],
+    details: { c1: 'Went to the library' },
     isFlagged: true,
     flagReason: 'Unwell.',
   };
+  const { details, ...rest } = content;
+  const sent = { ...rest, commonItemDetails: details };
 
-  it('sends the text, the ticks, the picks, the flag and the reason, as autosave and Submit alike send them', () => {
-    expect(sentContent(content)).toEqual(content);
+  it('sends the text, attendance, Medication, ticks, picks, details, flag and reason, as Submit does', () => {
+    expect(sentContent(content)).toEqual(sent);
+  });
+
+  it('sends no Medication for a note with no Medication box, and an empty one for a box with nothing in it', () => {
+    expect(sentContent({ ...content, medication: null }).medication).toBeNull();
+    expect(sentContent({ ...content, medication: '' }).medication).toBe('');
+  });
+
+  it('sends a blank Details box as it is, which a draft accepts', () => {
+    expect(sentContent({ ...content, details: { c1: '' } }).commonItemDetails).toEqual({ c1: '' });
+  });
+
+  it('cuts the Medication text and each item details to their limits', () => {
+    const cut = sentContent({ ...content, medication: 'm'.repeat(1_050), details: { c1: 'd'.repeat(250) } });
+
+    expect(cut.medication).toBe('m'.repeat(1_000));
+    expect(cut.commonItemDetails).toEqual({ c1: 'd'.repeat(200) });
   });
 
   it('sends no reason while the box is unticked, or while the reason is blank', () => {
-    expect(sentContent({ ...content, isFlagged: false })).toEqual({ ...content, isFlagged: false, flagReason: null });
-    expect(sentContent({ ...content, flagReason: '   ' })).toEqual({ ...content, flagReason: null });
+    expect(sentContent({ ...content, isFlagged: false })).toEqual({ ...sent, isFlagged: false, flagReason: null });
+    expect(sentContent({ ...content, flagReason: '   ' })).toEqual({ ...sent, flagReason: null });
   });
 
   it('cuts the text and the reason to their limits', () => {
-    const sent = sentContent({ ...content, narrative: 'x'.repeat(20_050), flagReason: 'y'.repeat(210) });
+    const cut = sentContent({ ...content, narrative: 'x'.repeat(20_050), flagReason: 'y'.repeat(210) });
 
-    expect(sent.narrative).toBe('x'.repeat(20_000));
-    expect(sent.flagReason).toBe('y'.repeat(200));
+    expect(cut.narrative).toBe('x'.repeat(20_000));
+    expect(cut.flagReason).toBe('y'.repeat(200));
   });
 });
 
@@ -71,6 +94,10 @@ const template: Draft = {
   goals: [],
   commonItemGroups: [],
   narrative: '',
+  isNotIn: false,
+  isLateNotice: false,
+  isSick: false,
+  medication: null,
   isFlagged: false,
   flagReason: null,
 };
@@ -83,6 +110,10 @@ const reopened: Draft = {
   goals: [],
   commonItemGroups: [],
   narrative: '',
+  isNotIn: false,
+  isLateNotice: false,
+  isSick: false,
+  medication: null,
   isFlagged: false,
   flagReason: null,
   savedAtUtc: '2026-09-30T23:40:00Z',
@@ -163,9 +194,14 @@ function renderAutosave(opened: Draft = template, overrides: Partial<DraftConten
   const participantId = crypto.randomUUID();
   const content: DraftContent = {
     narrative: '',
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     tickedGoalIds: [],
     pickedGroupIds: [],
     tickedCommonItemIds: [],
+    details: {},
     isFlagged: false,
     flagReason: '',
     ...overrides,
@@ -264,9 +300,14 @@ function textOf(bytes: number): string {
     clientId: crypto.randomUUID(),
     seq: 2,
     narrative: '',
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     tickedGoalIds: [],
     pickedGroupIds: [],
     tickedCommonItemIds: [],
+    commonItemDetails: {},
     isFlagged: false,
     baseVersion: 0,
   };
@@ -335,6 +376,33 @@ describe('A save', () => {
     await wait(0);
 
     expect(sentSaves[0]).toMatchObject({ keepalive: true, body: picks });
+  });
+
+  it('carries the attendance, the Medication text and the details of ticked items that ask for them', async () => {
+    const { type } = renderAutosave(template, {
+      isLateNotice: true,
+      medication: '8 am: two tablets.',
+      tickedCommonItemIds: ['c1'],
+      details: { c1: 'Went to the library' },
+    });
+    type('Jane');
+    await wait(5_000);
+
+    expect(sentSaves[0].body).toMatchObject({
+      isNotIn: false,
+      isLateNotice: true,
+      isSick: false,
+      medication: '8 am: two tablets.',
+      commonItemDetails: { c1: 'Went to the library' },
+    });
+  });
+
+  it('carries no Medication for a note that has no Medication box, and no details by default', async () => {
+    const { type } = renderAutosave();
+    type('Jane');
+    await wait(5_000);
+
+    expect(sentSaves[0].body).toMatchObject({ medication: null, commonItemDetails: {} });
   });
 });
 
