@@ -17,6 +17,10 @@ sign in with a password only, or a password and a passkey. It needs no other tas
 T43, added on 3 November 2026 (D101), is a Release 1 task in lane A with one new story, S07.06.02: an agent sets up a
 provider's organisation and first manager. It must merge before go-live section D.
 
+T44, added on 10 November 2026 (D104), is a Release 1 task in lane A with 13 new stories: the provider's Word
+template becomes the report layout, with attendance, goal terms, a Medication line and text for Other items. It
+depends on T43.
+
 - **The stories are the acceptance criteria.** An absorbed story keeps its section in its epic folder: its criteria
   and Notes are the task's acceptance criteria, and the task adds no new spec. Each task links its stories under
   *Absorbs*.
@@ -43,7 +47,7 @@ provider's organisation and first manager. It must merge before go-live section 
 Up to four lanes run at once, each one task at a time:
 
 - **A:** T01, T04, T11, T16, T19, T24 for Release 1, then T30 to T38, then T41, then T39, one after another, because
-  each MCP tool edits the shared `tools/list` snapshot and tool matrix. T43 follows T41.
+  each MCP tool edits the shared `tools/list` snapshot and tool matrix. T43 follows T41, and T44 follows T43.
 - **B:** T02, T05, T06, T07, T15, T17, T21, T25, then T29 beside T30, then T42.
 - **C:** T03, T08, T09, T10, T12, T13, T14, T18, T20, T26. The note form is one hot spot, so its tasks run back to
   back.
@@ -8291,6 +8295,102 @@ Decisions where the design is silent: A144 and D101, as in the Notes.
 
 ---
 
+## T44 Word template parity: report layout, attendance, goal terms, medication and Other text
+
+```yaml
+id: T44
+status: doing
+release: R1
+lane: A
+size: L
+depends_on: [T43]
+stories: [S01.02.09, S01.02.10, S01.03.09, S02.02.09, S02.02.10, S02.02.11, S02.02.12, S02.05.05, S04.01.07, S04.01.08, S04.01.09, S04.02.06, S07.03.09]
+```
+
+### Outcome
+
+The provider's five daily Word support-note documents are what Grow2Notes is based on. A manager downloads the day's
+report in Word or PDF laid out like those documents: the title, DATE and STAFF rows, a Participants index, and each
+participant on a new page with NAME, attendance, goals by term, Medication, every group, Daily Support Notes and Note
+written by. Workers tick Not In, Late Notice and Sick, write a Medication line where a manager switched it on, and
+fill in details for an "Other" item. One feature branch, one PR into main (owner, 10 November 2026).
+
+### Absorbs
+
+- [S01.02.09][] Set a goal's term
+- [S01.02.10][] Switch a participant's Medication box on or off
+- [S01.03.09][] Mark a common item as needing details
+- [S02.02.09][] Tick Not In, Late Notice or Sick on a note
+- [S02.02.10][] Write what was taken on a Medication line
+- [S02.02.11][] Use the Word headings on the note form and read view
+- [S02.02.12][] Old notes and existing note rules keep working
+- [S02.05.05][] Write details for a ticked item that needs them
+- [S04.01.07][] The daily report reads like the Word document
+- [S04.01.08][] Name the report by weekday and date
+- [S04.01.09][] Record the Word-template decision, defaults and set-up list
+- [S04.02.06][] Choose Week A or Week B when downloading
+- [S07.03.09][] The assistant carries the Word-template set-up fields
+- Amends, each with a dated Note: [S04.01.01][] to [S04.01.05][], [S04.02.01][] and [S04.02.03][], [S02.05.01][] to [S02.05.04][], [S01.02.03][], [S01.02.05][], [S01.02.06][] and [S01.03.02][].
+- Also done here: T04 (ops/word-template-setup.md), T22, T23, T24, T25, T26, T37, T38, T39 and T40 of the owner's
+  parity report; each is a criterion of the stories above.
+
+### Plan
+
+- **Outcome and approach.** Extend what exists. No route, table, error code or audit event type is added. One
+  expand-only migration adds defaulted columns and two check constraints. The snapshot rule (A3) carries the new
+  set-up data, so the form, read view, version read, daily report and record export see one shape through the
+  existing conversions (`NoteVersionContent.ReadAsync`, `NoteDrafts`, `NoteReadVersion.Of`) and one `ReportLayout`
+  still feeds both renderers.
+- **Domain.** `Goal.IsMediumOrLongTerm`, `CommonItem.NeedsDetail` and `Participant.HasMedicationLine` (bit, default 0).
+  `NoteDraft` and `NoteVersion` gain `IsNotIn`, `IsLateNotice`, `IsSick` and a nullable `Medication` (null means no
+  line). `NoteVersionItem` gains the term, `NeedsDetail` and `Detail`. `Limits.ItemDetail` 200 and `Limits.Medication`
+  1000. `NoteSnapshot` gains `HasMedicationLine`, `PrintedGroups` (report only, reverses D47 there) and the detail and
+  medication rules.
+- **Reuse.** `ListsVersion` (new inputs only when set, so existing hashes hold), `ConfigurationChanges.SaveAsync` and
+  If-Match for set-up, the seven MCP tools extended in place (28 tools, no note content), `ReportLayout` and both
+  renderers with new `IndexEntry` and `TickRow` blocks, DejaVu Sans (nothing downloaded), `TickListField`,
+  `FlagForManager`'s reveal, `FieldGroup` and `ChoiceRow`.
+- **Where the design is silent** (A145 to A163, recorded in V4; the owner may overturn them): goal term is a bool;
+  Medication is one nullable column; PUT draft stays a whole working copy; item details keyed by item ID, dropped
+  when unticked; Word index uses PAGEREF fields with a dash cached and `updateFields`, the PDF is exact; week is
+  `A` or `B`, ordinal, else 400; STAFF is by display name, not a counted list; one `ReportStyle` for both files.
+- **Blocking owner questions.** None. No file is downloaded; the migration is made with the local `dotnet ef` tool
+  (design time only), or written by hand if the builder judges that outside compile-and-lint.
+
+### Verticals
+
+- v0 Plan and design prose: D104, A-numbers, design.md prose, this section and the stories (on the feature branch).
+  depends_on: []. Requirements R-01, R-02.
+- v1 Data, note rules, set-up API and MCP for the new fields. depends_on: [v0]. R-17, R-18, R-20, R-21, R-22, R-23,
+  R-24, R-25, R-26, R-27, R-41.
+- v2 Word-layout report, record export body, file name, week, styles and report tests (T22, T23, T24, T39).
+  depends_on: [v1]. R-03 to R-08, R-10, R-12 to R-14, R-16, R-30 to R-32, R-36, R-38, R-39.
+- v3 SPA note form, read view, set-up controls, Report screen week, copy, UX docs and the T40 test.
+  depends_on: [v1, v2]. R-09, R-11, R-15, R-19, R-35, R-37, R-40, R-42.
+- v4 Decision, defaults, backlog close-out, coverage, ops/word-template-setup.md and by-hand checks (merges last).
+  depends_on: [v1, v2, v3]. R-28, R-29, R-33, R-34, R-43, R-44.
+
+### Notes
+
+- Owner request, 10 November 2026: "a web version of these and these reports can be downloaded after theyre done
+  (filling out on app)", then "do all, using our normal dev workflow, 1 pr for all tasks". The answers (report
+  layout, attendance, goal terms, Medication, Other text, STAFF, week, unpicked groups as empty boxes) are D104. Not
+  chosen: frequency levels, a "Note checked by" line, co-authors, handover.
+- A new task, planned on 10 November 2026 against `origin/main` at `107fac6`. Open PRs #235 and #241 claim only D103
+  and no A-number, step, story, task or migration; v0 rechecks the numbers before the final push.
+- Until it merges, this section, its stories and the plan are its spec. By-hand checks go on
+  ops/first-use-in-test.md from step 223 and hold nothing open.
+
+### Steps
+
+- [ ] v0 Plan and design prose (feature branch)
+- [ ] v1 Server foundation
+- [ ] v2 Report and renderers
+- [ ] v3 SPA and UX docs
+- [ ] v4 Records, set-up list and by-hand checks
+
+---
+
 ## Cut stories
 
 Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `status: cut` and a dated Note.
@@ -8529,3 +8629,16 @@ assumed defaults, which the owner may overturn:
 [S07.06.02]: E07-admin-mcp-server/F07.06-onboarding-with-claude-code.md#s070602-an-agent-sets-up-a-providers-organisation-and-first-manager
 [S00.07.01]: E00-skeleton-hosting-sign-in/F00.07-sign-in-choices.md#s000701-set-up-and-sign-in-with-a-password-only
 [S00.07.02]: E00-skeleton-hosting-sign-in/F00.07-sign-in-choices.md#s000702-set-up-and-sign-in-with-a-password-and-a-passkey
+[S01.02.09]: E01-participants-goals-common-items-guide-prompts/F01.02-participants-and-goals.md#s010209-set-a-goals-term
+[S01.02.10]: E01-participants-goals-common-items-guide-prompts/F01.02-participants-and-goals.md#s010210-switch-a-participants-medication-box-on-or-off
+[S01.03.09]: E01-participants-goals-common-items-guide-prompts/F01.03-common-items-and-groups.md#s010309-mark-a-common-item-as-needing-details
+[S02.02.09]: E02-note-form-autosave-submit-edit-history/F02.02-note-form-and-autosave.md#s020209-tick-not-in-late-notice-or-sick-on-a-note
+[S02.02.10]: E02-note-form-autosave-submit-edit-history/F02.02-note-form-and-autosave.md#s020210-write-what-was-taken-on-a-medication-line
+[S02.02.11]: E02-note-form-autosave-submit-edit-history/F02.02-note-form-and-autosave.md#s020211-use-the-word-headings-on-the-note-form-and-read-view
+[S02.02.12]: E02-note-form-autosave-submit-edit-history/F02.02-note-form-and-autosave.md#s020212-old-notes-and-existing-note-rules-keep-working
+[S02.05.05]: E02-note-form-autosave-submit-edit-history/F02.05-common-items-and-group-picks.md#s020505-write-details-for-a-ticked-item-that-needs-them
+[S04.01.07]: E04-daily-report-pdf-word/F04.01-daily-report-files.md#s040107-the-daily-report-reads-like-the-word-document
+[S04.01.08]: E04-daily-report-pdf-word/F04.01-daily-report-files.md#s040108-name-the-report-by-weekday-and-date
+[S04.01.09]: E04-daily-report-pdf-word/F04.01-daily-report-files.md#s040109-record-the-word-template-decision-defaults-and-set-up-list
+[S04.02.06]: E04-daily-report-pdf-word/F04.02-report-screen.md#s040206-choose-week-a-or-week-b-when-downloading
+[S07.03.09]: E07-admin-mcp-server/F07.03-setup-tools.md#s070309-the-assistant-carries-the-word-template-set-up-fields
