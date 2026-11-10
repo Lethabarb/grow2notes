@@ -33,4 +33,13 @@ internal sealed class NoteVersionItem : ITenantOwned, IAppendOnly
 
     /// <summary>Ticked means reached, for a goal, or done, for a common item (D7, D10).</summary>
     public bool IsTicked { get; set; }
+
+    /// <summary>Whether a goal row is Medium or long term (A150); false for Short term and for a common item.</summary>
+    public bool IsMediumOrLongTerm { get; set; }
+
+    /// <summary>Whether a common item row asked for details when ticked (A151); false for a goal.</summary>
+    public bool NeedsDetail { get; set; }
+
+    /// <summary>The details written for a ticked common item that needed them; null otherwise (A151).</summary>
+    public string? Detail { get; set; }
 }

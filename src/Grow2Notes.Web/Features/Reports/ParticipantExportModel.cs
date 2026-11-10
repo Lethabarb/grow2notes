@@ -112,8 +112,7 @@ internal sealed record ParticipantExportModel(
             var content = await NoteVersionContent.ReadAsync(db, noteId, summary.VersionNumber, cancellationToken);
             versions.Add(new(
                 summary,
-                NoteReadVersion.Of(
-                    summary.VersionNumber, content.Snapshot, content.Narrative, content.IsFlagged, content.FlagReason),
+                NoteReadVersion.Of(summary.VersionNumber, content, everyGroup: false),
                 [.. reviews.Where(review => review.VersionNumber == summary.VersionNumber)]));
         }
 

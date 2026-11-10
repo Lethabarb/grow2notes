@@ -71,15 +71,21 @@ internal sealed record NoteReadLastEdit(string By, DateTime AtUtc);
 /// and <see cref="FlagReason"/>, which is <c>null</c> unless it is, and is written so, and which a flagged draft may
 /// not have yet, as only Submit needs one (§3.4); and every goal of its snapshot, in the snapshot's order; and its
 /// <see cref="CommonItemGroups"/>. A version that <c>GET {base}/versions/{versionNumber}</c> answers also says who
-/// saved it and when.
+/// saved it and when. It has the three attendance ticks and the <see cref="Medication"/> text, which is <c>null</c>
+/// for a note with no Medication box (A152). A version saved before T44 has no ticks, Short term goals, no Medication
+/// box and no details.
 /// </summary>
 internal sealed record NoteReadVersion(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? VersionNumber,
     string Narrative,
     bool IsFlagged,
     string? FlagReason,
-    IReadOnlyList<NoteReadItem> Goals,
-    IReadOnlyList<NoteReadGroup> CommonItemGroups)
+    IReadOnlyList<NoteReadGoal> Goals,
+    IReadOnlyList<NoteReadGroup> CommonItemGroups,
+    bool IsNotIn = false,
+    bool IsLateNotice = false,
+    bool IsSick = false,
+    string? Medication = null)
 {
     /// <summary>Who saved the version, which only a version read from its own address says.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -90,18 +96,25 @@ internal sealed record NoteReadVersion(
     public DateTime? CreatedAtUtc { get; init; }
 
     /// <summary>
-    /// The version or working copy that <paramref name="snapshot"/> and the text and flag make: every goal in the
-    /// snapshot's order, and the groups it shows.
+    /// The version or working copy that <paramref name="content"/> makes: every goal in the snapshot's order, with its
+    /// term, and the groups it shows (D47), or, with <paramref name="everyGroup"/>, every group with an item, picked
+    /// or not (D104), which only the daily report asks for.
     /// </summary>
-    public static NoteReadVersion Of(
-        int? versionNumber, NoteSnapshot snapshot, string narrative, bool isFlagged, string? flagReason) =>
+    public static NoteReadVersion Of(int? versionNumber, NoteVersionContent content, bool everyGroup) =>
         new(
             versionNumber,
-            narrative,
-            isFlagged,
-            flagReason,
-            [.. snapshot.Goals.Select(item => new NoteReadItem(item.Text, item.IsTicked))],
-            snapshot.ShownGroups);
+            content.Narrative,
+            content.IsFlagged,
+            content.FlagReason,
+            [
+                .. content.Snapshot.Goals.Select(
+                    goal => new NoteReadGoal(goal.Text, goal.IsTicked, goal.IsMediumOrLongTerm is true)),
+            ],
+            everyGroup ? content.Snapshot.PrintedGroups : content.Snapshot.ShownGroups,
+            content.IsNotIn,
+            content.IsLateNotice,
+            content.IsSick,
+            content.Medication);
 }
 
 /// <summary>
@@ -112,7 +125,16 @@ internal sealed record NoteReadVersion(
 internal sealed record NoteReadGroup(string Name, bool IsEveryNote, IReadOnlyList<NoteReadItem> Items);
 
 /// <summary>
-/// A goal or a common item of a version or of a working copy: its wording as the snapshot holds it (A3), and whether
-/// it is ticked, as reached for a goal and as done for a common item.
+/// A common item of a version or of a working copy: its wording as the snapshot holds it (A3), whether it is ticked,
+/// as done, and, for a ticked item that asked for details, the details written, which are left out otherwise.
 /// </summary>
-internal sealed record NoteReadItem(string Text, bool IsTicked);
+internal sealed record NoteReadItem(
+    string Text,
+    bool IsTicked,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Detail = null);
+
+/// <summary>
+/// A goal of a version or of a working copy: its wording as the snapshot holds it (A3), whether it is ticked, as
+/// reached, and its term, Medium or long term or, if not, Short term (A150).
+/// </summary>
+internal sealed record NoteReadGoal(string Text, bool IsTicked, bool IsMediumOrLongTerm);

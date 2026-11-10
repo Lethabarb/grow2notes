@@ -99,8 +99,7 @@ internal static class NoteEndpoint
             return null;
         }
 
-        return NoteReadVersion.Of(
-            versionNumber: null, NoteSnapshot.Of(draft), draft.Narrative, draft.IsFlagged, draft.FlagReason);
+        return NoteReadVersion.Of(versionNumber: null, NoteVersionContent.Of(draft), everyGroup: false);
     }
 
     // The version's own goal and common item rows, in their places, which keep the snapshot's order and wording (§5.3,
@@ -125,8 +124,7 @@ internal static class NoteEndpoint
             note.IsPastDayNote,
             isEdited,
             lastEdit,
-            NoteReadVersion.Of(
-                note.CurrentVersionNumber, content.Snapshot, content.Narrative, content.IsFlagged, content.FlagReason),
+            NoteReadVersion.Of(note.CurrentVersionNumber, content, everyGroup: false),
             isManager ? note.FlagStatus.ToString() : null,
             isManager ? await NoteReadReview.NewestFirstAsync(db, note.Id, cancellationToken) : null,
             // Versions are numbered 1 to the current number with no gap (§5.8), so no count is needed.

@@ -10,6 +10,8 @@ export const limits = {
   participantName: 100,
   itemText: 200,
   groupName: 200,
+  itemDetail: 200,
+  medication: 1_000,
   guidedNotes: 20_000,
   flagReason: 200,
   reviewComment: 500,

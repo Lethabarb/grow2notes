@@ -44,6 +44,18 @@ internal static class Limits
     /// </summary>
     public const int GroupName = 200;
 
+    /// <summary>
+    /// The details of a ticked common item that asks for them: <c>NoteVersionItem.Detail</c> and the detail in
+    /// <c>NoteDraft.Items</c> (A151).
+    /// </summary>
+    public const int ItemDetail = 200;
+
+    /// <summary>
+    /// <c>NoteDraft.Medication</c> and <c>NoteVersion.Medication</c> (A152): several medicines with their times can
+    /// pass 500.
+    /// </summary>
+    public const int Medication = 1000;
+
     /// <summary><c>NoteDraft.FlagReason</c> and <c>NoteVersion.FlagReason</c> (A6).</summary>
     public const int FlagReason = 200;
 
