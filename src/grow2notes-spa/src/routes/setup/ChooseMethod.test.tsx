@@ -30,7 +30,7 @@ const startPath = '/api/auth/setup/start';
 const optionsPath = '/api/auth/setup/passkey/options';
 const passkeyPath = '/api/auth/setup/passkey';
 const failurePath = '/api/auth/setup/passkey/failure';
-const title ='Grow2Notes – Set up your account';
+const title = 'Grow2Notes – Set up your account';
 // Between a day and its month, so that the two never split across lines (microcopy.md §3).
 const nbsp = ' ';
 

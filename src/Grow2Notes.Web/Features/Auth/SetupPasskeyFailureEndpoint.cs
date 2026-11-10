@@ -1,3 +1,4 @@
+using System.Globalization;
 using Grow2Notes.Web.Data;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
@@ -14,7 +15,8 @@ namespace Grow2Notes.Web.Features.Auth;
 /// It is <c>AllowAnonymous</c>, as the person has no session yet, and checks the enrolment cookie itself, answering
 /// <c>401</c> and logging nothing without a valid one, so only someone with a setup link under way can write to the
 /// log. It changes nothing and writes no audit event. The log entry holds the browser's words, which name no person,
-/// with control characters made spaces, so that a value cannot start a line of its own in the console log.
+/// with control, format and separator characters made spaces, so that a value cannot start a line of its own in the
+/// console log; a request with no code logs "none" for it.
 /// </remarks>
 internal static partial class SetupPasskeyFailureEndpoint
 {
@@ -40,17 +42,22 @@ internal static partial class SetupPasskeyFailureEndpoint
         LogFailure(
             loggers.CreateLogger(typeof(SetupPasskeyFailureEndpoint)),
             OneLine(request.Name),
-            OneLine(request.Code),
+            string.IsNullOrEmpty(request.Code) ? "none" : OneLine(request.Code),
             OneLine(request.Message));
         return TypedResults.NoContent();
     }
 
+    // Line and paragraph separators end a line too, and format characters such as bidi overrides can make a line read
+    // otherwise than it is, so they go the way of control characters.
     private static string OneLine(string? text) =>
         string.Create(text?.Length ?? 0, text, (span, value) =>
         {
             for (var i = 0; i < span.Length; i++)
             {
-                span[i] = char.IsControl(value![i]) ? ' ' : value[i];
+                span[i] = char.GetUnicodeCategory(value![i]) is UnicodeCategory.Control or UnicodeCategory.Format
+                    or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator
+                    ? ' '
+                    : value[i];
             }
         });
 

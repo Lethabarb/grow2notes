@@ -31,8 +31,9 @@ public sealed class SetupPasskeyFailureEndpointTests : IClassFixture<Grow2NotesF
         app = factory.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(logs)));
     }
 
-    // Safari's words for a prompt that ended without a passkey, as SimpleWebAuthn passes them on. The line break is
-    // made a space, so that the entry stays on one line of the console log. The setup link still works afterwards.
+    // Safari's words for a prompt that ended without a passkey, as SimpleWebAuthn passes them on. The line break, the
+    // line separator and the bidi override are made spaces, so that the entry stays on one line of the console log and
+    // reads as it is. The setup link still works afterwards.
     [Fact]
     public async Task A_failure_is_logged_on_one_line_with_the_browser_s_words_and_changes_nothing()
     {
@@ -45,7 +46,7 @@ public sealed class SetupPasskeyFailureEndpointTests : IClassFixture<Grow2NotesF
         {
             name = "NotAllowedError",
             code = "ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY",
-            message = "The operation couldn’t be completed.\nError 31.",
+            message = "The operation couldn’t be completed.\nError 31.‮",
         });
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
@@ -54,10 +55,32 @@ public sealed class SetupPasskeyFailureEndpointTests : IClassFixture<Grow2NotesF
         Assert.Equal(LogLevel.Information, entry.Level);
         Assert.Equal(
             "Passkey setup failed in the browser: NotAllowedError, code ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY: "
-            + "The operation couldn’t be completed. Error 31.",
+            + "The operation couldn’t be completed. Error 31. ",
             entry.Message);
         Assert.False(entry.Holds(link.Email));
         Assert.Equal(stamp, await factory.SecurityStampAsync(link.UserId));
+    }
+
+    // A plain Error, such as SimpleWebAuthn's own when the browser has no WebAuthn, has no code.
+    [Fact]
+    public async Task A_failure_with_no_code_logs_none_for_it()
+    {
+        var link = await InviteAsync();
+        using var client = app.CreateHttpsClient();
+        var (token, _) = await client.StartSetupAsync(link);
+
+        using var response = await client.PostWithTokenAsync(Path, token, new
+        {
+            name = "Error",
+            message = "WebAuthn is not supported in this browser",
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var entry = Assert.Single(
+            logs.Entries, logged => logged.Category == typeof(SetupPasskeyFailureEndpoint).FullName);
+        Assert.Equal(
+            "Passkey setup failed in the browser: Error, code none: WebAuthn is not supported in this browser",
+            entry.Message);
     }
 
     // With no body, which the status code pages make problem details with no design.md §6.9 code.
