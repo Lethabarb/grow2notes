@@ -29,6 +29,8 @@ pattern already used in design.md and adds no feature, screen, setting or data.
 - **One set of words.** The labels a note shares with its report files are the Word template's and are held to
   `NoteWords.cs` by a test (T40): Not In, Late Notice, Sick, Short term goals, Medium or Long term goal, Medication,
   Details, Daily Support Notes, **No goals set**, **No common items set**.
+- **T38 (A163): the empty-goals sentence** is "No goals yet. Notes will show “No goals set”." wherever the manager's
+  Goals section is empty; the older "Notes will show an empty Goals section." is retired.
 - **New strings (P).** Attendance; What was taken, and when.; Enter the details for [item]; Details: [text]; Medication
   box on notes; Shows a Medication box on notes started from now on.; Term; Short term; Medium or long term; Ask for
   details when ticked; Notes started from now on show a Details box under this item when it is ticked. It must be filled in
@@ -720,7 +722,7 @@ NHS App; [Research] NN/g, https://www.nngroup.com/articles/error-message-guideli
   wording they were written with." Goal hint "You can enter up to 200 characters".
 - Row buttons "Edit", "Move up", "Move down", "Archive"; archived section "Archived goals" with "Restore" **(V)**.
   Each accessible name adds the goal text after the visible word.
-- Empty goals: "Notes will show an empty Goals section." **(V)**
+- Empty goals: "No goals yet. Notes will show “No goals set”." **(V)** (T38, A163: the words a note prints)
 - "Write past-day note" with a date field labelled "Note date" **(P)**.
 
 ### 4.9 Common items

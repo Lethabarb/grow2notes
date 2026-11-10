@@ -34,6 +34,8 @@ here. Each step ends with what it confirms.
 - The test database pauses after about 20 quiet minutes and takes a minute or two to wake. Signing in, opening a
   setup link and finishing setup wait up to 3 minutes for it, or for a slow first answer (D96, D99). If any other
   step says "no connection" after a quiet spell, the database is waking up: wait a minute and try again.
+- Since T44 the note's "Guided notes" box is labelled "Daily Support Notes" on screen (D104, A159). In the steps
+  older than T44, "Guided notes" means that box.
 
 ## Steps
 

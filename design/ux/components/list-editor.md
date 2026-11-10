@@ -45,7 +45,7 @@ common item's **Ask for details when ticked**. A page that has one passes it; th
 
 | Screen | What the list holds | What differs |
 |---|---|---|
-| **4.8 Participant detail, "Goals" section** (managers; phone and laptop) | One participant's flat list of active goals, in note order (D8). Archived goals are in a collapsed section. | It is one section of a page that also has Details (a three-field form) and Actions. The section heading is an `<h2>` "Goals". Help text has two sentences. Empty copy is "Notes will show an empty Goals section." The add control is "Add goal". Design 4.8 names "Save / Add goal" as the page's primary actions. If the participant is archived, the whole page is read-only (4.8 "a read-only banner with Restore"), so the list shows **no controls** at all. |
+| **4.8 Participant detail, "Goals" section** (managers; phone and laptop) | One participant's flat list of active goals, in note order (D8). Archived goals are in a collapsed section. | It is one section of a page that also has Details (a three-field form) and Actions. The section heading is an `<h2>` "Goals". Help text has two sentences. Empty copy is "Notes will show “No goals set”." The add control is "Add goal". Design 4.8 names "Save / Add goal" as the page's primary actions. If the participant is archived, the whole page is read-only (4.8 "a read-only banner with Restore"), so the list shows **no controls** at all. |
 | **4.9 Common items** (managers) | One list per common-item group, Every note first (D44, D45), each in the order it shows on notes. Each group's archived items are in its own collapsed section. | One `ListEditor` per active group, inside that group's `<section>` under its `<h2>` (the group's name); the page `<h1>` "Common items" and the help text come once at the top (common-items.md). Empty copy per group: "No items in this group. It does not show on notes until it has one." The add label is "New item in [group name]" and the button "Add item" (primary in every group). The edit form gains a **Group** radio set to move the item (A42). Moves stay within the group. There is no read-only variant. |
 | **4.8 Participants list** (Active / Archived toggle, names, Add participant) | Not this component. | Participants are sorted by family name, then given name (A5), and are never reordered by hand. The list and its search are covered by `participant-list-rows.md` and `search-filter.md`. |
 | **4.8 Write past-day note** | Not this component. | A one-field date form (`form-validation.md`). |
@@ -351,7 +351,7 @@ two open at once, and moving other rows doesn't close or reset them. **[Opinion]
 | **Conflict** | A message above the list with a 4px left bar | `<p tabIndex={-1}>`, focused |
 | **Loading** (first load) | Heading and help text at once. Nothing else for 1 s, then "Loading…". No add form until the list arrives. | App-level loading pattern (`app-shell-nav.md`) |
 | **Load failed** | "Goals couldn't be loaded. Check your connection, then try again." and a **Try again** button | Message plus button. Try again refetches. |
-| **Empty** (no active rows) | 4.8: "No goals yet. Notes will show an empty Goals section." 4.9, per group: "No items in this group. It does not show on notes until it has one." The add form is still shown, and so is the archived section if anything is archived. | A `<p>`, not an empty `<ol>` |
+| **Empty** (no active rows) | 4.8: "No goals yet. Notes will show “No goals set”." 4.9, per group: "No items in this group. It does not show on notes until it has one." The add form is still shown, and so is the archived section if anything is archived. | A `<p>`, not an empty `<ol>` |
 | **Read-only** (4.8, archived participant) | Numbered goal texts only. No buttons, no help text, no add form. The archived section (if any) lists texts with no Restore. | Same lists, no controls |
 
 ### Phone and laptop
@@ -381,7 +381,7 @@ two open at once, and moving other rows doesn't close or reset them. **[Opinion]
 | Edit buttons | Save · Cancel | design.md wording used elsewhere (4.3, 4.8) |
 | Character count | You can enter up to 200 characters · You have 142 characters remaining · You have 3 characters too many | GOV.UK defaults, as in `conditional-reveal.md` |
 | Field errors | Enter the goal · Goal must be 200 characters or less · Enter the common item · Common item must be 200 characters or less | `form-validation.md` (proposed there) |
-| Empty, 4.8 | No goals yet. Notes will show an empty Goals section. | Second sentence: design.md 4.8. "No goals yet." is the design's own name for the state, **proposed** as visible text so the sentence makes sense alone. |
+| Empty, 4.8 | No goals yet. Notes will show “No goals set”. | Second sentence: design.md 4.8. "No goals yet." is the design's own name for the state, **proposed** as visible text so the sentence makes sense alone. |
 | Empty, 4.9 (per group) | No items in this group. It does not show on notes until it has one. | design.md 4.9 (replaces "No common items yet.") |
 | Archived summary | Archived goals · Archived items (plus hidden " in [group name]" on 4.9) | **Proposed**, from design.md 4.8 ("Archived goals sit in a collapsed section") and 4.9 ("the group's archived items, collapsed") |
 | Busy labels | Moving… · Saving… · Adding… · Archiving… · Restoring… | **Proposed** (`primary-actions.md` busy pattern) |
