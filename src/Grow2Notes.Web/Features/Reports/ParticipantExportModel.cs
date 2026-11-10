@@ -57,6 +57,7 @@ internal sealed record ParticipantExportModel(
                 && n.Status == NoteStatus.Submitted
                 && n.NoteDate >= from
                 && n.NoteDate <= to),
+            everyGroup: false,
             cancellationToken);
         if (reads.Count == 0)
         {

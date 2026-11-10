@@ -25,6 +25,10 @@ internal static class ReportDates
     public static string DateLong(DateOnly date) =>
         $"{Days[(int)date.DayOfWeek]} {date.Day}{Nbsp}{Months[date.Month - 1]} {date.Year}";
 
+    /// <summary>"Thursday 01.10.2026", as the report's DATE row, its title and its file name say a day.</summary>
+    public static string DayDotted(DateOnly date) =>
+        $"{Days[(int)date.DayOfWeek]} {date.Day:D2}.{date.Month:D2}.{date.Year:D4}";
+
     /// <summary>"1 January 2026".</summary>
     public static string DatePlain(DateOnly date) => $"{date.Day}{Nbsp}{Months[date.Month - 1]} {date.Year}";
 

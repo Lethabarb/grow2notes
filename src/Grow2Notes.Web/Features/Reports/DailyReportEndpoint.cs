@@ -11,11 +11,13 @@ using Microsoft.Extensions.Options;
 namespace Grow2Notes.Web.Features.Reports;
 
 /// <summary>
-/// <c>GET /api/reports/daily/{date}/export?format=docx|pdf</c> (design.md §6.5): the day's submitted notes as a Word or
-/// PDF file, rendered in memory from one <see cref="DailyReportModel"/> and sent as an attachment. A day with no
-/// submitted note in the caller's organisation, including a future day, gets <c>404 report.no_notes</c>. A format that
-/// is not exactly <c>docx</c> or <c>pdf</c> gets <c>400</c>. <c>GET /api/reports/daily/{date}/has-notes</c> answers
-/// whether the export would find a note, as <c>{date, hasNotes}</c> and nothing more.
+/// <c>GET /api/reports/daily/{date}/export?format=docx|pdf&amp;week=A|B</c> (design.md §6.5): the day's submitted
+/// notes as a Word or PDF file, rendered in memory from one <see cref="DailyReportModel"/> and sent as an attachment.
+/// A day with no submitted note in the caller's organisation, including a future day, gets <c>404 report.no_notes</c>.
+/// A format that is not exactly <c>docx</c> or <c>pdf</c>, or a <c>week</c> that is given and is not exactly <c>A</c>
+/// or <c>B</c>, gets <c>400</c>, before anything is read. <c>GET /api/reports/daily/{date}/has-notes</c> answers
+/// whether the export would find a note, as <c>{date, hasNotes}</c> and nothing more. The file is named by its weekday
+/// and date, <c>Monday 14.09.2026.docx</c>, and never by the week.
 /// </summary>
 /// <remarks>
 /// Both routes have the <see cref="Policies.Manager"/> policy of their own, as §6.5 puts them outside
@@ -45,6 +47,7 @@ internal static class DailyReportEndpoint
     private static async Task<Results<FileContentHttpResult, BadRequest, ProblemHttpResult>> ExportAsync(
         DateOnly date,
         string? format,
+        string? week,
         ClaimsPrincipal user,
         IOptions<IdentityOptions> identityOptions,
         Grow2NotesDbContext db,
@@ -59,6 +62,12 @@ internal static class DailyReportEndpoint
             return TypedResults.BadRequest();
         }
 
+        // The same bare 400 and the same ordinal match, so week=a is refused as PDF is. No week means no label (A158).
+        if (week is not (null or "A" or "B"))
+        {
+            return TypedResults.BadRequest();
+        }
+
         var callerId = Actor.InApp(user, identityOptions.Value).UserId;
         var model = await DailyReportModel.ReadAsync(
             db, tenant.OrganisationId, date, callerId, timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
@@ -67,8 +76,7 @@ internal static class DailyReportEndpoint
             return ErrorCode.NoNotes.Problem();
         }
 
-        var (bytes, contentType) = ReportFile.Render(ReportLayout.DailyReport(model), format);
-        var fileDate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var (bytes, contentType) = ReportFile.Render(ReportLayout.DailyReport(model, week), format);
 
         await audit.WriteAsync(
             tenant.OrganisationId,
@@ -77,9 +85,14 @@ internal static class DailyReportEndpoint
             AuditEntityTypes.Report,
             entityId: null,
             participantId: null,
-            new JsonObject { ["date"] = fileDate, ["format"] = format },
+            new JsonObject
+            {
+                ["date"] = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                ["format"] = format,
+                ["week"] = week,
+            },
             cancellationToken);
-        return TypedResults.File(bytes, contentType, $"daily-notes_{fileDate}.{format}");
+        return TypedResults.File(bytes, contentType, $"{ReportDates.DayDotted(date)}.{format}");
     }
 }
 
