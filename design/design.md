@@ -424,7 +424,8 @@ After submitting, the user returns to Today with "Note for Jane Citizen submitte
 
 **On screen, in order:**
 1. **Previous day**, a native date field and **Next day**. The screen opens on today's date (Melbourne). Future dates cannot be picked, so Next day is disabled on today.
-2. **Download Word** and **Download PDF**.
+2. **Week**, a choice of None (the default), Week A or Week B, which the file prints in its title (D104, A158). It is not remembered, and it is not part of the screen's URL or of the file's name.
+3. **Download Word** and **Download PDF**. The file is named by its weekday and date, such as `Monday 14.09.2026.docx` (A19, A80, D104).
 
 The screen URL is `/reports/daily/2026-10-01`: a date only, so back, forward and bookmarks work and no personal data is in the URL.
 
@@ -1025,7 +1026,7 @@ Audit rows for changes are written in the same transaction as the change (5.9). 
 | Users | `user.invited`, `user.updated` (name, email or role; old and new values), `user.setup_link_sent` (invite resent or sign-in reset), `user.deactivated` (through an assistant: reason, when given), `user.reactivated` |
 | Configuration | `participant.created` (with the Medication switch, always off), `participant.updated` (the details and the Medication switch, old and new), `participant.archived`, `participant.restored`; `goal.created`, `goal.updated` (text and term, old and new), `goal.archived`, `goal.restored`, `goal.reordered`; the same five with a `common_item.` prefix (`common_item.updated` also records a move to another group, with the old and new group, and whether the item asks for details, old and new); the same five with a `common_item_group.` prefix; `guide_prompts.updated` (only when the text changes, D84) |
 | Notes | `note.draft_started`, `note.discarded`, `note.submitted` (v1), `note.edited` (v2 and later), `note.reviewed` |
-| Reports | `report.downloaded` (date, format), `participant.exported` (date range, format, earlier versions included or not) |
+| Reports | `report.downloaded` (date, format, and the week, A, B or none, which is kept here and nowhere else, A158), `participant.exported` (date range, format, earlier versions included or not) |
 | Operator | `admin.bootstrap`, `admin.signin_reset`, `admin.signout_all`, `admin.mcp_client_added`, `admin.mcp_client_updated`, `admin.mcp_client_removed` |
 | AI assistant (Release 2) | `mcp.authorised` (client, scope), `mcp.authorisation_refused` (client, why: not_allowed or cancelled), `mcp.read` (client, tool, the IDs returned, count), `mcp.refused` (client, tool, code) |
 
@@ -1313,7 +1314,7 @@ Spot-checks (D17) need no endpoint: managers read notes and the downloaded daily
 | Method | Path | Role | Purpose | Request → response |
 |---|---|---|---|---|
 | GET | /api/reports/daily/{date}/has-notes | Manager | Whether the date has at least one submitted note, so the Report screen can enable or disable its download buttons (4.7). Returns no note content and no count (D26). | → `{date, hasNotes}` |
-| GET | /api/reports/daily/{date}/export?format=pdf\|docx | Manager | Download the daily report file (§11): every **submitted** note with `NoteDate = date`, each as its current version, sorted by family then given name. No counts or statistics (D26). Built fresh on every request and rendered on the server. Audited as `report.downloaded`. | → `application/pdf` or `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `Content-Disposition: attachment; filename="daily-notes_2026-10-01.pdf"` and `filename*` (A80); `404 report.no_notes` when the date has no submitted notes (this includes any future date) |
+| GET | /api/reports/daily/{date}/export?format=pdf\|docx&week=A\|B | Manager | Download the daily report file (§11): every **submitted** note with `NoteDate = date`, each as its current version, sorted by given name, then family name (A160). `week` is optional and is exactly `A` or `B`, which the file prints in its title (A158); any other value, `a` included, gets the bare `400` that a bad `format` gets, before anything is read. No counts or statistics (D26). Built fresh on every request and rendered on the server. Audited as `report.downloaded` with the date, the format and the week (`A`, `B` or null). | → `application/pdf` or `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `Content-Disposition: attachment; filename="Thursday 01.10.2026.pdf"` and `filename*` (A80, D104), the weekday and date and never the week; |docx | Manager | Download the daily report file (§11): every **submitted** note with `NoteDate = date`, each as its current version, sorted by family then given name. No counts or statistics (D26). Built fresh on every request and rendered on the server. Audited as `report.downloaded`. | → `application/pdf` or `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `Content-Disposition: attachment; filename="daily-notes_2026-10-01.pdf"` and `filename*` (A80); `404 report.no_notes` when the date has no submitted notes (this includes any future date) |
 | GET | /api/reports/participants/{participantId}/export?from=&to=&includeHistory=&format=pdf\|docx | Manager | Participant record export (APP 12, HPP 6; §11.6). Audited as `participant.exported` with the range, format and `includeHistory`. | → file, `participant-record_2026-01-01_to_2026-09-30.pdf` (dates only, no names); `404 report.no_notes` and no file when the range holds no submitted note (D80); a `to` after today is accepted as sent (A60) |
 
 The record export checks its query before it reads anything, and answers `422 validation.failed` keyed `from`, `to` or `format` only, then a plain `404` for a participant who is not in the organisation, then `404 report.no_notes`; a refusal writes no file and no audit event (A94).
@@ -1993,7 +1994,7 @@ Dependabot also covers the MCP SDK and OpenIddict (§9.11). Before upgrading eit
 
 ### 11.1 What the report is
 
-One file, Word (.docx) or PDF (D29), holding every **submitted** note for one note date, each exactly as written: goals ticked, common items ticked, and the Guided notes text (D26). Only managers can download it (D28), from the Report screen (4.7). It is never shown on screen (D43), and the app emails nothing (D30). There are no totals, counts of notes, charts or statistics across notes (D26, A86), and no list of drafts (A18).
+One file, Word (.docx) or PDF (D29), holding every **submitted** note for one note date, each as written: attendance, goals ticked, common items ticked, and the Daily Support Notes text (D26). It follows the provider's own Word support-note template (D104). Only managers can download it (D28), from the Report screen (4.7). It is never shown on screen (D43), and the app emails nothing (D30). There are no totals, counts of notes, charts or statistics across notes (D26, A86), and no list of drafts (A18). The Word template's sections are common item groups the provider sets up (A145 to A147), so the file adds no structure of its own.
 
 ### 11.2 Which notes are in it
 
@@ -2002,51 +2003,72 @@ One file, Word (.docx) or PDF (D29), holding every **submitted** note for one no
 
 ### 11.3 Layout
 
-The start of a downloaded file:
+The start of a downloaded file, then the first participant's page:
 
 ```
-<Organisation name>
-Daily progress notes
-Thursday 1 October 2026
+SUPPORT NOTES – WEEK A
+DATE: Thursday 01.10.2026
+STAFF: Alex Pham, Priya Nair
 As at Fri 2 Oct 2026, 9:14 am
 Exported by Jo Smith
-────────────────────────────────────────────────────────────────
-Sam Taylor
-Written by Priya Nair · Submitted Thu 1 Oct, 4:42 pm
+
+Participants
+  AMÉLIE NGUYEN ........................................ 2
+  SAM TAYLOR ........................................... 3
+  (one line for each participant)
+────────────────────────────────────────────────────────  (a new page)
+NAME: SAM TAYLOR
+☐ Not In  ☐ Late Notice  ☐ Sick
+
+Short term goals
+  ☑ Catch the 903 bus to the library on his own
+  ☐ Make his own lunch
+Medium or Long term goal
+  ☐ Live on his own
+Medication
+  Took one tablet at 9 am.
+Every note
+  ☑ Medication prompted
+  ☐ Meal prepared
+Community outing
+  ☑ Travelled by bus or train
+  ☑ Other (staff to complete if different from above)
+    Details: Went by taxi
+Personal care                (not picked on this note: unticked)
+  ☐ Showered with prompting
+Daily Support Notes
+  Sam was keen to go to the library today ...
+
+Note written by: Priya Nair · Submitted Thu 1 Oct, 4:42 pm
 Edited · 3 versions · last change by Jo Smith, Fri 2 Oct 2026, 9:01 am
 Flagged for manager: "Mentioned pain in his left knee after the walk."
 To review
-
-Goals
-  ☑ Catch the 903 bus to the library on his own
-  ☐ Make his own lunch
-Common items
-  Every note
-    ☑ Medication prompted
-    ☐ Meal prepared
-  Community outing
-    ☑ Travelled by bus or train
-    ☐ Paid for own purchases
-Guided notes
-  Sam was keen to go to the library today ...
-────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────  (a new page)
 (next participant)
 ```
 
-**Order:** participants A to Z by family name, then given name (A5, A18). Flagged notes are not moved to the top; the Flagged list is where flags are worked through.
+**Title block:** the title is "SUPPORT NOTES", with " – WEEK A" or " – WEEK B" (an en dash) when the manager chose one (A158). The organisation's name is not in the body: it is the Word file's Company property and the PDF's Subject (A85, A155). **STAFF** names the authors of the day's submitted notes, each once, in first-name order, leaving out the authors of past-day notes, whom a manager wrote later (A157). It lists names and never counts them (A86).
 
-**Each participant's block:**
+**Index:** a **Participants** heading and one line for each participant, with the name in capitals, a dot leader and the page that the participant's block starts on (A156).
+
+**Order:** participants A to Z by given name, then family name, as the Word files are (A160, which amends A5 for this report only). Flagged notes are not moved to the top; the Flagged list is where flags are worked through.
+
+**Each participant's block**, on a page of its own:
 
 | Element | Shows | Rules |
 |---|---|---|
-| Participant | Full name | Archived participants still appear when they have a note for that day. |
-| Written by | The note's author | For a past-day note, the same line starts "Past-day note, written by Jo Smith (manager) on Sat 3 Oct 2026, 10:14 am" and keeps " · Submitted …" after it (A11, A84). |
-| Submitted | Day and time of version 1, in Melbourne, without the year (A79) | One shape for every note, so a note first submitted on a later day already shows its own date: "Submitted Thu 1 Oct, 4:42 pm", "Submitted Fri 2 Oct, 8:05 am". |
-| Goals | Every goal in the note's snapshot, in order, ticked or not ticked | The wording as it was when the note was written (A3). "No goals set" if there were none. |
-| Common items | The Every note group, then each group picked on the note, each under its group name in the configured order, with every item in it ticked or not ticked (D47) | Groups not picked do not appear. Group names and wording as they were when the note was written (A3). An Every note group with no items is left out. "No common items set" if no group is shown. |
-| Guided notes | The text exactly as written, line breaks kept | Guide prompts are never shown; they were placeholders (D34). Never empty, because submit requires text. |
-| Flag | Only when the note has been flagged: the reason (from the flagged version) in quotation marks, "(flag removed in a later edit)" after it where that applies, then on the next line "To review" or "Reviewed by Jo Smith on Fri 2 Oct 2026, 9:30 am", then "Comment: …" if the review has one (A82, A84) | No flag line otherwise. The comment keeps its line breaks. |
+| NAME | "NAME:" and the participant's full name in capitals | Archived participants still appear when they have a note for that day. |
+| Attendance | A row of three boxes, **Not In**, **Late Notice** and **Sick**, ticked or not | Independent of one another. Directly under the name, not inside the heading, so that navigation lists names only (A153). A version saved before T44 shows all three unticked. |
+| Goals | Under **Short term goals** and **Medium or Long term goal**, every goal of the note's snapshot, ticked or not, in the snapshot's order | The wording and the term as they were when the note was written (A3, A150). A heading with no goals is left out. "No goals set" if there were none. |
+| Medication | The heading and the text as written, line breaks kept | Only on a note that has the Medication box (A152). The heading stands alone when nothing was written. |
+| Common item groups | Every group in the note's snapshot that has at least one item, the Every note group first, each under its own name in the configured order, with every item ticked or not | Groups the note did not pick are printed too, with their items unticked (D104, A161), which reverses D47 for this report only. Group names and wording as they were when the note was written (A3). "No common items set" if no group prints. |
+| Details | "Details: <text>" after a ticked item that asks for details | Only an item that asks has some (A151). |
+| Daily Support Notes | The text exactly as written, line breaks kept | Guide prompts are never shown; they were placeholders (D34). Never empty, because submit requires text, a note ticked Not In included. |
+| Note written by | "Note written by: Priya Nair · Submitted Thu 1 Oct, 4:42 pm" | The submitted time is that of version 1, in Melbourne, without the year (A79), with its day, so a note first submitted on a later day already shows its own date. For a past-day note: "Note written by: Jo Smith (manager) · Past-day note, written Sat 3 Oct 2026, 10:14 am · Submitted Sat 3 Oct, 10:20 am" (A11, A84). |
 | Edited | Only when there is more than one version: "Edited · N versions · last change by <name>, <date and time>", always dated with the year (A83) | The block always shows the **current** version (A18). |
+| Flag | Only when the note has been flagged: the reason (from the flagged version) in quotation marks, "(flag removed in a later edit)" after it where that applies, then on the next line "To review" or "Reviewed by Jo Smith on Fri 2 Oct 2026, 9:30 am", then "Comment: …" if the review has one (A82, A84) | No flag line otherwise. The comment keeps its line breaks. |
+
+The labels are the Word template's (A155), and the note form and the read view use the same words, held to the report's by a test (A159).
 
 ### 11.4 Empty day
 
@@ -2054,23 +2076,26 @@ There is no file for a day with no submitted notes: the Report screen disables b
 
 ### 11.5 PDF and Word layout
 
-Both files have the same content and order (11.3). One `DailyReportModel` feeds both file renderers, so the two cannot drift apart.
+Both files have the same content and order (11.3). One `DailyReportModel` feeds both file renderers, and one `ReportStyle` holds their sizes and distances, so the two cannot drift apart (A162).
 
 | | PDF | Word (.docx) |
 |---|---|---|
 | Page | A4 portrait, 20 mm margins | A4 portrait, 20 mm margins |
-| Font | DejaVu Sans 11 pt (static TrueType, open licence), embedded; it contains the ☐ (U+2610) and ☑ (U+2611) characters | Arial 11 pt; the tick characters set in Segoe UI Symbol |
-| Page 1 title block | Organisation name, "Daily progress notes", the date, "As at", exported by | Same, in the Title and Subtitle styles |
-| Each note | Participant name as a heading kept with the lines below it; common item group names as sub-headings; a thin rule between notes; no forced page breaks | Heading 1 per participant, Heading 2 per section, Heading 3 per common item group, so notes appear in Word's Navigation pane |
-| Running header (page 2 on) | "Daily progress notes: Thu 1 Oct 2026" | Same |
+| Font | DejaVu Sans 11 pt (static TrueType, open licence), embedded; it contains the ☐ (U+2610) and ☑ (U+2611) characters, the curly quotes and the en dash | Arial 11 pt; the tick characters set in Segoe UI Symbol |
+| Styles | One set for both files (A162): Title 20 pt; Heading 1 14 pt; Heading 2 12 pt; Heading 3 11 pt, bold and not italic; body 11 pt; running header and footer 8 pt, 10 mm from the page edge | Same values, as half-points and twips |
+| Page 1 title block | The title with the week, DATE, STAFF, "As at", exported by, then the Participants index | Same, in the Title and Subtitle styles |
+| Each participant | "NAME: …" as a heading that starts a new page and is bookmarked; each section label as a sub-heading; no rule between notes, as the page break is the separation | Heading 1 per participant, with a page break before it and a bookmark; Heading 2 per section and per group, so notes appear in Word's Navigation pane |
+| Index page numbers | PDF bookmarks and page references, which MigraDoc works out exactly | A PAGEREF field for each bookmark, with a dash as its stored result, and the file asks Word to update its fields when it opens (A156) |
+| Running header (page 2 on) | "SUPPORT NOTES – WEEK A: Monday 14.09.2026"; the same with no week | Same |
 | Footer, every page | "Confidential: health information. Copy exported from Grow2Notes by Jo Smith, Fri 2 Oct 2026, 9:14 am. The record in Grow2Notes is authoritative. Page 3 of 7" | Same, using PAGE and NUMPAGES fields |
 | Ticks | ☑ / ☐ as text characters | ☑ / ☐ as text, not content controls, so the file reads as a record rather than a form |
-| File name | `daily-notes_2026-10-01.pdf` | `daily-notes_2026-10-01.docx` |
-| Metadata | Title "Daily progress notes: Thu 1 Oct 2026" and the organisation (the Subject property); no participant names (A85) | Same title; the organisation is the Company property (A85) |
+| File name | `Monday 14.09.2026.pdf`: the weekday and the date, never the week or any name (A19, A80, D104) | `Monday 14.09.2026.docx` |
+| Metadata | Title "SUPPORT NOTES – WEEK A: Monday 14.09.2026" and the organisation (the Subject property); no participant names (A85) | Same title; the organisation is the Company property (A85) |
 
 - **Libraries:** PDFsharp-MigraDoc and the Open XML SDK (§7.5). MigraDoc does no per-character font fallback, so an M4 test checks that every character in a rendered report exists in the embedded font. A character the font cannot draw, such as an emoji, is printed as the replacement mark U+FFFD in the PDF only; the Word file keeps the text as written (A59).
-- **Files are not stored:** each file is generated on request and sent straight to the manager's browser (A19). Each download is audited with who, when, which date and which format.
+- **Files are not stored:** each file is generated on request and sent straight to the manager's browser (A19). Each download is audited with who, when, which date, which format and which week.
 - **Accessibility:** the Word file is the accessible version, with real headings and lists. The PDF is for printing and filing.
+- **Page numbers in Word:** a viewer that does not update fields (Word on the web, a phone, a preview) shows a dash in the index, never a wrong number. Desktop Word asks once to update the fields, and the Report screen tells the manager to choose Yes (A156).
 
 ### 11.6 Participant record export (access and correction requests)
 
@@ -2078,7 +2103,7 @@ Managers only, from participant detail > Export record (4.12).
 
 - **Choices:** From and To dates (default: the participant's first note to today; a To date after today is accepted as sent, A60); **Include earlier versions** (off by default, A20); PDF or Word.
 - **Title block:** "Progress notes record", the participant's name and date of birth, the date range, the organisation, who exported it and when, and "Earlier versions: included" or "not included".
-- **Body:** one block per submitted note, oldest first, headed with the note date and laid out like the daily-report block (written by, submitted, goals, common items with the Every note group and the picked groups only (D47), guided notes, flag and review, edited marker). Flag reasons and review comments are included, because they are information about the participant (A20). Drafts are excluded.
+- **Body:** one block per submitted note, oldest first, headed with the note date and laid out like the daily-report block (attendance, goals by term, Medication, common items with the Every note group and the picked groups only (D47), details, Daily Support Notes, note written by, edited marker, flag and review), through the same code (D104, A159). It has no index and no page breaks, and keeps its own date headings and order. Flag reasons and review comments are included, because they are information about the participant (A20). Drafts are excluded.
 - **With earlier versions:** each edited note is followed by "Earlier versions", newest to oldest, each printed in full with the groups picked in that version, for example "Version 2: saved by Jo Smith, Fri 2 Oct 2026, 9:01 am" or "Version 1: submitted by Priya Nair, …". The wording and order of the title block, the document title and the heading levels are A93.
 - **Page setup and footer** as for the daily report. File name with dates only: `participant-record_2026-01-01_to_2026-09-30.pdf`.
 - **Audit:** who, when, which participant, the date range, the earlier-versions choice and the format.

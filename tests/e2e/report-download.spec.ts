@@ -3,7 +3,7 @@ import { manager, serveMe } from './me.ts';
 import {
   recordExports,
   reportAddress,
-  reportDay,
+  reportFileDay,
   serveHasNotes,
   serveOverHttp,
   serveReport,
@@ -17,7 +17,7 @@ for (const { button, format } of [
   { button: 'Download Word', format: 'docx' },
   { button: 'Download PDF', format: 'pdf' },
 ]) {
-  test(`${button} saves daily-notes_${reportDay}.${format}, asking for ?format=${format}, with no new page`, async ({
+  test(`${button} saves ${reportFileDay}.${format}, asking for ?format=${format}, with no new page`, async ({
     page,
     context,
   }) => {
@@ -35,7 +35,7 @@ for (const { button, format } of [
     const download = page.waitForEvent('download');
     await page.getByRole('main').getByRole('button', { name: button, exact: true }).click();
 
-    expect((await download).suggestedFilename()).toBe(`daily-notes_${reportDay}.${format}`);
+    expect((await download).suggestedFilename()).toBe(`${reportFileDay}.${format}`);
     expect(sent).toEqual([`?format=${format}`]);
     expect(pagesOpened).toBe(0);
     expect(context.pages()).toHaveLength(1);
