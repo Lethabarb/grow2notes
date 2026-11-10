@@ -15,7 +15,8 @@ internal static partial class ReportText
 {
     /// <summary>
     /// The text of each body paragraph of a Word file, in order: <c>w:t</c> as text and <c>w:br</c> as a line feed. A
-    /// goal reads as its box, a space and its text.
+    /// goal reads as its box, a space and its text, a tab as a tab and a complex field as its instruction in braces
+    /// followed by its stored result.
     /// </summary>
     public static IReadOnlyList<string> WordParagraphs(byte[] docx)
     {
@@ -114,6 +115,12 @@ internal static partial class ReportText
     /// </summary>
     public static string Normalised(string text) => WhiteSpace().Replace(text.Replace('\u00A0', ' '), " ").Trim();
 
+    /// <summary>
+    /// <paramref name="text"/> with each run of four dots or more, which is how the PDF draws the dot leader of an
+    /// index entry, as one space.
+    /// </summary>
+    public static string WithoutLeaders(string text) => Leader().Replace(text, " ");
+
     private static string PartText(IEnumerable<Paragraph> paragraphs) =>
         string.Join('\n', paragraphs.Select(ParagraphText));
 
@@ -122,12 +129,17 @@ internal static partial class ReportText
         {
             Text text => text.Text,
             SimpleField field => "{" + field.Instruction!.Value!.Trim() + "}",
+            FieldCode code => "{" + code.Text.Trim() + "}",
+            TabChar => "\t",
             Break => "\n",
             _ => string.Empty,
         }));
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhiteSpace();
+
+    [GeneratedRegex(@"\.{4,}")]
+    private static partial Regex Leader();
 }
 
 /// <summary>What <see cref="ReportText.WordHeadersAndFooters"/> reads from a Word file.</summary>

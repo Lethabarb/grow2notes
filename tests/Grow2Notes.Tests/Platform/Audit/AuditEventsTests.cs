@@ -1371,9 +1371,9 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
 
     /// <summary>
     /// <c>report.downloaded</c>: A's manager downloads the daily report of <see cref="ReportDate"/>, a day on which a
-    /// participant added for the row has a submitted note, with <c>GET /api/reports/daily/{date}/export</c> as a PDF,
-    /// which records the manager as the actor and the report as the entity, with no entity ID and no participant,
-    /// and the date and format alone in <c>Details</c>.
+    /// participant added for the row has a submitted note, with <c>GET /api/reports/daily/{date}/export</c> as a PDF
+    /// for Week A, which records the manager as the actor and the report as the entity, with no entity ID and no
+    /// participant, and the date, format and week alone in <c>Details</c>.
     /// </summary>
     private async Task<WrittenEvent> DownloadDailyReportAsync()
     {
@@ -1381,7 +1381,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
 
         using var response = await client.GetAsync(
-            $"/api/reports/daily/{ReportDay}/export?format=pdf", TestContext.Current.CancellationToken);
+            $"/api/reports/daily/{ReportDay}/export?format=pdf&week=A", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return new(
@@ -1391,7 +1391,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             AuditEntityTypes.Report,
             null,
             null,
-            new JsonObject { ["date"] = ReportDay, ["format"] = "pdf" }.ToJsonString());
+            new JsonObject { ["date"] = ReportDay, ["format"] = "pdf", ["week"] = "A" }.ToJsonString());
     }
 
     /// <summary>
