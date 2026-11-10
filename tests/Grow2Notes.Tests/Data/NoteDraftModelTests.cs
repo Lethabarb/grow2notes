@@ -38,9 +38,13 @@ public sealed class NoteDraftModelTests
             ("FlagReason", $"nvarchar({Limits.FlagReason})", true),
             ("Groups", "nvarchar(max)", false),
             ("IsFlagged", "bit", false),
+            ("IsLateNotice", "bit", false),
+            ("IsNotIn", "bit", false),
+            ("IsSick", "bit", false),
             ("Items", "nvarchar(max)", false),
             ("LastClientId", "uniqueidentifier", false),
             ("LastSeq", "int", false),
+            ("Medication", $"nvarchar({Limits.Medication})", true),
             ("Narrative", "nvarchar(max)", false),
             ("NoteId", "uniqueidentifier", false),
             ("OrganisationId", "uniqueidentifier", false),
@@ -121,8 +125,11 @@ public sealed class NoteDraftModelTests
             JsonPropertiesOf(draft, nameof(NoteDraft.Groups)));
         Assert.Equal(
             [
+                ("detail", nameof(DraftItem.Detail)),
                 ("groupId", nameof(DraftItem.GroupId)),
+                ("isMediumOrLongTerm", nameof(DraftItem.IsMediumOrLongTerm)),
                 ("isTicked", nameof(DraftItem.IsTicked)),
+                ("needsDetail", nameof(DraftItem.NeedsDetail)),
                 ("section", nameof(DraftItem.Section)),
                 ("sourceId", nameof(DraftItem.SourceId)),
                 ("text", nameof(DraftItem.Text)),

@@ -232,6 +232,95 @@ public sealed class NoteTableTests(Grow2NotesFactory factory, SqlServerFixture s
         }
     }
 
+    // The Word-template members (D104) in the JSON and the columns: a goal's term, an item's need for details and its
+    // details, the attendance ticks and the Medication text, read back as written.
+    [Fact]
+    public async Task A_working_copy_s_term_details_attendance_and_medication_are_read_back_as_written()
+    {
+        var participant = await factory.Services.AddParticipantAsync(A);
+        var noteId = await AddNoteAsync(NewNote(participant.Id, NoteStatus.Draft));
+        var everyNote = Guid.NewGuid();
+        var written = new NoteDraft
+        {
+            NoteId = noteId,
+            EditorUserId = A.WorkerId,
+            OrganisationId = A.OrganisationId,
+            Groups = [new(everyNote, "Every note", true, false)],
+            Items =
+            [
+                new(NoteSection.Goal, Guid.NewGuid(), null, "Makes own breakfast", true, IsMediumOrLongTerm: true),
+                new(NoteSection.Goal, Guid.NewGuid(), null, "Catches the bus", false, IsMediumOrLongTerm: false),
+                new(
+                    NoteSection.CommonItem, Guid.NewGuid(), everyNote, "Other (staff to complete)", true,
+                    NeedsDetail: true, Detail: "Zoë’s “walk” to O’Brien’s"),
+                new(NoteSection.CommonItem, Guid.NewGuid(), everyNote, "Medication given", false, NeedsDetail: false),
+            ],
+            Narrative = "Jane made toast.",
+            IsNotIn = true,
+            IsLateNotice = true,
+            IsSick = false,
+            Medication = "Panadol at 9 am.\nNothing else.",
+            LastClientId = Guid.NewGuid(),
+            LastSeq = 1,
+            CreatedAtUtc = StartedAtUtc,
+            UpdatedAtUtc = StartedAtUtc,
+        };
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+            db.NoteDrafts.Add(written);
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(A.OrganisationId))
+            {
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var stored = await StoredDraftAsync(noteId);
+
+        Assert.Equal(written.Items, stored.Items);
+        Assert.Equal(
+            (true, true, false, "Panadol at 9 am.\nNothing else."),
+            (stored.IsNotIn, stored.IsLateNotice, stored.IsSick, stored.Medication));
+    }
+
+    // Written by hand, as the release before T44 writes it, with none of the new members: a swap of the releases, or a
+    // draft kept across the deploy, must read them as not set (A154), whatever EF Core does with a missing member.
+    [Fact]
+    public async Task A_working_copy_written_before_T44_reads_the_new_members_as_not_set()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var participant = await factory.Services.AddParticipantAsync(A);
+        var noteId = await AddNoteAsync(NewNote(participant.Id, NoteStatus.Draft));
+        Guid everyNote = Guid.NewGuid(), goalId = Guid.NewGuid(), itemId = Guid.NewGuid();
+        var groups = $$"""[{"groupId":"{{everyNote}}","name":"Every note","isEveryNote":true,"isPicked":false}]""";
+        var items = $$"""
+            [{"section":1,"sourceId":"{{goalId}}","groupId":null,"text":"Makes own breakfast","isTicked":true},
+             {"section":2,"sourceId":"{{itemId}}","groupId":"{{everyNote}}","text":"Medication given","isTicked":true}]
+            """;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO [NoteDraft] ([NoteId], [EditorUserId], [OrganisationId], [BaseVersionNumber], [Groups],
+                    [Items], [Narrative], [IsFlagged], [FlagReason], [LastClientId], [LastSeq], [CreatedAtUtc],
+                    [UpdatedAtUtc])
+                VALUES ({noteId}, {A.WorkerId}, {A.OrganisationId}, 0, {groups}, {items}, N'Jane made toast.', 0,
+                    NULL, {Guid.NewGuid()}, 1, {StartedAtUtc}, {StartedAtUtc})
+                """, cancellationToken);
+        }
+
+        var stored = await StoredDraftAsync(noteId);
+
+        Assert.Equal(
+            [
+                new DraftItem(NoteSection.Goal, goalId, null, "Makes own breakfast", true, null, null, null),
+                new DraftItem(NoteSection.CommonItem, itemId, everyNote, "Medication given", true, null, null, null),
+            ],
+            stored.Items);
+        Assert.Equal(
+            (false, false, false, null), (stored.IsNotIn, stored.IsLateNotice, stored.IsSick, stored.Medication));
+    }
+
     [Theory]
     [MemberData(nameof(FixedColumns))]
     public async Task A_change_to_a_saved_note_s_fixed_column_is_refused_and_its_row_is_left_as_it_was(string column)

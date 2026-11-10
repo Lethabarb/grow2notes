@@ -27,9 +27,12 @@ public sealed class NoteVersionItemModelTests
         (string Name, string Type, bool IsNullable)[] expected =
         [
             ("CommonItemId", "uniqueidentifier", true),
+            ("Detail", $"nvarchar({Limits.ItemDetail})", true),
             ("GoalId", "uniqueidentifier", true),
             ("GroupPosition", "int", true),
+            ("IsMediumOrLongTerm", "bit", false),
             ("IsTicked", "bit", false),
+            ("NeedsDetail", "bit", false),
             ("NoteVersionId", "uniqueidentifier", false),
             ("OrganisationId", "uniqueidentifier", false),
             ("Position", "int", false),
@@ -58,16 +61,26 @@ public sealed class NoteVersionItemModelTests
     }
 
     [Fact]
-    public async Task Its_check_constraint_ties_each_section_to_its_source_and_group_columns()
+    public async Task Its_check_constraints_tie_each_section_to_its_columns()
     {
         var table = TableOf(await NoteVersionItemInTheAppModelAsync());
 
-        var constraint = Assert.Single(table.CheckConstraints);
-        Assert.Equal("CK_NoteVersionItem_Section", constraint.Name);
         Assert.Equal(
-            "([Section] = 1 AND [GoalId] IS NOT NULL AND [CommonItemId] IS NULL AND [GroupPosition] IS NULL)"
-            + " OR ([Section] = 2 AND [CommonItemId] IS NOT NULL AND [GoalId] IS NULL AND [GroupPosition] IS NOT NULL)",
-            constraint.Sql);
+            [
+                (
+                    "CK_NoteVersionItem_Detail",
+                    "([Section] = 2 OR [NeedsDetail] = 0)"
+                    + " AND ([Detail] IS NULL OR ([Section] = 2 AND [NeedsDetail] = 1 AND [IsTicked] = 1))"),
+                (
+                    "CK_NoteVersionItem_Section",
+                    "([Section] = 1 AND [GoalId] IS NOT NULL AND [CommonItemId] IS NULL AND [GroupPosition] IS NULL)"
+                    + " OR ([Section] = 2 AND [CommonItemId] IS NOT NULL AND [GoalId] IS NULL"
+                    + " AND [GroupPosition] IS NOT NULL)"),
+                ("CK_NoteVersionItem_Term", "[Section] = 1 OR [IsMediumOrLongTerm] = 0"),
+            ],
+            table.CheckConstraints
+                .Select(constraint => (constraint.Name, constraint.Sql))
+                .OrderBy(constraint => constraint.Name, StringComparer.Ordinal));
     }
 
     // design.md gives the table no index beyond its key, which starts with NoteVersionId alone, so EF Core gives each

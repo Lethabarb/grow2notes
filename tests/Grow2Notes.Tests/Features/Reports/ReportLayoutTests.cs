@@ -137,7 +137,7 @@ public sealed class ReportLayoutTests
                 "Second text.",
                 true,
                 "Knee sore.",
-                [new NoteReadItem("Make her own lunch", true)],
+                [new NoteReadGoal("Make her own lunch", true, false)],
                 [new NoteReadGroup("Community outing", false, [new NoteReadItem("Bus", false)])]),
             [
                 new NoteReadReview(

@@ -27,6 +27,7 @@ public sealed class CommonItemModelTests
             ("CreatedAtUtc", "datetime2(3)", false),
             ("GroupId", "uniqueidentifier", false),
             ("Id", "uniqueidentifier", false),
+            ("NeedsDetail", "bit", false),
             ("OrganisationId", "uniqueidentifier", false),
             ("RowVersion", "rowversion", false),
             ("SortOrder", "int", false),

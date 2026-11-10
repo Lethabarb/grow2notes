@@ -35,6 +35,7 @@ public sealed class ParticipantModelTests
             ("DateOfBirth", "date", false),
             ("FamilyName", $"nvarchar({Limits.ParticipantName})", false),
             ("GivenName", $"nvarchar({Limits.ParticipantName})", false),
+            ("HasMedicationLine", "bit", false),
             ("Id", "uniqueidentifier", false),
             ("OrganisationId", "uniqueidentifier", false),
             ("RowVersion", "rowversion", false),

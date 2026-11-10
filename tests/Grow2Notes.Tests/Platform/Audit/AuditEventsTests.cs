@@ -468,6 +468,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             ["givenName"] = "Jane",
             ["familyName"] = "Citizen",
             ["dateOfBirth"] = "1987-03-07",
+            ["hasMedicationLine"] = false,
             ["status"] = "Active",
         };
         return new(
@@ -580,7 +581,13 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             new { text = " Makes own\nbreakfast " });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var values = new JsonObject { ["text"] = "Makes own breakfast", ["sortOrder"] = 0, ["archivedAtUtc"] = null };
+        var values = new JsonObject
+        {
+            ["text"] = "Makes own breakfast",
+            ["isMediumOrLongTerm"] = false,
+            ["sortOrder"] = 0,
+            ["archivedAtUtc"] = null,
+        };
         return new(
             AuditEventTypes.Goal.Created,
             a.OrganisationId,
@@ -740,6 +747,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         {
             ["groupId"] = groupId,
             ["text"] = "Travelled by bus or train",
+            ["needsDetail"] = false,
             ["sortOrder"] = 0,
             ["archivedAtUtc"] = null,
         };

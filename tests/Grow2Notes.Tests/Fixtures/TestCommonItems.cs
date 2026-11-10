@@ -21,7 +21,12 @@ internal sealed record TestCommonItemGroup(
 /// <see langword="null"/> for an active item.
 /// </summary>
 internal sealed record TestCommonItem(
-    string Text, int SortOrder, DateTime? CreatedAtUtc = null, Guid? Id = null, DateTime? ArchivedAtUtc = null);
+    string Text,
+    int SortOrder,
+    DateTime? CreatedAtUtc = null,
+    Guid? Id = null,
+    DateTime? ArchivedAtUtc = null,
+    bool NeedsDetail = false);
 
 /// <summary>
 /// A common item that <see cref="TestCommonItems.AddItemAsync"/> added: its ID, and its <c>ETag</c>, the
@@ -150,6 +155,7 @@ internal static class TestCommonItems
             OrganisationId = organisationId,
             GroupId = groupId,
             Text = item.Text,
+            NeedsDetail = item.NeedsDetail,
             SortOrder = item.SortOrder,
             ArchivedAtUtc = item.ArchivedAtUtc,
             CreatedAtUtc = item.CreatedAtUtc ?? AddedAtUtc,

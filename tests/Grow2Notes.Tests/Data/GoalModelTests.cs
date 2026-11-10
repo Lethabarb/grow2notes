@@ -26,6 +26,7 @@ public sealed class GoalModelTests
             ("ArchivedAtUtc", "datetime2(3)", true),
             ("CreatedAtUtc", "datetime2(3)", false),
             ("Id", "uniqueidentifier", false),
+            ("IsMediumOrLongTerm", "bit", false),
             ("OrganisationId", "uniqueidentifier", false),
             ("ParticipantId", "uniqueidentifier", false),
             ("RowVersion", "rowversion", false),
