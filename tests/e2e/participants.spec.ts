@@ -1113,7 +1113,7 @@ test('in forced colours, the focus ring shows in Highlight at each stop, and una
     page,
     'Tab',
     [
-      ...['Given name', 'Family name', 'Day', 'Month', 'Year', 'Save'],
+      ...['Given name', 'Family name', 'Day', 'Month', 'Year', 'Medication box on notes', 'Save'],
       ...[breakfast, bus, sister].flatMap((goal) => rowStops(goal.text)),
       ...['New goal', 'Add goal', 'Archived goals'],
     ],

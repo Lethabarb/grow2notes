@@ -51,7 +51,7 @@ async function setUp(page: Page) {
 
   // A goal's Term, chosen in its Edit form and sent with Save; the list then says so under the goal.
   const goals = region(page, 'Goals');
-  await goals.getByRole('button', { name: `Edit, ${breakfast.text}` }).click();
+  await goals.getByRole('button', { name: `Edit , ${breakfast.text}`, exact: true }).click();
   await expect(goals.getByRole('group', { name: 'Term', exact: true })).toBeVisible();
   await expect(goals.getByRole('radio', { name: 'Short term', exact: true })).toBeChecked();
   await goals.getByRole('radio', { name: 'Medium or long term', exact: true }).check();
@@ -86,7 +86,7 @@ async function setUp(page: Page) {
   await everyNote.getByRole('textbox', { name: 'New item in Every note', exact: true }).fill(otherItem);
   await everyNote.getByRole('button', { name: 'Add item', exact: true }).click();
   await expect(everyNote.getByText(otherItem, { exact: true })).toBeVisible();
-  await everyNote.getByRole('button', { name: `Edit, ${otherItem}` }).click();
+  await everyNote.getByRole('button', { name: `Edit , ${otherItem}`, exact: true }).click();
   const asks = everyNote.getByRole('checkbox', { name: 'Ask for details when ticked', exact: true });
   await expect(asks).not.toBeChecked();
   await asks.check();
@@ -149,7 +149,7 @@ test('a manager sets up the additions, a worker writes a note with them, and the
     await main(phone).getByRole('checkbox', { name: breakfast.text, exact: true }).check();
     await main(phone).getByRole('textbox', { name: 'Medication', exact: true }).fill(medicationText);
     await main(phone).getByRole('checkbox', { name: otherItem, exact: true }).check();
-    const detailsBox = main(phone).getByRole('textbox', { name: `Details, ${otherItem}`, exact: true });
+    const detailsBox = main(phone).getByRole('textbox', { name: `Details , ${otherItem}`, exact: true });
     await expect(detailsBox).toBeVisible();
     await main(phone).getByRole('textbox', { name: 'Daily Support Notes', exact: true }).fill(narrative);
     await expect(saveStatus(phone)).toHaveText(savedAnyTime, { timeout: 15_000 });

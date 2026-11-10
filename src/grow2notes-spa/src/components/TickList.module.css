@@ -20,8 +20,10 @@
   padding: 0;
 }
 
+/* A long word, such as Attendance or a group's name, wraps rather than widening the page at 320 px with text at 200%. */
 .heading {
   margin: 0 0 var(--space-1);
+  overflow-wrap: anywhere;
 }
 
 .hint {

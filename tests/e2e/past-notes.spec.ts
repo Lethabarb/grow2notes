@@ -846,7 +846,7 @@ test('someone else’s draft: a worker’s view, and a manager’s read-only one
   await expect(page.locator('#save-status')).toHaveCount(0);
   // In that order, as it reads.
   expect((await main(page).innerText()).replace(/\s+/g, ' ')).toMatch(
-    /^Jane Citizen Thursday 1 October 2026 Alex P\. started .+ Discard draft Past notes 1\. Goals /,
+    /^Jane Citizen Thursday 1 October 2026 Alex P\. started .+ Discard draft Past notes Attendance Not In , not ticked Late Notice , not ticked Sick , not ticked Short term goals /,
   );
   await expect(page).toHaveTitle(title('Note'));
   await expectAxeToPass(page);

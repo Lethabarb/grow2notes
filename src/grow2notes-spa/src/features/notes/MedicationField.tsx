@@ -33,7 +33,7 @@ export function MedicationField({ value, onChange, error }: MedicationFieldProps
   const hintId = `${medicationId}-hint`;
   return (
     <div className={guidedNotes.section} data-invalid={error !== undefined || undefined}>
-      <h2>
+      <h2 className={styles.heading}>
         <label htmlFor={medicationId}>{strings.noteWords.medication}</label>
       </h2>
       <p id={hintId} className={tickList.hint}>
