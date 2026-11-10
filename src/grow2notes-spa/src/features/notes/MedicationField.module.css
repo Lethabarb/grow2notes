@@ -1,0 +1,9 @@
+/*
+ * Four rows tall, as rows={4} sets it, and resized by its corner, where the shared text box grows with its text and
+ * never shrinks below six lines. Two classes, so that it outranks the shared rule whichever stylesheet comes first.
+ */
+.field.field {
+  min-block-size: 0;
+  resize: vertical;
+  field-sizing: fixed;
+}

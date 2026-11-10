@@ -26,7 +26,8 @@ type GuidedNotesProps = {
 };
 
 /**
- * Section 3 of the note form (guided-notes-textarea.md): its `<h2>`, which is the box's label, then the box, in the
+ * The Daily Support Notes box of the note form (guided-notes-textarea.md): its `<h2>`, which is the box's label, then
+ * the box, in the
  * shared text box's look, with the guide prompts as its placeholder, gone at the first character typed and back when
  * the box is emptied (D34), and none when no prompts are saved. The box is uncontrolled, so that nothing but typing
  * changes what it holds; it grows with its text, never shorter than the prompts or about 6 lines, so that the page
@@ -57,7 +58,7 @@ export function GuidedNotes({ initialText, prompts, boxRef, onChange, error }: G
   return (
     <div className={styles.section} data-invalid={error !== undefined || undefined}>
       <h2>
-        <label htmlFor={guidedNotesId}>{strings.note.guidedNotes}</label>
+        <label htmlFor={guidedNotesId}>{strings.noteWords.dailySupportNotes}</label>
       </h2>
       {error !== undefined && <FieldError fieldId={guidedNotesId}>{error}</FieldError>}
       {/* The copies behind the box, from data-prompts and data-value, size it (TextBox.module.css). */}

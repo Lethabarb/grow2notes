@@ -134,3 +134,15 @@
 .readText {
   overflow-wrap: anywhere;
 }
+
+/* An item's details on the read view, under its wording, as written. */
+.detail {
+  display: block;
+  color: var(--colour-text-secondary);
+}
+
+/* The Details box under a ticked item that asks for them, in the form: indented under the item's box and wording. */
+.detailField {
+  padding-block: var(--space-2);
+  padding-inline-start: calc(2.5rem + var(--space-3));
+}
