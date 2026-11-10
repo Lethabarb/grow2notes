@@ -8,6 +8,8 @@ export type AdminParticipant = {
   /** A calendar date, such as "1987-03-07". */
   dateOfBirth: string;
   status: 'Active' | 'Archived';
+  /** Whether notes started from now on carry a Medication box (D104). */
+  hasMedicationLine: boolean;
   /** The row's `RowVersion` as base64, which a change to the participant sends as `If-Match` (D78). */
   rowVersion: string;
 };
@@ -19,7 +21,15 @@ export function madeUpParticipant(
   familyName: string,
   status: AdminParticipant['status'] = 'Active',
 ): AdminParticipant {
-  return { id, givenName, familyName, dateOfBirth: '1987-03-07', status, rowVersion: `AAAAAAAA${id.slice(0, 4)}=` };
+  return {
+    id,
+    givenName,
+    familyName,
+    dateOfBirth: '1987-03-07',
+    status,
+    hasMedicationLine: false,
+    rowVersion: `AAAAAAAA${id.slice(0, 4)}=`,
+  };
 }
 
 // Made-up participants (A35): two active and one archived.
