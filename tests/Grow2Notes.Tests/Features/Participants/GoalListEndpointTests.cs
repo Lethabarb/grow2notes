@@ -128,7 +128,7 @@ public sealed class GoalListEndpointTests(Grow2NotesFactory factory, SqlServerFi
 
         var active = goals[0];
         Assert.Equal(
-            ["id", "text", "sortOrder", "archivedAtUtc", "rowVersion"],
+            ["id", "text", "isMediumOrLongTerm", "sortOrder", "archivedAtUtc", "rowVersion"],
             active.EnumerateObject().Select(property => property.Name));
         Assert.Equal("Cooks phở with Nguyễn, then tidies up", active.GetProperty("text").GetString());
         Assert.Equal(3, active.GetProperty("sortOrder").GetInt32());

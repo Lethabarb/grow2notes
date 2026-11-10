@@ -10,7 +10,8 @@ namespace Grow2Notes.Web.Features.Notes;
 /// of the note, which the working copy keeps as the page that saved last (§5.6); the version of the lists
 /// that the form opened with, which a note's first save sends back from the template (§5.7); the Guided notes text;
 /// the IDs of the goals ticked as reached; the IDs of the common item groups picked as having happened and of the
-/// common items ticked as done; and whether the note is flagged for a manager, with the reason.
+/// common items ticked as done; the three attendance ticks; the Medication text; the details of ticked common items
+/// that ask for them, by item ID; and whether the note is flagged for a manager, with the reason.
 /// </summary>
 /// <remarks>
 /// <see cref="BaseVersion"/> is 0 when missing, which is a draft's save, and is never negative. <see cref="Narrative"/>
@@ -21,8 +22,12 @@ namespace Grow2Notes.Web.Features.Notes;
 /// <see cref="Limits.FlagReason"/> characters. So a body without the narrative, the ticks or the picks, a <c>null</c>
 /// one, a longer narrative or a longer reason gets <c>422 validation.failed</c> under its name before the endpoint
 /// runs, and writes nothing. Only a save that creates the note reads <see cref="ListsVersion"/>, and it refuses a
-/// missing one as it does one that no longer matches. Public, as the validation source generator describes public
-/// types only.
+/// missing one as it does one that no longer matches. The body is the whole working copy, so a member it leaves out
+/// means none: not ticked, no text, no details (A153). <see cref="Medication"/> is at most
+/// <see cref="Limits.Medication"/> characters; that the note has a Medication box is the working copy's, never the
+/// body's, so text for a note without one is refused by the snapshot (<see cref="NoteSnapshot.RefusalOf"/>), as are
+/// details for an item that does not ask for them, or that are too long. Public, as the validation source generator
+/// describes public types only.
 /// </remarks>
 public sealed record DraftSaveRequest(
     [property: Range(0, int.MaxValue)] int BaseVersion,
@@ -34,4 +39,9 @@ public sealed record DraftSaveRequest(
     [property: Required] IReadOnlyList<Guid> PickedGroupIds,
     [property: Required] IReadOnlyList<Guid> TickedCommonItemIds,
     bool IsFlagged,
-    [property: MaxLength(Limits.FlagReason)] string? FlagReason) : INoteTicks;
+    [property: MaxLength(Limits.FlagReason)] string? FlagReason,
+    bool IsNotIn = false,
+    bool IsLateNotice = false,
+    bool IsSick = false,
+    [property: MaxLength(Limits.Medication)] string? Medication = null,
+    IReadOnlyDictionary<Guid, string>? CommonItemDetails = null) : INoteContent;

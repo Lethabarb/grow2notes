@@ -6,18 +6,25 @@ namespace Grow2Notes.Web.Features.Participants;
 /// The body of <c>POST /api/admin/participants</c> and <c>PUT /api/admin/participants/{id}</c> (design.md §6.6): a
 /// participant's given and family names, as typed, and their date of birth, a calendar date written
 /// <c>1987-03-07</c>. Each may be missing, so that <see cref="ParticipantDetails.TryRead"/> checks all three and words
-/// each refusal as the Participants screens do.
+/// each refusal as the Participants screens do. <see cref="HasMedicationLine"/> switches the Medication box on notes
+/// started afterwards on or off (A152); a PUT that leaves it out keeps the stored switch, and a POST leaves it off.
 /// </summary>
 /// <remarks>
 /// Nothing else is read: any other field in the body, such as a government identifier, is passed over, so none is
 /// stored (A5).
 /// </remarks>
-internal sealed record ParticipantDetailsRequest(string? GivenName, string? FamilyName, DateOnly? DateOfBirth)
+internal sealed record ParticipantDetailsRequest(
+    string? GivenName, string? FamilyName, DateOnly? DateOfBirth, bool? HasMedicationLine = null)
 {
     /// <summary>
     /// This request with each field it leaves out (<see langword="null"/>) taken from <paramref name="stored"/>, for a
-    /// tool that sends only the fields to change. A field sent empty is kept as sent, so its rule refuses it.
+    /// tool that sends only the fields to change. A field sent empty is kept as sent, so its rule refuses it. The
+    /// switch is kept when it is left out on either channel, so is not completed here.
     /// </summary>
     public ParticipantDetailsRequest OrStored(Participant stored) =>
-        new(GivenName ?? stored.GivenName, FamilyName ?? stored.FamilyName, DateOfBirth ?? stored.DateOfBirth);
+        new(
+            GivenName ?? stored.GivenName,
+            FamilyName ?? stored.FamilyName,
+            DateOfBirth ?? stored.DateOfBirth,
+            HasMedicationLine);
 }

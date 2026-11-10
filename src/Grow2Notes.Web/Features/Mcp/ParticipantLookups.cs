@@ -75,6 +75,7 @@ internal sealed class ParticipantLookups(Grow2NotesDbContext db)
             {
                 participant.GivenName,
                 participant.FamilyName,
+                participant.HasMedicationLine,
                 participant.Status,
                 participant.RowVersion,
             })
@@ -85,17 +86,27 @@ internal sealed class ParticipantLookups(Grow2NotesDbContext db)
         }
 
         var goals = await GoalList.InListOrder(db.Goals.AsNoTracking().Where(goal => goal.ParticipantId == id))
-            .Select(goal => new { goal.Id, goal.Text, Archived = goal.ArchivedAtUtc != null, goal.RowVersion })
+            .Select(goal => new
+            {
+                goal.Id,
+                goal.Text,
+                goal.IsMediumOrLongTerm,
+                Archived = goal.ArchivedAtUtc != null,
+                goal.RowVersion,
+            })
             .ToListAsync(cancellationToken);
 
         return new(
             id,
             participant.GivenName,
             participant.FamilyName,
+            participant.HasMedicationLine,
             StatusOf(participant.Status),
             RowVersionToken.Of(participant.RowVersion),
-            [.. goals.OrderBy(goal => goal.Archived).Select(
-                goal => new ParticipantGoal(goal.Id, goal.Text, goal.Archived, RowVersionToken.Of(goal.RowVersion)))]);
+            [
+                .. goals.OrderBy(goal => goal.Archived).Select(goal => new ParticipantGoal(
+                    goal.Id, goal.Text, goal.IsMediumOrLongTerm, goal.Archived, RowVersionToken.Of(goal.RowVersion))),
+            ]);
     }
 
     /// <summary>
@@ -106,9 +117,18 @@ internal sealed class ParticipantLookups(Grow2NotesDbContext db)
     {
         var goal = await db.Goals.AsNoTracking()
             .Where(goal => goal.Id == goalId)
-            .Select(goal => new { goal.Id, goal.Text, Archived = goal.ArchivedAtUtc != null, goal.RowVersion })
+            .Select(goal => new
+            {
+                goal.Id,
+                goal.Text,
+                goal.IsMediumOrLongTerm,
+                Archived = goal.ArchivedAtUtc != null,
+                goal.RowVersion,
+            })
             .SingleOrDefaultAsync(cancellationToken);
-        return goal is null ? null : new(goal.Id, goal.Text, goal.Archived, RowVersionToken.Of(goal.RowVersion));
+        return goal is null
+            ? null
+            : new(goal.Id, goal.Text, goal.IsMediumOrLongTerm, goal.Archived, RowVersionToken.Of(goal.RowVersion));
     }
 
     /// <summary>

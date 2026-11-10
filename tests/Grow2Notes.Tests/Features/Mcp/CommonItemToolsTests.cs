@@ -105,7 +105,7 @@ public sealed class CommonItemToolsTests(ToolWorld world) : IClassFixture<ToolWo
         Assert.True(content.GetProperty("changed").GetBoolean());
         Assert.Equal(HelpText, Text(content, "helpText"));
         Assert.Equal(
-            ["archived", "changed", "expectedVersion", "groupId", "helpText", "itemId", "text"],
+            ["archived", "changed", "expectedVersion", "groupId", "helpText", "itemId", "needsDetail", "text"],
             content.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal([first.Id, id], await Scene.ActiveItemIdsAsync(group.Id));
         Assert.Equal(Text(content, "expectedVersion"), Text((await StoredAsync(id)).Item, "expectedVersion"));
@@ -374,7 +374,7 @@ public sealed class CommonItemToolsTests(ToolWorld world) : IClassFixture<ToolWo
         Assert.True(result.IsError);
         var error = Content(result).GetProperty("error");
         Assert.Equal("validation.failed", error.GetProperty("code").GetString());
-        Assert.Equal("Send at least one of text and groupId.", error.GetProperty("message").GetString());
+        Assert.Equal("Send at least one of text, groupId and needsDetail.", error.GetProperty("message").GetString());
         Assert.Equal(JsonValueKind.Null, error.GetProperty("fields").ValueKind);
         AssertRefused(row, Update, "validation.failed");
     }
@@ -489,7 +489,7 @@ public sealed class CommonItemToolsTests(ToolWorld world) : IClassFixture<ToolWo
         Assert.True(content.GetProperty("changed").GetBoolean());
         Assert.Equal(HelpText, Text(content, "helpText"));
         Assert.Equal(
-            ["archived", "changed", "expectedVersion", "groupId", "helpText", "itemId", "text"],
+            ["archived", "changed", "expectedVersion", "groupId", "helpText", "itemId", "needsDetail", "text"],
             content.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(Text(content, "expectedVersion"), Text((await StoredAsync(item.Id)).Item, "expectedVersion"));
         Assert.Equal([kept.Id], await Scene.ActiveItemIdsAsync(group.Id));
@@ -688,6 +688,72 @@ public sealed class CommonItemToolsTests(ToolWorld world) : IClassFixture<ToolWo
         }
 
         return data;
+    }
+
+    // The Word-template field (D104): whether ticking an item on a note asks for details, as an Other item does.
+    [Fact]
+    public async Task An_item_is_added_not_asking_for_details_unless_the_call_says_otherwise()
+    {
+        var group = await Scene.AddGroupAsync();
+
+        var (plain, _) = await world.CallAsync(Add, AddCall(group.Id, $"Item {Unique()}"));
+        var (asking, row) = await world.CallAsync(
+            Add, With(AddCall(group.Id, $"Other {Unique()}"), "needsDetail", true));
+
+        Assert.False(Content(plain).GetProperty("needsDetail").GetBoolean());
+        Assert.True(Content(asking).GetProperty("needsDetail").GetBoolean());
+        var listed = (await StoredAsync(Content(asking).GetProperty("itemId").GetGuid())).Item;
+        Assert.True(listed.GetProperty("needsDetail").GetBoolean());
+        var details = JsonNode.Parse(Assert.IsType<string>(row.Details))!;
+        Assert.True(details["new"]!["needsDetail"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task An_item_s_need_for_details_is_changed_alone_and_a_call_that_leaves_it_out_keeps_it()
+    {
+        var group = await Scene.AddGroupAsync();
+        var item = await Scene.AddItemAsync(group.Id);
+
+        var (changed, row) = await world.CallAsync(
+            Update, With(ItemCall(item.Id, ToolScene.ExpectedVersion(item.ETag)), "needsDetail", true));
+
+        Assert.NotEqual(true, changed.IsError);
+        Assert.True(Content(changed).GetProperty("changed").GetBoolean());
+        Assert.True(Content(changed).GetProperty("needsDetail").GetBoolean());
+        AssertChanged(row, AuditEventTypes.CommonItem.Updated, Update, Scene.Organisation.ManagerId);
+        var details = JsonNode.Parse(Assert.IsType<string>(row.Details))!;
+        Assert.True(JsonNode.DeepEquals(new JsonObject { ["needsDetail"] = false }, details["old"]));
+        Assert.True(JsonNode.DeepEquals(new JsonObject { ["needsDetail"] = true }, details["new"]));
+
+        var version = Text(Content(changed), "expectedVersion");
+        var (reworded, _) = await world.CallAsync(Update, ItemCall(item.Id, version, $"Reworded {Unique()}"));
+
+        Assert.True(Content(reworded).GetProperty("needsDetail").GetBoolean());
+        Assert.True((await StoredAsync(item.Id)).Item.GetProperty("needsDetail").GetBoolean());
+    }
+
+    // Set-up data only (D49): no note content, whose names are exactly these, is in what the list returns.
+    [Fact]
+    public async Task The_list_holds_no_note_content()
+    {
+        var (result, _) = await world.CallAsync(List, new() { ["includeArchived"] = true });
+
+        string[] noteContent = ["medication", "detail", "isnotin", "islatenotice", "issick"];
+        Assert.DoesNotContain(PropertyNames(Content(result)), name => noteContent.Contains(name.ToLowerInvariant()));
+    }
+
+    private static IEnumerable<string> PropertyNames(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => element.EnumerateObject()
+            .SelectMany(property => PropertyNames(property.Value).Prepend(property.Name)),
+        JsonValueKind.Array => element.EnumerateArray().SelectMany(PropertyNames),
+        _ => [],
+    };
+
+    private static JsonObject With(JsonObject arguments, string name, bool value)
+    {
+        arguments[name] = value;
+        return arguments;
     }
 
     private static string Unique() => Guid.NewGuid().ToString("N")[..12];

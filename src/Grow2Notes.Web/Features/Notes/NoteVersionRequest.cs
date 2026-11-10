@@ -7,7 +7,8 @@ namespace Grow2Notes.Web.Features.Notes;
 /// The body of <c>POST {base}/versions</c> (design.md §6.3), Submit or Save changes: the version that the save works
 /// on, 0 for a draft and <c>n</c> for a pending edit on version <c>n</c>; and the note's latest content, repeated so
 /// that a lagging autosave is never lost: the Guided notes text, the IDs of the goals ticked as reached, the IDs of the
-/// common item groups picked as having happened and of the common items ticked as done, and whether the note is flagged
+/// common item groups picked as having happened and of the common items ticked as done, the three attendance ticks, the
+/// Medication text, the details of ticked common items that ask for them, by item ID, and whether the note is flagged
 /// for a manager, with the reason.
 /// </summary>
 /// <remarks>
@@ -17,7 +18,10 @@ namespace Grow2Notes.Web.Features.Notes;
 /// required, and may be empty, as a note may be submitted with nothing picked. <see cref="FlagReason"/> is at most
 /// <see cref="Limits.FlagReason"/> characters; that a flagged note has one is the handler's check, as it reads the
 /// flag. So a body that breaks any of these gets <c>422 validation.failed</c> under its name before the endpoint runs,
-/// and writes nothing. Public, as the validation source generator describes public types only.
+/// and writes nothing. <see cref="Medication"/> is at most <see cref="Limits.Medication"/> characters; the rules for it
+/// and for the details are the snapshot's, and a ticked common item that asks for details must have some (A151). A
+/// member that the body leaves out means none (A153). Public, as the validation source generator describes public
+/// types only.
 /// </remarks>
 public sealed record NoteVersionRequest(
     [property: Range(0, int.MaxValue)] int BaseVersion,
@@ -26,4 +30,9 @@ public sealed record NoteVersionRequest(
     [property: Required] IReadOnlyList<Guid> PickedGroupIds,
     [property: Required] IReadOnlyList<Guid> TickedCommonItemIds,
     bool IsFlagged,
-    [property: MaxLength(Limits.FlagReason)] string? FlagReason) : INoteTicks;
+    [property: MaxLength(Limits.FlagReason)] string? FlagReason,
+    bool IsNotIn = false,
+    bool IsLateNotice = false,
+    bool IsSick = false,
+    [property: MaxLength(Limits.Medication)] string? Medication = null,
+    IReadOnlyDictionary<Guid, string>? CommonItemDetails = null) : INoteContent;

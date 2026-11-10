@@ -21,7 +21,11 @@ internal sealed record TestDraft(
     DateTime? SavedAtUtc = null,
     bool IsFlagged = false,
     string? FlagReason = null,
-    IReadOnlyList<DraftGroup>? Groups = null);
+    IReadOnlyList<DraftGroup>? Groups = null,
+    bool IsNotIn = false,
+    bool IsLateNotice = false,
+    bool IsSick = false,
+    string? Medication = null);
 
 /// <summary>
 /// A submitted note that a test adds for a participant of its own: the participant, the note date, the author, when
@@ -42,13 +46,17 @@ internal sealed record TestSubmittedNote(
     string? FlagReason = null,
     FlagStatus? FlagStatus = null,
     IReadOnlyList<TestVersionGoal>? Goals = null,
-    IReadOnlyList<TestVersionGroup>? Groups = null);
+    IReadOnlyList<TestVersionGroup>? Groups = null,
+    bool IsNotIn = false,
+    bool IsLateNotice = false,
+    bool IsSick = false,
+    string? Medication = null);
 
 /// <summary>
 /// A goal row of a <see cref="TestSubmittedNote"/>'s version 1: the ID of a goal of the participant's, its wording as
-/// the version holds it, which need not be the goal's own, and whether it is ticked.
+/// the version holds it, which need not be the goal's own, whether it is ticked, and whether it is Medium or long term.
 /// </summary>
-internal sealed record TestVersionGoal(Guid GoalId, string Text, bool IsTicked);
+internal sealed record TestVersionGoal(Guid GoalId, string Text, bool IsTicked, bool IsMediumOrLongTerm = false);
 
 /// <summary>
 /// A group row of a version, with the common item rows in it: the ID of a group of the organisation's, its name as the
@@ -60,9 +68,11 @@ internal sealed record TestVersionGroup(
 
 /// <summary>
 /// A common item row of a <see cref="TestVersionGroup"/>: the ID of an item of the organisation's, its wording as the
-/// version holds it, which need not be the item's own, and whether it is ticked.
+/// version holds it, which need not be the item's own, whether it is ticked, whether it asks for details, and the
+/// details written (only on a ticked item that asks for them).
 /// </summary>
-internal sealed record TestVersionItem(Guid CommonItemId, string Text, bool IsTicked);
+internal sealed record TestVersionItem(
+    Guid CommonItemId, string Text, bool IsTicked, bool NeedsDetail = false, string? Detail = null);
 
 internal static class TestNotes
 {
@@ -94,6 +104,10 @@ internal static class TestNotes
             Groups = [.. draft.Groups ?? []],
             Items = [.. draft.Items ?? []],
             Narrative = draft.Narrative,
+            IsNotIn = draft.IsNotIn,
+            IsLateNotice = draft.IsLateNotice,
+            IsSick = draft.IsSick,
+            Medication = draft.Medication,
             IsFlagged = draft.IsFlagged,
             FlagReason = draft.FlagReason,
             LastClientId = Guid.NewGuid(),
@@ -154,6 +168,10 @@ internal static class TestNotes
             NoteId = note.Id,
             VersionNumber = 1,
             Narrative = submitted.Narrative,
+            IsNotIn = submitted.IsNotIn,
+            IsLateNotice = submitted.IsLateNotice,
+            IsSick = submitted.IsSick,
+            Medication = submitted.Medication,
             IsFlagged = submitted.IsFlagged,
             FlagReason = submitted.FlagReason,
             CreatedByUserId = submitted.AuthorUserId,
@@ -170,6 +188,7 @@ internal static class TestNotes
             GoalId = goal.GoalId,
             Text = goal.Text,
             IsTicked = goal.IsTicked,
+            IsMediumOrLongTerm = goal.IsMediumOrLongTerm,
         }));
         AddGroupRows(db, organisation, version.Id, submitted.Groups ?? []);
         using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.OrganisationId))
@@ -281,6 +300,8 @@ internal static class TestNotes
                 GroupPosition = entry.groupPosition,
                 Text = entry.item.Text,
                 IsTicked = entry.item.IsTicked,
+                NeedsDetail = entry.item.NeedsDetail,
+                Detail = entry.item.Detail,
             }));
     }
 

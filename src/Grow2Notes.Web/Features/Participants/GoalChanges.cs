@@ -54,6 +54,7 @@ internal sealed class GoalChanges(
             OrganisationId = tenant.OrganisationId,
             ParticipantId = participantId,
             Text = text,
+            IsMediumOrLongTerm = request.IsMediumOrLongTerm ?? false,
             SortOrder = ListOrder.End(activeGoals),
             CreatedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
         };
@@ -73,11 +74,12 @@ internal sealed class GoalChanges(
     }
 
     /// <summary>
-    /// Rewords a goal of the tenant's organisation (S01.02.06): loads it through the tenant filter, so another
-    /// organisation's is not found; checks <paramref name="ifMatch"/> against its version; reads the text from
-    /// <paramref name="request"/> by the add's rules (<see cref="ItemText.Goal"/>); then saves it with
-    /// <c>goal.updated</c>, whose <c>Details</c> hold the old and new <c>text</c>, and whose participant is the goal's;
-    /// or, when the text is already stored, saves nothing and writes no event, and answers as a save does (D84). An
+    /// Rewords a goal of the tenant's organisation, and sets its term (S01.02.06): loads it through the tenant
+    /// filter, so another organisation's is not found; checks <paramref name="ifMatch"/> against its version; reads
+    /// the text from <paramref name="request"/> by the add's rules (<see cref="ItemText.Goal"/>); then saves it with
+    /// <c>goal.updated</c>, whose <c>Details</c> hold the old and new <c>text</c> and <c>isMediumOrLongTerm</c>, those
+    /// that changed alone, and whose participant is the goal's; or, when both are already stored, saves nothing and
+    /// writes no event, and answers as a save does (D84). A term the request leaves out keeps the stored one (A150). An
     /// archived goal of an active participant is reworded too, though the screen offers Edit on active goals alone
     /// (T05's Notes); a goal of an archived participant is not (D86, D93), whatever the version.
     /// </summary>
@@ -108,8 +110,9 @@ internal sealed class GoalChanges(
                     return GoalChangeResult.Invalid(errors);
                 }
 
-                var before = TextValues(goal);
+                var before = EditValues(goal);
                 goal.Text = text;
+                goal.IsMediumOrLongTerm = request.IsMediumOrLongTerm ?? goal.IsMediumOrLongTerm;
                 var saved = await changes.SaveAsync(
                     actor,
                     AuditEventTypes.Goal.Updated,
@@ -117,7 +120,7 @@ internal sealed class GoalChanges(
                     goal.Id,
                     goal.ParticipantId,
                     before,
-                    TextValues(goal),
+                    EditValues(goal),
                     refuseIfChanged: refuseIfChanged,
                     cancellationToken: cancellationToken);
 
@@ -312,14 +315,19 @@ internal sealed class GoalChanges(
     private static JsonObject Values(Goal goal) => new()
     {
         ["text"] = goal.Text,
+        ["isMediumOrLongTerm"] = goal.IsMediumOrLongTerm,
         ["sortOrder"] = goal.SortOrder,
         ["archivedAtUtc"] = goal.ArchivedAtUtc,
     };
 
     /// <summary>
-    /// The one value that a reword changes, as <c>goal.updated</c> records it, named as <see cref="Values"/> names it.
+    /// The values that an edit changes, as <c>goal.updated</c> records them, named as <see cref="Values"/> names them.
     /// </summary>
-    private static JsonObject TextValues(Goal goal) => new() { ["text"] = goal.Text };
+    private static JsonObject EditValues(Goal goal) => new()
+    {
+        ["text"] = goal.Text,
+        ["isMediumOrLongTerm"] = goal.IsMediumOrLongTerm,
+    };
 
     /// <summary>
     /// The goal's place in its participant's list, the values that archiving and restoring change, as their events

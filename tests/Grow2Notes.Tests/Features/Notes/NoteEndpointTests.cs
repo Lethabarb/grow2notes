@@ -91,7 +91,10 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.False(worker.GetProperty("isEdited").GetBoolean());
         var current = worker.GetProperty("current");
         Assert.Equal(
-            ["versionNumber", "narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
+            [
+                "versionNumber", "narrative", "isFlagged", "flagReason", "goals", "commonItemGroups", "isNotIn",
+                "isLateNotice", "isSick", "medication",
+            ],
             current.EnumerateObject().Select(property => property.Name));
         Assert.Equal(1, current.GetProperty("versionNumber").GetInt32());
         Assert.Equal(narrative, current.GetProperty("narrative").GetString());
@@ -323,7 +326,10 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.Equal("2026-09-30T23:14:00Z", note.GetProperty("startedAtUtc").GetString());
         var current = note.GetProperty("current");
         Assert.Equal(
-            ["narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
+            [
+                "narrative", "isFlagged", "flagReason", "goals", "commonItemGroups", "isNotIn", "isLateNotice",
+                "isSick", "medication",
+            ],
             current.EnumerateObject().Select(property => property.Name));
         Assert.Equal(narrative, current.GetProperty("narrative").GetString());
         Assert.True(current.GetProperty("isFlagged").GetBoolean());
@@ -343,7 +349,8 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         var current = (await ReadAsync(Caller.ManagerOfA, participant.Id)).GetProperty("current");
 
         Assert.Equal(
-            """{"narrative":"","isFlagged":false,"flagReason":null,"goals":[],"commonItemGroups":[]}""",
+            "{\"narrative\":\"\",\"isFlagged\":false,\"flagReason\":null,\"goals\":[],\"commonItemGroups\":[],"
+            + "\"isNotIn\":false,\"isLateNotice\":false,\"isSick\":false,\"medication\":null}",
             current.GetRawText());
     }
 
@@ -652,7 +659,10 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
         var current = raw.GetProperty("current");
         Assert.Equal(
-            ["versionNumber", "narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
+            [
+                "versionNumber", "narrative", "isFlagged", "flagReason", "goals", "commonItemGroups", "isNotIn",
+                "isLateNotice", "isSick", "medication",
+            ],
             current.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
             [
@@ -744,7 +754,8 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
             Assert.Equal(["name", "isEveryNote", "items"], group.EnumerateObject().Select(property => property.Name));
             var name = group.GetProperty("name").GetString();
             var isEveryNote = group.GetProperty("isEveryNote").GetBoolean();
-            return TickedRows(group, "items").Select(item => (name, isEveryNote, item.Text, item.IsTicked));
+            return TickedRows(group, "items", "text", "isTicked")
+                .Select(item => (name, isEveryNote, item.Text, item.IsTicked));
         }),
     ];
 
@@ -779,15 +790,18 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
     }
 
     // A version's goals, in its order, as their wording and tick.
-    private static List<(string? Text, bool IsTicked)> Goals(JsonElement current) => TickedRows(current, "goals");
+    private static List<(string? Text, bool IsTicked)> Goals(JsonElement current) =>
+        TickedRows(current, "goals", "text", "isTicked", "isMediumOrLongTerm");
 
-    // The rows of a version's or a group's list, in its order, as their wording and tick.
-    private static List<(string? Text, bool IsTicked)> TickedRows(JsonElement parent, string list) =>
+    // The rows of a version's or a group's list, in its order, as their wording and tick. A goal has its term, and an
+    // item its details only when it has some.
+    private static List<(string? Text, bool IsTicked)> TickedRows(
+        JsonElement parent, string list, params string[] names) =>
     [
-        .. parent.GetProperty(list).EnumerateArray().Select(goal =>
+        .. parent.GetProperty(list).EnumerateArray().Select(row =>
         {
-            Assert.Equal(["text", "isTicked"], goal.EnumerateObject().Select(property => property.Name));
-            return (goal.GetProperty("text").GetString(), goal.GetProperty("isTicked").GetBoolean());
+            Assert.Equal(names, row.EnumerateObject().Select(property => property.Name));
+            return (row.GetProperty("text").GetString(), row.GetProperty("isTicked").GetBoolean());
         }),
     ];
 

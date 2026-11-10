@@ -8380,6 +8380,10 @@ fill in details for an "Other" item. One feature branch, one PR into main (owner
   and no A-number, step, story, task or migration; v0 rechecks the numbers before the final push.
 - Until it merges, this section, its stories and the plan are its spec. By-hand checks go on
   ops/first-use-in-test.md from step 223 and hold nothing open.
+- The onboard-provider skill reads `hasMedicationLine` and each goal's term and an item's need for details, and enters
+  the term and the need for details when it adds goals and items. It does not switch a participant's Medication box:
+  that is a manager's choice per participant, not part of the fixed template list, and the skill never calls
+  `update_participant` (its rule 7). The tool accepts `hasMedicationLine` for any other caller (10 November 2026).
 
 ### Steps
 

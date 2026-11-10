@@ -30,7 +30,8 @@ internal static class TestParticipants
         bool archived = false,
         string givenName = "Jane",
         string familyName = "Citizen",
-        DateOnly? dateOfBirth = null)
+        DateOnly? dateOfBirth = null,
+        bool hasMedicationLine = false)
     {
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
@@ -40,6 +41,7 @@ internal static class TestParticipants
             GivenName = givenName,
             FamilyName = familyName,
             DateOfBirth = dateOfBirth ?? new DateOnly(1987, 3, 7),
+            HasMedicationLine = hasMedicationLine,
             CreatedAtUtc = AddedAtUtc,
             Status = archived ? ParticipantStatus.Archived : ParticipantStatus.Active,
             ArchivedAtUtc = archived ? ArchivedAtUtc : null,

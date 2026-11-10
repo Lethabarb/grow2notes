@@ -8,13 +8,14 @@ namespace Grow2Notes.Web.Features.Participants;
 /// Participants screens. <see cref="Status"/> is its <see cref="ParticipantStatus"/> name, as the user list gives a
 /// user's status; <see cref="DateOfBirth"/> is a calendar date, written <c>2026-10-01</c>; and <see cref="RowVersion"/>
 /// is the row's <c>RowVersion</c> as base64, which the SPA sends, in quotes, as <c>If-Match</c> when it changes the
-/// participant (D78).
+/// participant (D78). <see cref="HasMedicationLine"/> is whether notes started from now on have a Medication box.
 /// </summary>
 internal sealed record AdminParticipant(
     Guid Id,
     string GivenName,
     string FamilyName,
     DateOnly DateOfBirth,
+    bool HasMedicationLine,
     string Status,
     string RowVersion)
 {
@@ -24,6 +25,7 @@ internal sealed record AdminParticipant(
             participant.GivenName,
             participant.FamilyName,
             participant.DateOfBirth,
+            participant.HasMedicationLine,
             participant.Status.ToString(),
             RowVersionToken.Of(participant));
 }

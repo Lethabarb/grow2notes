@@ -310,6 +310,7 @@ test("signed in for real at 375 px, a manager adds O'Brien, corrects the date of
     familyName: siobhan.familyName,
     dateOfBirth: '1987-03-07',
     status: 'Active',
+    hasMedicationLine: false,
     rowVersion: expect.any(String),
   });
   await expect(page).toHaveURL('/manage/participants');

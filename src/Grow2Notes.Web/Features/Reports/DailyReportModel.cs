@@ -103,12 +103,7 @@ internal sealed record DailyReportModel(
                     row.DisplayName,
                     pastDayWrittenAtUtc,
                     row.FirstSubmittedAtUtc,
-                    NoteReadVersion.Of(
-                        row.CurrentVersionNumber,
-                        content.Snapshot,
-                        content.Narrative,
-                        content.IsFlagged,
-                        content.FlagReason),
+                    NoteReadVersion.Of(row.CurrentVersionNumber, content, everyGroup: false),
                     lastEdit,
                     await FlagOfAsync(db, row.Id, row.FlagStatus, row.FlagReason, cancellationToken))));
         }

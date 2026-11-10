@@ -10,16 +10,22 @@ namespace Grow2Notes.Web.Features.Notes;
 /// <see cref="Narrative"/>, unflagged, and <see cref="ListsVersion"/>, which the first save sends back (§5.7); or the
 /// caller's own draft, with its snapshot, picks, ticks, text and flag, and <see cref="SavedAtUtc"/>, the time of its
 /// last save. <see cref="GuidePrompts"/> are the organisation's as they are now, which a draft's empty box shows
-/// (§4.10). <see cref="FlagReason"/> is <c>null</c> unless the draft is flagged with a reason, and is written so.
+/// (§4.10). <see cref="FlagReason"/> is <c>null</c> unless the draft is flagged with a reason, and is written so. The
+/// three attendance ticks are unticked on a template. <see cref="Medication"/> is <c>null</c> for a note with no
+/// Medication box, written so, and the text, empty for a template, for one with the box (A152).
 /// </summary>
 internal sealed record DraftForm(
     int BaseVersion,
     bool IsSaved,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ListsVersion,
     string GuidePrompts,
-    IReadOnlyList<DraftFormItem> Goals,
+    IReadOnlyList<DraftFormGoal> Goals,
     IReadOnlyList<DraftFormGroup> CommonItemGroups,
     string Narrative,
+    bool IsNotIn,
+    bool IsLateNotice,
+    bool IsSick,
+    string? Medication,
     bool IsFlagged,
     string? FlagReason,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? SavedAtUtc);
@@ -32,7 +38,12 @@ internal sealed record DraftFormGroup(
     Guid Id, string Name, bool IsEveryNote, bool IsPicked, IReadOnlyList<DraftFormItem> Items);
 
 /// <summary>
-/// A goal or a common item on the note form: its wording as the form shows it, and whether it is ticked, as reached
-/// for a goal and as done for a common item.
+/// A goal on the note form: its wording as the form shows it, whether it is ticked, as reached, and its term (A150).
 /// </summary>
-internal sealed record DraftFormItem(Guid Id, string Text, bool IsTicked);
+internal sealed record DraftFormGoal(Guid Id, string Text, bool IsTicked, bool IsMediumOrLongTerm);
+
+/// <summary>
+/// A common item on the note form: its wording as the form shows it, whether it is ticked, as done, whether ticking it
+/// asks for details, and the details written, <c>null</c> for none (A151).
+/// </summary>
+internal sealed record DraftFormItem(Guid Id, string Text, bool IsTicked, bool NeedsDetail, string? Detail);

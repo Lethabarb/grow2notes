@@ -80,14 +80,11 @@ internal sealed class NoteDrafts(
         var content = await NoteVersionContent.ReadAsync(
             db, note.Id, note.CurrentVersionNumber, cancellationToken);
         return DraftRead.Of(FormOf(
-            content.Snapshot,
+            content,
             note.CurrentVersionNumber,
             isSaved: false,
             listsVersion: null,
             await GuidePromptsAsync(cancellationToken),
-            content.Narrative,
-            content.IsFlagged,
-            content.FlagReason,
             savedAtUtc: null));
     }
 
@@ -226,6 +223,10 @@ internal sealed class NoteDrafts(
                 Groups = [.. snapshot.Groups],
                 Items = [.. snapshot.Items],
                 Narrative = request.Narrative,
+                IsNotIn = request.IsNotIn,
+                IsLateNotice = request.IsLateNotice,
+                IsSick = request.IsSick,
+                Medication = snapshot.MedicationOf(request),
                 IsFlagged = request.IsFlagged,
                 FlagReason = FlagReasonOf(request),
                 LastClientId = request.ClientId,
@@ -320,6 +321,10 @@ internal sealed class NoteDrafts(
         draft.Groups = [.. saved.Groups];
         draft.Items = [.. saved.Items];
         draft.Narrative = request.Narrative;
+        draft.IsNotIn = request.IsNotIn;
+        draft.IsLateNotice = request.IsLateNotice;
+        draft.IsSick = request.IsSick;
+        draft.Medication = saved.MedicationOf(request);
         draft.IsFlagged = request.IsFlagged;
         draft.FlagReason = FlagReasonOf(request);
         draft.LastClientId = request.ClientId;
@@ -356,6 +361,10 @@ internal sealed class NoteDrafts(
             Groups = [.. saved.Groups],
             Items = [.. saved.Items],
             Narrative = request.Narrative,
+            IsNotIn = request.IsNotIn,
+            IsLateNotice = request.IsLateNotice,
+            IsSick = request.IsSick,
+            Medication = saved.MedicationOf(request),
             IsFlagged = request.IsFlagged,
             FlagReason = FlagReasonOf(request),
             LastClientId = request.ClientId,
@@ -438,23 +447,34 @@ internal sealed class NoteDrafts(
     {
         var template = await TemplateSnapshotAsync(participantId, cancellationToken);
         var startingPicks = await StartingPicksAsync(participantId, noteDate, cancellationToken);
-        return FormOf(
+        var content = new NoteVersionContent(
             template.WithStartingPicks(startingPicks),
+            Narrative: "",
+            IsFlagged: false,
+            FlagReason: null,
+            IsNotIn: false,
+            IsLateNotice: false,
+            IsSick: false,
+            Medication: template.HasMedicationLine ? "" : null);
+        return FormOf(
+            content,
             baseVersion: 0,
             isSaved: false,
             ListsVersion.Of(template),
             await GuidePromptsAsync(cancellationToken),
-            narrative: "",
-            isFlagged: false,
-            flagReason: null,
             savedAtUtc: null);
     }
 
     // The lists a new draft's snapshot will hold (§5.7), all unpicked and unticked: the participant's active goals in
-    // the order of the manager's list (GoalList.InListOrder); the active groups in the groups' list order, Every note
-    // first and empty groups included; and the active items group by group, in the items' list order.
+    // the order of the manager's list (GoalList.InListOrder), each with its term; the active groups in the groups' list
+    // order, Every note first and empty groups included; and the active items group by group, in the items' list
+    // order, each with whether it asks for details; and whether the participant has a Medication box.
     private async Task<NoteSnapshot> TemplateSnapshotAsync(Guid participantId, CancellationToken cancellationToken)
     {
+        var hasMedicationLine = await db.Participants.AsNoTracking()
+            .Where(participant => participant.Id == participantId)
+            .Select(participant => participant.HasMedicationLine)
+            .SingleAsync(cancellationToken);
         var goals = await GoalList
             .InListOrder(db.Goals.AsNoTracking()
                 .Where(goal => goal.ParticipantId == participantId && goal.ArchivedAtUtc == null))
@@ -471,11 +491,22 @@ internal sealed class NoteDrafts(
         return new(
             [.. groups.Select(group => new DraftGroup(group.Id, group.Name, group.IsEveryNote, IsPicked: false))],
             [
-                .. goals.Select(goal =>
-                    new DraftItem(NoteSection.Goal, goal.Id, GroupId: null, goal.Text, IsTicked: false)),
-                .. groups.SelectMany(group => itemsByGroup[group.Id].Select(item =>
-                    new DraftItem(NoteSection.CommonItem, item.Id, group.Id, item.Text, IsTicked: false))),
-            ]);
+                .. goals.Select(goal => new DraftItem(
+                    NoteSection.Goal,
+                    goal.Id,
+                    GroupId: null,
+                    goal.Text,
+                    IsTicked: false,
+                    IsMediumOrLongTerm: goal.IsMediumOrLongTerm ? true : null)),
+                .. groups.SelectMany(group => itemsByGroup[group.Id].Select(item => new DraftItem(
+                    NoteSection.CommonItem,
+                    item.Id,
+                    group.Id,
+                    item.Text,
+                    IsTicked: false,
+                    NeedsDetail: item.NeedsDetail ? true : null))),
+            ],
+            hasMedicationLine);
     }
 
     // The IDs of the groups picked in the current version of the participant's latest submitted note dated before
@@ -502,32 +533,31 @@ internal sealed class NoteDrafts(
     // since.
     private static DraftForm Saved(NoteDraft draft, string guidePrompts) =>
         FormOf(
-            NoteSnapshot.Of(draft),
+            NoteVersionContent.Of(draft),
             draft.BaseVersionNumber,
             isSaved: true,
             listsVersion: null,
             guidePrompts,
-            draft.Narrative,
-            draft.IsFlagged,
-            draft.FlagReason,
             draft.UpdatedAtUtc);
 
     private static DraftForm FormOf(
-        NoteSnapshot snapshot,
+        NoteVersionContent content,
         int baseVersion,
         bool isSaved,
         string? listsVersion,
         string guidePrompts,
-        string narrative,
-        bool isFlagged,
-        string? flagReason,
-        DateTime? savedAtUtc) =>
-        new(
+        DateTime? savedAtUtc)
+    {
+        var snapshot = content.Snapshot;
+        return new(
             baseVersion,
             isSaved,
             listsVersion,
             guidePrompts,
-            [.. snapshot.Goals.Select(FormItemOf)],
+            [
+                .. snapshot.Goals.Select(goal => new DraftFormGoal(
+                    goal.SourceId, goal.Text, goal.IsTicked, goal.IsMediumOrLongTerm is true)),
+            ],
             [
                 .. snapshot.Groups.Select(group => new DraftFormGroup(
                     group.GroupId,
@@ -536,12 +566,18 @@ internal sealed class NoteDrafts(
                     group.IsPicked,
                     [.. snapshot.ItemsOf(group).Select(FormItemOf)])),
             ],
-            narrative,
-            isFlagged,
-            flagReason,
+            content.Narrative,
+            content.IsNotIn,
+            content.IsLateNotice,
+            content.IsSick,
+            content.Medication,
+            content.IsFlagged,
+            content.FlagReason,
             savedAtUtc);
+    }
 
-    private static DraftFormItem FormItemOf(DraftItem item) => new(item.SourceId, item.Text, item.IsTicked);
+    private static DraftFormItem FormItemOf(DraftItem item) =>
+        new(item.SourceId, item.Text, item.IsTicked, item.NeedsDetail is true, item.Detail);
 
     private Task<string> GuidePromptsAsync(CancellationToken cancellationToken) =>
         db.Organisations

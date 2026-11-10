@@ -45,7 +45,8 @@ internal sealed class NoteVersions(
     /// first, each picked as the request says, and its goals and common items, in its order and with its wording (A3),
     /// each ticked as the request says, those of a group that is not picked unticked, and the actor as its creator. The
     /// actor's working copy is deleted (§5.6), and <c>note.submitted</c> or <c>note.edited</c> is written, with the
-    /// version number and no text.
+    /// version number and no text. The version also keeps the attendance ticks, the Medication text, each goal's term
+    /// and each common item's need for details and its details.
     /// </summary>
     /// <param name="actor">Who saves.</param>
     /// <param name="participantId">The note's participant.</param>
@@ -64,8 +65,9 @@ internal sealed class NoteVersions(
     /// <see cref="NoteVersionResult.VersionConflict"/> for a base that is not the note's current version, with that
     /// version's creator and time when it has one; the refusal of a flagged note with a blank reason; the same
     /// conflict for an actor who has no working copy at the base; the refusal of a tick or a pick that the snapshot
-    /// refuses (<see cref="NoteSnapshot.RefusalOf"/>); then the version saved. A refusal writes nothing. There is no
-    /// date or archive check, as a draft already started can still be submitted (§3.7, §5.5 item 4).
+    /// refuses (<see cref="NoteSnapshot.RefusalOf"/>); the refusal of a ticked common item that asks for details and
+    /// has none (<see cref="NoteSnapshot.SubmitRefusal"/>); then the version saved. A refusal writes nothing. There is
+    /// no date or archive check, as a draft already started can still be submitted (§3.7, §5.5 item 4).
     /// </returns>
     public async Task<NoteVersionResult> SaveAsync(
         Actor actor,
@@ -155,6 +157,10 @@ internal sealed class NoteVersions(
         }
 
         var saved = snapshot.With(request);
+        if (saved.SubmitRefusal() is { } detailsMissing)
+        {
+            return NoteVersionResult.Invalid(detailsMissing);
+        }
 
         var now = StoredTime.UtcNow(timeProvider);
 
@@ -211,6 +217,10 @@ internal sealed class NoteVersions(
             NoteId = note.Id,
             VersionNumber = versionNumber,
             Narrative = request.Narrative,
+            IsNotIn = request.IsNotIn,
+            IsLateNotice = request.IsLateNotice,
+            IsSick = request.IsSick,
+            Medication = saved.MedicationOf(request),
             IsFlagged = request.IsFlagged,
             FlagReason = request.IsFlagged ? request.FlagReason : null,
             CreatedByUserId = actor.UserId,
@@ -237,6 +247,7 @@ internal sealed class NoteVersions(
             GoalId = goal.SourceId,
             Text = goal.Text,
             IsTicked = goal.IsTicked,
+            IsMediumOrLongTerm = goal.IsMediumOrLongTerm is true,
         }));
         var groupPositions = saved.Groups
             .Select((group, position) => (group.GroupId, position))
@@ -251,6 +262,8 @@ internal sealed class NoteVersions(
             GroupPosition = groupPositions[item.GroupId!.Value],
             Text = item.Text,
             IsTicked = item.IsTicked,
+            NeedsDetail = item.NeedsDetail is true,
+            Detail = item.Detail,
         }));
         db.NoteDrafts.Remove(draft);
         await db.SaveChangesAsync(cancellationToken);

@@ -497,6 +497,7 @@ public sealed class ParticipantArchiveToolsTests(ToolWorld world) : IClassFixtur
     {
         ["givenName"] = added.GivenName,
         ["familyName"] = added.FamilyName,
+        ["hasMedicationLine"] = false,
         ["status"] = "active",
         ["changed"] = changed,
         ["expectedVersion"] = version,

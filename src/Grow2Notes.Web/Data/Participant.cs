@@ -27,6 +27,12 @@ internal sealed class Participant : ITenantOwned, IVersionedRow, IArchivableRow
     public required DateOnly DateOfBirth { get; set; }
 
     /// <summary>
+    /// Whether notes started from now on carry a Medication box (D104, A152). A manager switches it on and off; a
+    /// working copy keeps the line it started with (A3).
+    /// </summary>
+    public bool HasMedicationLine { get; set; }
+
+    /// <summary>
     /// An archived participant is not on Today and gets no new notes; their notes stay readable (§3.7).
     /// </summary>
     public ParticipantStatus Status { get; set; } = ParticipantStatus.Active;
