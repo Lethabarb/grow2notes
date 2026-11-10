@@ -17,6 +17,7 @@ import { apiErrorCopy } from '../../copy/apiErrors.ts';
 import { dateLong, parseDateOnly, type Ymd } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { strings, type Cause } from '../../copy/strings.ts';
+import { limits } from '../../limits.ts';
 import { messageStore } from '../../routes/messageStore.ts';
 import { openerBefore } from '../../routes/routeChange.ts';
 import { useUnloadWarning } from '../../routes/useUnloadWarning.ts';
@@ -647,18 +648,25 @@ export function NoteForm({
 
   // A `422` that names the Medication text or the details of a ticked item, shown on the field it names, with its link
   // in the summary, as the form's own checks word them (form-validation.md *Server responses*); whether it named one.
-  // The checks on what is on screen now give the words, and the first Details box that fails.
+  // The checks on what is on screen now give the words, and the first Details box that fails them; the server may
+  // count blank what they do not, such as a box of U+0085 alone, and then the first ticked item that asks for details
+  // is the one told to enter them, as the server names no item.
   function showServerFields(error: ApiError): boolean {
     const named = error.errors === undefined ? [] : Object.keys(error.errors);
-    const found = checkNote(read(), hasPrompts, wordingIn(groups));
-    const [firstDetail] = Object.entries(found.details ?? {});
-    const shown: NoteErrors = {
-      medication: named.includes('medication') ? found.medication : undefined,
-      details:
-        named.includes('commonItemDetails') && firstDetail !== undefined
-          ? Object.fromEntries([firstDetail])
-          : undefined,
-    };
+    const content = read();
+    const wording = wordingIn(groups);
+    const found = checkNote(content, hasPrompts, wording);
+    const shown: NoteErrors = {};
+    if (named.includes('medication') && content.medication !== null) {
+      shown.medication = found.medication ?? msg.tooLong(strings.noteWords.medication, limits.medication);
+    }
+
+    const [asking] = Object.keys(content.details);
+    if (named.includes('commonItemDetails') && asking !== undefined) {
+      const [itemId = asking] = Object.keys(found.details ?? {});
+      shown.details = { [itemId]: found.details?.[itemId] ?? msg.enterDetails(wording(itemId)) };
+    }
+
     if (!hasErrors(shown)) {
       return false;
     }
