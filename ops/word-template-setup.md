@@ -51,14 +51,15 @@ of choice.
 The group's name is **Wording to confirm against the Word template**. Four options, in this order:
 
 1. Collected from/dropped home by CSW
-2. Dropped/picked up at Lakeside by parent/external support/family friend/other (Lakeside is a venue name: use the
-   provider's own)
+2. Dropped/picked up at `<base venue>` by parent/external support/family friend/other (`<base venue>` is a
+   placeholder: enter the provider's own venue name)
 3. Collected from/dropped to station
 4. Other (staff to complete if different from above) (**needs detail**)
 
 ### G2B Bus Travel (Goal Focused Support, Life Skills Development)
 
-Seven items, in this order:
+"G2B" may be the provider's own name for its bus, so it is **Wording to confirm against the Word template** (and with
+the owner) wherever it appears: this heading, item 7 and the venue travel items below. Seven items, in this order:
 
 1. No prompting required
 2. Reminded to use the bathroom if needed before we leave
@@ -93,7 +94,7 @@ order of the items.
 
 It opens with two location items, in this order:
 
-1. Lakeside (the base location: use the provider's own name; the template sets it for each participant, which this
+1. `<base venue>` (the base location: use the provider's own name; the template sets it for each participant, which this
    list cannot) (**Wording to confirm against the Word template**)
 2. Out in the Community
 
@@ -133,13 +134,13 @@ template**; enter each from a Word day.
 
 - Activities of choice (it appears on all five days)
 - Photography Out and About
-- Woodwork, and Woodwork – KWR, which has a different tool list (two groups)
-- Lakeside Art (use the provider's own venue name)
+- Woodwork, and Woodwork - `<site>`, which has a different tool list (two groups; `<site>` is a placeholder)
+- `<venue>` Art (`<venue>` is a placeholder: use the provider's own venue name)
 - Walk around the lake (no purpose tags)
 - Walk and Outdoor Gym (no purpose tags), with its tagged sub-heading as its own group, Walk and Outdoor Gym: Fitness
   Park
 - Baking (no purpose tags)
-- Market Stall @ Lakeside Square (no purpose tags; use the provider's own venue name)
+- Market Stall @ `<venue>` (no purpose tags; `<venue>` is a placeholder: use the provider's own venue name)
 - Bowling (two purpose tags)
 - Cooking, with its sub-headings as groups of their own: `<cooking heading>: Preparation`, `<cooking heading>:
   Shopping` and `<cooking heading>: Cooking`. The cooking heading's own wording and tags are **Wording to confirm
