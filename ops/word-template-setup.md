@@ -56,10 +56,11 @@ The group's name is **Wording to confirm against the Word template**. Four optio
 3. Collected from/dropped to station
 4. Other (staff to complete if different from above) (**needs detail**)
 
-### G2B Bus Travel (Goal Focused Support, Life Skills Development)
+### <bus name> Bus Travel (Goal Focused Support, Life Skills Development)
 
-"G2B" may be the provider's own name for its bus, so it is **Wording to confirm against the Word template** (and with
-the owner) wherever it appears: this heading, item 7 and the venue travel items below. Seven items, in this order:
+`<bus name>` is a placeholder, like the venues: enter the provider's own name for its bus wherever it appears (this
+heading, item 7 and the venue travel items below). The name is left out of this public file; take it from the Word
+template. Seven items, in this order:
 
 1. No prompting required
 2. Reminded to use the bathroom if needed before we leave
@@ -67,7 +68,7 @@ the owner) wherever it appears: this heading, item 7 and the venue travel items 
 4. Reminded of shared space etiquette
 5. Reminded of respectful interactions and using manners
 6. Reminded of the bus routine – fill in from the back/get off from the front
-7. Physical support to get into/out of a vehicle (G2B bus or CSW vehicle)
+7. Physical support to get into/out of a vehicle (<bus name> bus or CSW vehicle)
 
 ### The venue travel groups
 
@@ -75,7 +76,7 @@ Four headings, each with the venue as a placeholder (`<venue>`). Enter one group
 to or from, with the venue's own name in the heading.
 
 - Private vehicle travel to/from `<venue>`
-- Private vehicle OR G2B bus to/from `<venue>`
+- Private vehicle OR <bus name> bus to/from `<venue>`
 - Bus travel from `<venue>`
 - Private vehicle to `<venue>` (no purpose tags)
 
@@ -84,7 +85,7 @@ Items quoted for these headings, in no order given:
 - Prompted to put bag in the boot
 - Prompted seat belt safety
 - Reminded to treat CSW's car with care and respect (do not slam doors or scrape bags)
-- Physical support to get into/out of a vehicle (G2B bus or CSW vehicle)
+- Physical support to get into/out of a vehicle (<bus name> bus or CSW vehicle)
 
 **Wording to confirm against the Word template:** which of these four items belong under which heading (the report says
 the headings have 4 to 6 items each), the other items of each heading, whether a heading carries purpose tags, and the

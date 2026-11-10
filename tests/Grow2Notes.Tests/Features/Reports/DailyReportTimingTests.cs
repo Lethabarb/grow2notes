@@ -8,8 +8,9 @@ namespace Grow2Notes.Tests.Features.Reports;
 
 /// <summary>
 /// How long a manager waits for the daily report (S04.01.06, design.md §7.1): a made-up day (A35) of 20 notes, each
-/// with three goals, Every note and two of three groups picked, and about 2,000 characters of guided notes, which is
-/// well under <c>Limits.GuidedNotes</c>; with every 4th note flagged, half of those reviewed, and every 5th note
+/// with three goals, 16 groups of about 10 items each (the size of the Word-template set-up list, which the report
+/// prints in full for every note, A161), Every note and two of the others picked, and about 2,000 characters of
+/// guided notes, which is well under <c>Limits.GuidedNotes</c>; with every 4th note flagged, half of those reviewed, and every 5th note
 /// edited. Each format is downloaded once, Word first, through the real endpoint on a host that is already running.
 /// The first call of each is the cold path: compiling the queries, loading the font and the libraries all count.
 /// The ceiling is 10 seconds against a time that is expected to be well under a second, a margin that shared build
@@ -20,6 +21,10 @@ namespace Grow2Notes.Tests.Features.Reports;
 public sealed class DailyReportTimingTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
 {
     private const int NoteCount = 20;
+
+    private const int ExtraGroupCount = 12;
+
+    private const int ItemsPerExtraGroup = 10;
 
     private const string Sentence = "Jane had a quiet morning and ate her breakfast without help. ";
 
@@ -69,8 +74,9 @@ public sealed class DailyReportTimingTests(Grow2NotesFactory factory) : IClassFi
         return stopwatch.Elapsed;
     }
 
-    // The organisation's Every note group gets two items, and two more groups get two each, a third group none that
-    // a note picks, so that every note holds the same shape.
+    // The organisation's Every note group gets two items, and two more groups get two each, a third group one that no
+    // note picks, so that every note holds the same shape; then 12 more groups of 10 items that no note picks, which
+    // the report prints in full all the same (A161), to the size of the Word-template set-up list.
     private async Task<IReadOnlyList<TestVersionGroup>> AddCommonItemsAsync(SeededOrganisation organisation)
     {
         var organisationId = organisation.OrganisationId;
@@ -96,13 +102,26 @@ public sealed class DailyReportTimingTests(Grow2NotesFactory factory) : IClassFi
             new TestCommonItem("Dressed independently", 2));
         var household = await factory.Services.AddItemsAsync(
             organisationId, groupIds[2], new TestCommonItem("Washed the dishes", 1));
-        return
-        [
+        var groups = new List<TestVersionGroup>
+        {
             Group(organisation.EveryNoteGroupId, "Every note", true, false, every),
             Group(groupIds[0], "Community outing", false, true, outing),
             Group(groupIds[1], "Personal care", false, true, care),
             Group(groupIds[2], "Household tasks", false, false, household),
-        ];
+        };
+        for (var number = 1; number <= ExtraGroupCount; number++)
+        {
+            var name = $"Template section {number}";
+            var groupId = (await factory.Services.AddGroupsAsync(
+                organisationId, new TestCommonItemGroup(name, 3 + number)))[0];
+            var itemIds = await factory.Services.AddItemsAsync(
+                organisationId,
+                groupId,
+                [.. Enumerable.Range(1, ItemsPerExtraGroup).Select(item => new TestCommonItem($"Item {item}", item))]);
+            groups.Add(Group(groupId, name, false, false, itemIds));
+        }
+
+        return groups;
     }
 
     // One participant with three goals and a note submitted by the worker. Every 4th note is flagged, and every 2nd

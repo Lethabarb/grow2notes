@@ -67,19 +67,18 @@ public sealed class WordReportTests
     }
 
     [Fact]
-    public void A_common_item_group_is_a_Heading_3()
+    public void A_Heading3_block_renders_as_the_Heading3_style()
     {
         var docx = Render(
-            new ReportBlock(ReportBlockKind.Heading2, "Common items"),
             new ReportBlock(ReportBlockKind.Heading3, "Personal care"),
             new ReportBlock(ReportBlockKind.Tick, "Showered with prompting", IsTicked: true));
 
-        var groups = Read(docx, document => BodyOf(document).Elements<Paragraph>()
+        var headings = Read(docx, document => BodyOf(document).Elements<Paragraph>()
             .Where(p => p.ParagraphProperties?.ParagraphStyleId?.Val?.Value == "Heading3")
             .Select(p => p.InnerText)
             .ToList());
 
-        Assert.Equal(["Personal care"], groups);
+        Assert.Equal(["Personal care"], headings);
     }
 
     [Fact]
@@ -125,8 +124,8 @@ public sealed class WordReportTests
             new ReportBlock(ReportBlockKind.Title, "Organisation"),
             new ReportBlock(ReportBlockKind.Subtitle, "Daily progress notes"),
             new ReportBlock(ReportBlockKind.Heading1, "Zoë Adams"),
-            new ReportBlock(ReportBlockKind.Heading2, "Common items"),
-            new ReportBlock(ReportBlockKind.Heading3, "Every note"),
+            new ReportBlock(ReportBlockKind.Heading2, "Every note"),
+            new ReportBlock(ReportBlockKind.Heading3, "Personal care"),
             new ReportBlock(ReportBlockKind.Tick, "Medication prompted", IsTicked: true),
             new ReportBlock(ReportBlockKind.Line, "One\nTwo"),
             new ReportBlock(ReportBlockKind.IndexEntry, "ZOE ADAMS") { Anchor = "p1" },

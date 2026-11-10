@@ -1916,8 +1916,11 @@ with the story and the assumed default it confirms.
      a few of them Not In or Sick, and download the Word file and the PDF. Put one of the provider's
      Word days beside them. Compare: the title, DATE and STAFF rows, the Participants index, one participant to a page,
      the order (by first name), the position of the attendance row against the Word template's NAME row, and the page
-     count. Write down every difference; the attendance row's place is the deliberate one in A153, and the owner
-     decides whether it stays. This step holds nothing open. (S04.01.07; A153, A155, A160.)
+     count. Time each download from the click to the saved file, and write down the time and the page count; each
+     must be under 10 seconds. Do this again after step 229 has entered the Word-template set-up list, because the
+     report prints every group of it for every participant. Write down every difference; the attendance row's place is
+     the deliberate one in A153, and the owner decides whether it stays. This step holds nothing open. (S04.01.07;
+     A153, A155, A160, A161.)
 226. The index numbers in Word. Open the Word file from step 225 in desktop Word. Look for: Word asking whether to
      update the fields; choose Yes, and look for each index page number to equal the page where that participant's
      block starts. Open the same file in Word on the web, and on a phone if you can, and look for a dash where a

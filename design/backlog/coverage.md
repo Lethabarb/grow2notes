@@ -397,7 +397,7 @@ story S04.01.09, which records the decision, and says so in its Notes.
 | 10 | Goals under "Short term goals" and "Medium or Long term goal", the term set by a manager | F01.02 | F02.02 (the form and read view), F04.01 (the files) | Done in T44 (S01.02.09): `GoalTermEndpointTests`, `NoteWordTemplateEndpointsTests`, `ReportLayoutTests`; A150 |
 | 11 | The "Medication" row, switched on for a participant | F02.02 | F01.02 (the switch) | Done in T44 (S02.02.10, S01.02.10): `MedicationLineEndpointTests`, `NoteWordTemplateEndpointsTests`; A152 |
 | 12 | Each Word section is a group named with its Word heading, purpose tags kept, items in Word order; a sub-heading is its own group | F01.03 | F06.05 (the production entry) | `ops/word-template-setup.md` (T04); A145 |
-| 13 | The pick-up and drop-off options, G2B Bus Travel and the venue travel sections | F01.03 | F06.05 | `ops/word-template-setup.md`; A147. Venue names are placeholders; the "G2B" wording is marked to confirm |
+| 13 | The pick-up and drop-off options, <bus name> Bus Travel and the venue travel sections | F01.03 | F06.05 | `ops/word-template-setup.md`; A147. Venue and bus names are placeholders |
 | 14 | "Further Supports Provided" with its 11 items | F01.03 | F06.05 | `ops/word-template-setup.md`; A147 |
 | 15 | A parent line with child options, as items worded with the option | F01.03 | | `ops/word-template-setup.md`; A146 |
 | 16 | "Other (staff to complete if different from above)": a Details text, required while ticked | F02.05 | F01.03 (the flag on the item) | Done in T44 (S02.05.05, S01.03.09): `CommonItemNeedsDetailEndpointTests`, `NoteWordTemplateEndpointsTests`, `NotePage.test.tsx`; A151 |
