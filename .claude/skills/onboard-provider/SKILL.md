@@ -119,8 +119,12 @@ inside the repository is refused until it is moved out. The file has the header 
 comma is quoted. Kinds are matched ignoring case:
 
 - Common item: Name is the group, Text is the item. The group name Every note means the built-in Every note group.
+- Common item with details: as Common item, for an item that asks for a short text when it is ticked on a note, such
+  as Other (staff to complete if different from above).
 - Guide prompt: Name is blank, Text is one line. The lines are joined with line breaks in file order.
-- Goal: Name is the participant's given name then family name, Text is the goal. For example, Sam Example.
+- Goal: Name is the participant's given name then family name, Text is the goal. For example, Sam Example. A goal is
+  Short term.
+- Medium or long term goal: as Goal, for a goal the participant works on over a longer time.
 - Worker: Name is the display name, Text is the email address.
 
 Before any plan, report unknown kinds, missing fields, duplicate rows and a Worker email that appears twice. Leave
@@ -135,10 +139,13 @@ within their own group.
 - An active match is used. Several active groups with one name: ask the owner which.
 - Only an archived group matches: report it, leave it alone, and skip that group's items.
 - An archived item matches: report it and do not add it.
+- An item that is there already is never changed. If its needsDetail differs from the row's kind (Common item with
+  details asks for details), report it: a manager changes it in the app, because this skill cannot.
 - Every note is never added, renamed or archived. Its items go in by its groupId.
 
-Show the plan: to add, already there, archived and left alone. After one yes, call add_common_item_group for each
-missing group, then add_common_item for each missing item, in file order and never reordered.
+Show the plan: to add, already there, archived and left alone, and differing from the row. After one yes, call
+add_common_item_group for each missing group, then add_common_item for each missing item, in file order and never
+reordered. Send needsDetail true for a Common item with details, and leave it out for a Common item.
 
 ### D3 Guide prompts
 
@@ -153,13 +160,20 @@ A match is a result whose given name and family name, joined by one space, equal
 with runs of spaces collapsed. Never split a name.
 
 - Exactly one active match: call get_participant, then add_goal for each goal whose text, trimmed and ignoring case,
-  is not among its active or archived goals. An archived goal that matches is reported and left alone.
+  is not among its active or archived goals. Send isMediumOrLongTerm true for a Medium or long term goal, and leave it
+  out for a Goal. An archived goal that matches is reported and left alone. A goal that is there already is never
+  changed: if its isMediumOrLongTerm differs from the row's kind, report it, and a manager changes it in the app.
 - Several matches, near matches only, or moreMatches present: show what was found and ask the owner.
 - An archived participant: report it and leave it alone.
 - No result: list the person for a manager to add in the app with their date of birth. Show the exact search, and ask
   the owner to check Participants, archived included, first. A re-run then adds the goals.
 
 Show the plan, get one yes, then add the goals.
+
+The result of get_participant also says whether the participant has the Medication box on their notes
+(hasMedicationLine). This skill cannot switch it, so when the owner says a participant needs it and it is false,
+list that person for a manager to switch on in Participant Details in the app. Say nothing about what the box holds:
+it holds what a worker writes on a note, which this skill never sees.
 
 ### D5 Invites, last
 
@@ -206,6 +220,8 @@ Summarise each section as counts and names: added, already there, archived and l
 workers by display name only. The summary holds no email address, link or note content. Then list what is left by hand:
 
 - participants for a manager to add in the app with their dates of birth, then a re-run for their goals;
+- participants whose Medication box a manager switches on in Participant Details, and any goal term or item that asks
+  for details that a manager changes in the app;
 - archived matches, for a manager to restore if wanted, and deactivated accounts for a manager to decide;
 - invites not sent: the hour's limit, refused, or declined;
 - other managers, whom a manager invites in the app;
