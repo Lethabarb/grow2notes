@@ -19,6 +19,10 @@ public sealed class SetupPasskeyFailureEndpointTests : IClassFixture<Grow2NotesF
 {
     private const string Path = "/api/auth/setup/passkey/failure";
 
+    // U+2028, which ends a line as a line break does, and U+202E, which makes the text after it read right to left.
+    private const char LineSeparator = (char)0x2028;
+    private const char RightToLeftOverride = (char)0x202E;
+
     private readonly RecordingLoggerProvider logs = new();
     private readonly Grow2NotesFactory factory;
     private readonly SeededOrganisations seeded;
@@ -46,7 +50,7 @@ public sealed class SetupPasskeyFailureEndpointTests : IClassFixture<Grow2NotesF
         {
             name = "NotAllowedError",
             code = "ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY",
-            message = "The operation couldn’t be completed.\nError 31.‮",
+            message = "The operation couldn’t be completed.\nError" + LineSeparator + "31." + RightToLeftOverride,
         });
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
