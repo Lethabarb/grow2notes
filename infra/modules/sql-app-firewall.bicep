@@ -1,4 +1,4 @@
-// The SQL server's firewall rules for a web app with no VNet integration: test's, on the free F1 plan (D103). One rule
+// The SQL server's firewall rules for a web app with no VNet integration: test's, on the free F1 plan (D105). One rule
 // per address the app's App Service stamp can send from. Other customers' apps on that stamp share those addresses, so
 // the rules let them reach the server's endpoint too; Entra-only sign-in is what keeps them out (ops/security-review.md
 // F-27). Deployed after the app, whose addresses are known only then; main.bicep leaves it out for a B1 app, which

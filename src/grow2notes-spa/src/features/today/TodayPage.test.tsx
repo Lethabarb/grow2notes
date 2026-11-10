@@ -110,7 +110,7 @@ function listOf(participants: readonly TodayParticipant[], date = '2026-10-01'):
 /** Jane as the admin list gives her, active or archived, with the version that the row then has. */
 function janeInTheAdminList(status: AdminParticipant['status'], rowVersion: string): AdminParticipant {
   const { id, givenName, familyName } = jane;
-  return { id, givenName, familyName, dateOfBirth: '1987-03-07', status, rowVersion };
+  return { id, givenName, familyName, dateOfBirth: '1987-03-07', hasMedicationLine: false, status, rowVersion };
 }
 
 /** How the server meets a request: an answer, or a failure as `fetch` has one. */
@@ -157,6 +157,10 @@ const newNote: Draft = {
   goals: [],
   commonItemGroups: [],
   narrative: '',
+  isNotIn: false,
+  isLateNotice: false,
+  isSick: false,
+  medication: null,
   isFlagged: false,
   flagReason: null,
 };
@@ -172,6 +176,10 @@ const alexsSubmittedNote: SubmittedNote = {
   current: {
     versionNumber: 1,
     narrative: 'Jane made toast.',
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     goals: [],
     commonItemGroups: [],
     isFlagged: false,
@@ -800,7 +808,7 @@ describe('Today, opening a row', () => {
     await settle();
 
     expect(router.state.location.pathname).toBe(`/participants/${jane.id}/notes/2026-10-01`);
-    expect(within(main()).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('');
+    expect(within(main()).getByRole('textbox', { name: 'Daily Support Notes' })).toHaveValue('');
     expect(main()).not.toHaveTextContent(/started/);
   });
 
@@ -1614,7 +1622,7 @@ describe('Today, Your unfinished drafts', () => {
     await settle();
 
     expect(router.state.location.pathname).toBe(`/participants/${jane.id}/notes/${yesterday}`);
-    expect(within(main()).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('Went to the library.');
+    expect(within(main()).getByRole('textbox', { name: 'Daily Support Notes' })).toHaveValue('Went to the library.');
   });
 
   it('lists the draft of a participant archived since, with nothing to say so, and opens it', async () => {
@@ -1631,7 +1639,7 @@ describe('Today, Your unfinished drafts', () => {
     await settle();
 
     expect(router.state.location.pathname).toBe(`/participants/${priya.id}/notes/${yesterday}`);
-    expect(within(main()).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('Went to the library.');
+    expect(within(main()).getByRole('textbox', { name: 'Daily Support Notes' })).toHaveValue('Went to the library.');
   });
 
   // design.md §3.4 *Earlier-day drafts* and §3.7: the draft keeps its date, and once submitted is unfinished no more.

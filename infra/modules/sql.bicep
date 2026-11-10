@@ -1,7 +1,7 @@
 // The Azure SQL logical server and the app's database (design.md §9.3, §9.4, §10.1). The server takes only Microsoft
 // Entra sign-ins, and only from the web app's subnet, apart from the temporary firewall rule each deploy adds for its
 // migration and then removes (design.md §10.4). Test's app is on F1, which has no subnet, so sql-app-firewall.bicep
-// gives its outbound addresses rules of their own instead (D103).
+// gives its outbound addresses rules of their own instead (D105).
 targetScope = 'resourceGroup'
 
 @description('The environment, test or prod.')

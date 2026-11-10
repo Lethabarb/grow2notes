@@ -123,7 +123,11 @@ const pastDay: FakeNote = {
 const currentOf = ({ narrative, tickedGoals, groups, flagReason }: FakeVersion, versionNumber: number) => ({
   versionNumber,
   narrative,
-  goals: goalTexts.map((text, index) => ({ text, isTicked: tickedGoals[index] })),
+  isNotIn: false,
+  isLateNotice: false,
+  isSick: false,
+  medication: null,
+  goals: goalTexts.map((text, index) => ({ text, isTicked: tickedGoals[index], isMediumOrLongTerm: false })),
   commonItemGroups: groups,
   isFlagged: flagReason !== null,
   flagReason,
@@ -256,7 +260,7 @@ test('the list opens from the read view; a version has its own groups and flag; 
   await expect.poll(() => shownText(lineStarting(page, /^Flagged/))).toBe(
     'Flagged Reason: Mentioned pain in her left knee after the walk.',
   );
-  await expect(main(page).getByRole('heading', { level: 3, name: 'Personal care' })).toBeVisible();
+  await expect(main(page).getByRole('heading', { level: 2, name: 'Personal care' })).toBeVisible();
   await expect(main(page).getByText('Community outing')).toHaveCount(0);
   await expect(main(page).getByRole('button')).toHaveCount(0);
   await expect(main(page).getByRole('link')).toHaveCount(1);
@@ -284,7 +288,7 @@ test('the list opens from the read view; a version has its own groups and flag; 
   await expect(lineStarting(page, /^This is the current version/)).toHaveText('This is the current version.');
   await expect(main(page).getByRole('link')).toHaveCount(0);
   await expect(main(page).getByText('Flagged', { exact: true })).toHaveCount(0);
-  await expect(main(page).getByRole('heading', { level: 3, name: 'Personal care' })).toBeVisible();
+  await expect(main(page).getByRole('heading', { level: 2, name: 'Personal care' })).toBeVisible();
 
   // Version 1: the outing, the first submit, and no flag.
   await page.goto(versionAddress(1));
@@ -292,7 +296,7 @@ test('the list opens from the read view; a version has its own groups and flag; 
   await expect.poll(() => shownText(lineStarting(page, /^Submitted by/))).toBe(
     'Submitted by Priya Nair, Thu 1 Oct 2026, 4:12 pm',
   );
-  await expect(main(page).getByRole('heading', { level: 3, name: 'Community outing' })).toBeVisible();
+  await expect(main(page).getByRole('heading', { level: 2, name: 'Community outing' })).toBeVisible();
   await expect(main(page).getByText('Personal care')).toHaveCount(0);
 
   // Nothing of the note is kept where the page could keep it.
@@ -459,6 +463,10 @@ test('in forced colours, the ring is Highlight at each stop of both pages, and t
   await expectStops(page, 'Shift+Tab', ['Version history'], forcedRing);
   await expectStops(page, 'Tab', ['version 3'], forcedRing);
   expect(await tickStrokes(page), 'the box of each tick icon, and the tick of each ticked one').toEqual([
+    // The three Attendance ticks, unticked, then the goals and the outing's item.
+    { box: canvasText, tick: null },
+    { box: canvasText, tick: null },
+    { box: canvasText, tick: null },
     { box: canvasText, tick: canvasText },
     { box: canvasText, tick: null },
     { box: canvasText, tick: canvasText },

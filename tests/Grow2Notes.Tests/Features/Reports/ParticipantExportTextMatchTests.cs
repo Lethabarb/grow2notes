@@ -29,6 +29,8 @@ public sealed partial class ParticipantExportTextMatchTests(Grow2NotesFactory fa
 
     private const string Query = "from=2026-09-01&to=2026-10-02";
 
+    private const string NoBoxes = "☐ Not In  ☐ Late Notice  ☐ Sick";
+
     private const string ZoeNarrative = "Zoë said “I’m ready” — then we left…\n\nShe paid at the café herself.";
 
     private const string WrongPersonNarrative = "Sam Taylor walked to the shops with his support worker.";
@@ -71,69 +73,66 @@ public sealed partial class ParticipantExportTextMatchTests(Grow2NotesFactory fa
         string[] nextDay =
         [
             $"Sunday 27{Nb}September 2026",
-            $"Written by Priya Nair · Submitted Mon 28{Nb}Sep, 8:05{Nb}am",
-            "Goals",
+            NoBoxes,
             "No goals set",
-            "Common items",
             "No common items set",
-            "Guided notes",
+            "Daily Support Notes",
             ZoeNarrative,
+            $"Note written by: Priya Nair · Submitted Mon 28{Nb}Sep, 8:05{Nb}am",
         ];
         string[] flaggedAndReviewed =
         [
             $"Monday 28{Nb}September 2026",
-            $"Written by Priya Nair · Submitted Mon 28{Nb}Sep, 3:00{Nb}pm",
+            NoBoxes,
+            "No goals set",
+            "No common items set",
+            "Daily Support Notes",
+            "Flagged and reviewed text.",
+            $"Note written by: Priya Nair · Submitted Mon 28{Nb}Sep, 3:00{Nb}pm",
             "Flagged for manager: \"Mentioned pain in her left knee.\"",
             $"Reviewed by Jo Smith on Mon 28{Nb}Sep 2026, 6:00{Nb}pm",
             "Comment: Booked a physio visit.\nWill check on Monday.",
-            "Goals",
-            "No goals set",
-            "Common items",
-            "No common items set",
-            "Guided notes",
-            "Flagged and reviewed text.",
         ];
 
-        // Three versions, whose picked groups differ: the current one shows Every note and both groups.
+        // Three versions, whose picked groups differ: the current one shows Every note and both groups. The record
+        // keeps the groups a note shows (D47), as it did before the daily report printed every group.
         string[] editedCurrent =
         [
             $"Tuesday 29{Nb}September 2026",
-            $"Written by Priya Nair · Submitted Tue 29{Nb}Sep, 4:42{Nb}pm",
-            $"Edited · 3 versions · last change by Priya Nair, Wed 30{Nb}Sep 2026, 8:30{Nb}am",
-            "Goals",
+            NoBoxes,
             "No goals set",
-            "Common items",
             "Every note",
             "☑ Medication prompted",
             "Community outing",
             "☐ Travelled by bus",
             "Personal care",
             "☐ Showered with prompting",
-            "Guided notes",
+            "Daily Support Notes",
             "Version three text.",
+            $"Note written by: Priya Nair · Submitted Tue 29{Nb}Sep, 4:42{Nb}pm",
+            $"Edited · 3 versions · last change by Priya Nair, Wed 30{Nb}Sep 2026, 8:30{Nb}am",
         ];
         string[] editedEarlier =
         [
             "Earlier versions",
             $"Version 2: saved by Priya Nair, Tue 29{Nb}Sep 2026, 6:00{Nb}pm",
-            "Goals",
+            NoBoxes,
             "No goals set",
-            "Common items",
             "Every note",
             "☐ Medication prompted",
             "Personal care",
             "☑ Showered with prompting",
-            "Guided notes",
+            "Daily Support Notes",
             "Version two text.",
             $"Version 1: submitted by Priya Nair, Tue 29{Nb}Sep 2026, 4:42{Nb}pm",
-            "Goals",
+            NoBoxes,
+            "Short term goals",
             "☑ Catch the bus to the library",
-            "Common items",
             "Every note",
             "☑ Medication prompted",
             "Community outing",
             "☑ Travelled by bus",
-            "Guided notes",
+            "Daily Support Notes",
             "Version one text.",
         ];
 
@@ -142,17 +141,16 @@ public sealed partial class ParticipantExportTextMatchTests(Grow2NotesFactory fa
         string[] flagRemovedCurrent =
         [
             $"Wednesday 30{Nb}September 2026",
-            $"Written by Priya Nair · Submitted Wed 30{Nb}Sep, 2:00{Nb}pm",
+            NoBoxes,
+            "No goals set",
+            "No common items set",
+            "Daily Support Notes",
+            "Rested version two text.",
+            $"Note written by: Priya Nair · Submitted Wed 30{Nb}Sep, 2:00{Nb}pm",
             $"Edited · 2 versions · last change by Priya Nair, Wed 30{Nb}Sep 2026, 5:00{Nb}pm",
             "Flagged for manager: \"Seemed tired all day.\" (flag removed in a later edit)",
             $"Reviewed by Jo Smith on Wed 30{Nb}Sep 2026, 4:00{Nb}pm",
             "Comment: Rest day arranged.",
-            "Goals",
-            "No goals set",
-            "Common items",
-            "No common items set",
-            "Guided notes",
-            "Rested version two text.",
         ];
         string[] flagRemovedEarlier =
         [
@@ -161,11 +159,10 @@ public sealed partial class ParticipantExportTextMatchTests(Grow2NotesFactory fa
             "Flagged for manager: \"Seemed tired all day.\"",
             $"Reviewed by Jo Smith on Wed 30{Nb}Sep 2026, 4:00{Nb}pm",
             "Comment: Rest day arranged.",
-            "Goals",
+            NoBoxes,
             "No goals set",
-            "Common items",
             "No common items set",
-            "Guided notes",
+            "Daily Support Notes",
             "Tired version one text.",
         ];
 
@@ -173,38 +170,35 @@ public sealed partial class ParticipantExportTextMatchTests(Grow2NotesFactory fa
         string[] pastDay =
         [
             $"Thursday 1{Nb}October 2026",
-            $"Past-day note, written by Jo Smith (manager) on Fri 2{Nb}Oct 2026, 8:10{Nb}am · Submitted "
-                + $"Fri 2{Nb}Oct, 8:20{Nb}am",
-            "Goals",
+            NoBoxes,
             "No goals set",
-            "Common items",
             "No common items set",
-            "Guided notes",
+            "Daily Support Notes",
             "Written the next morning by the manager.",
+            $"Note written by: Jo Smith (manager) · Past-day note, written Fri 2{Nb}Oct 2026, 8:10{Nb}am · "
+                + $"Submitted Fri 2{Nb}Oct, 8:20{Nb}am",
         ];
 
         // S3.9: written against the wrong participant, then corrected. Version 1 shows only with earlier versions.
         string[] wrongParticipantCurrent =
         [
             $"Friday 2{Nb}October 2026",
-            $"Written by Priya Nair · Submitted Fri 2{Nb}Oct, 7:00{Nb}am",
-            $"Edited · 2 versions · last change by Priya Nair, Fri 2{Nb}Oct 2026, 8:00{Nb}am",
-            "Goals",
+            NoBoxes,
             "No goals set",
-            "Common items",
             "No common items set",
-            "Guided notes",
+            "Daily Support Notes",
             InErrorNarrative,
+            $"Note written by: Priya Nair · Submitted Fri 2{Nb}Oct, 7:00{Nb}am",
+            $"Edited · 2 versions · last change by Priya Nair, Fri 2{Nb}Oct 2026, 8:00{Nb}am",
         ];
         string[] wrongParticipantEarlier =
         [
             "Earlier versions",
             $"Version 1: submitted by Priya Nair, Fri 2{Nb}Oct 2026, 7:00{Nb}am",
-            "Goals",
+            NoBoxes,
             "No goals set",
-            "Common items",
             "No common items set",
-            "Guided notes",
+            "Daily Support Notes",
             WrongPersonNarrative,
         ];
         string[] withoutHistory =

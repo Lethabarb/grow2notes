@@ -4,6 +4,12 @@ Screen spec for design.md **4.5 Version history (managers)**. It puts together t
 
 Evidence grades: **[Research]** studies and usability write-ups, **[Standard]** WCAG, WAI-ARIA and HTML, **[Convention]** established design systems, **[Opinion]** reasoned judgement. Copy marks: **(V)** word for word from design.md, **(N)** design.md wording with only the format normalised under microcopy.md, **(P)** proposed (not in design.md). Every (P) string here on 9 October 2026 was approved as written (D67); a (P) string added later still needs the owner's approval.
 
+**T44 (D104, A159): the version page's sections.** Where the rest of this file differs, this block wins. Page B shows the
+read view's sections, which are now **Attendance**, the goals under **Short term goals** and **Medium or Long term
+goal**, **Medication** (only for a version with the box), each shown group under its own `<h2>` with **Details: [text]**
+under a ticked item that has details, and **Daily Support Notes**; see note-read-view.md. The numbered headings are gone.
+Page A's rows are unchanged (they carry no note content), so attendance shows on the version page alone.
+
 ---
 
 ## Purpose and who uses it

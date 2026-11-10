@@ -34,14 +34,21 @@ const keepaliveBytes = 60_000;
 const transientStatuses = new Set([0, 408, 429, 500, 502, 503, 504]);
 
 /**
- * What the form holds, as a save reads it: the Guided notes text, the ticked goals, the picked common item groups and
- * their ticked items, the flag, and the reason as typed, which the form keeps while the box is unticked.
+ * What the form holds, as a save reads it: the Daily Support Notes text, the three Attendance ticks, the Medication
+ * text, `null` for a note with no Medication box, the ticked goals, the picked common item groups and their ticked
+ * items, the details as typed of each ticked item that asks for them, by the item's ID, blank ones included, the flag,
+ * and the reason as typed, which the form keeps while the box is unticked.
  */
 export type DraftContent = {
   narrative: string;
+  isNotIn: boolean;
+  isLateNotice: boolean;
+  isSick: boolean;
+  medication: string | null;
   tickedGoalIds: string[];
   pickedGroupIds: string[];
   tickedCommonItemIds: string[];
+  details: Record<string, string>;
   isFlagged: boolean;
   flagReason: string;
 };
@@ -49,9 +56,14 @@ export type DraftContent = {
 /** The note's content as `PUT {base}/draft` and `POST {base}/versions` alike send it (design.md §6.3). */
 export type SentContent = {
   narrative: string;
+  isNotIn: boolean;
+  isLateNotice: boolean;
+  isSick: boolean;
+  medication: string | null;
   tickedGoalIds: string[];
   pickedGroupIds: string[];
   tickedCommonItemIds: string[];
+  commonItemDetails: Record<string, string>;
   isFlagged: boolean;
   flagReason: string | null;
 };
@@ -127,16 +139,24 @@ function savedReason({ isFlagged, flagReason }: DraftContent): string | null {
 }
 
 /**
- * The form's content as a save sends it, and as Submit sends it too, built here once (T09's Notes): the text cut to
- * its limit, the ticks, the picks, the flag, and the reason as `savedReason()` gives it. Submit's checks have by then
- * refused a text or a reason over its limit, so that Submit sends them whole.
+ * The form's content as a save sends it, and as Submit sends it too, built here once (T09's Notes): the text, the
+ * Medication text and each item's details cut to their limits, the ticks, the picks, the flag, and the reason as
+ * `savedReason()` gives it. Submit's checks have by then refused a text, details or a reason over their limit, so that
+ * Submit sends them whole.
  */
 export function sentContent(content: DraftContent): SentContent {
   return {
     narrative: capped(content.narrative, limits.guidedNotes),
+    isNotIn: content.isNotIn,
+    isLateNotice: content.isLateNotice,
+    isSick: content.isSick,
+    medication: content.medication === null ? null : capped(content.medication, limits.medication),
     tickedGoalIds: content.tickedGoalIds,
     pickedGroupIds: content.pickedGroupIds,
     tickedCommonItemIds: content.tickedCommonItemIds,
+    commonItemDetails: Object.fromEntries(
+      Object.entries(content.details).map(([id, text]) => [id, capped(text, limits.itemDetail)]),
+    ),
     isFlagged: content.isFlagged,
     flagReason: savedReason(content),
   };

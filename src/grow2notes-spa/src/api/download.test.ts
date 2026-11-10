@@ -3,7 +3,7 @@ import { ApiError } from './api.ts';
 import { download } from './download.ts';
 
 const exportPath = '/api/reports/daily/2026-10-01/export?format=docx';
-const fallbackName = 'daily-notes_2026-10-01.docx';
+const fallbackName = 'Thursday 01.10.2026.docx';
 const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -68,8 +68,17 @@ describe('download', () => {
       "attachment; filename=plain.docx; filename*=UTF-8''Zo%C3%AB%20notes.docx",
       'Zoë notes.docx',
     ],
-    ['a quoted filename', 'attachment; filename="daily-notes_2026-10-01.pdf"', 'daily-notes_2026-10-01.pdf'],
-    ['a bare filename', 'attachment; filename=daily-notes_2026-10-01.pdf', 'daily-notes_2026-10-01.pdf'],
+    [
+      'a quoted filename with the weekday and the date',
+      'attachment; filename="Thursday 01.10.2026.pdf"',
+      'Thursday 01.10.2026.pdf',
+    ],
+    [
+      'filename* with the weekday and the date, percent-decoded',
+      "attachment; filename=\"Thursday 01.10.2026.docx\"; filename*=UTF-8''Thursday%2001.10.2026.docx",
+      'Thursday 01.10.2026.docx',
+    ],
+    ['a bare filename', 'attachment; filename=report.pdf', 'report.pdf'],
     ['a bare filename before other parameters', 'attachment; filename=a.docx; size=10', 'a.docx'],
     ['a filename when filename* does not decode', "attachment; filename=b.docx; filename*=UTF-8''%E0%A4%A", 'b.docx'],
     ['the fallback when there is no filename', 'attachment', fallbackName],
@@ -93,7 +102,7 @@ describe('download', () => {
   });
 
   it('sends a GET of the path and saves the bytes through a hidden link, appended, clicked and removed', async () => {
-    fetchMock.mockResolvedValue(await file('attachment; filename=daily-notes_2026-10-01.docx'));
+    fetchMock.mockResolvedValue(await file('attachment; filename="Thursday 01.10.2026.docx"'));
 
     await download(exportPath, fallbackName, new AbortController().signal);
 
@@ -104,7 +113,7 @@ describe('download', () => {
     expect(new Uint8Array(await blob.arrayBuffer())).toEqual(bytes);
     expect(clicked).toEqual([
       {
-        name: 'daily-notes_2026-10-01.docx',
+        name: 'Thursday 01.10.2026.docx',
         rel: 'noopener',
         hasTarget: false,
         href: 'blob:https://grow2notes.test/1',

@@ -89,7 +89,7 @@ public sealed class CommonItemsToolsTests(ToolWorld world) : IClassFixture<ToolW
             Assert.Equal(scene.Archived, item.GetProperty("archived").GetBoolean());
             Assert.Equal(ToolScene.ExpectedVersion(scene.ETag), item.GetProperty("expectedVersion").GetString());
             Assert.Equal(
-                ["archived", "expectedVersion", "itemId", "text"],
+                ["archived", "expectedVersion", "itemId", "needsDetail", "text"],
                 item.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
         }
     }

@@ -7,6 +7,13 @@ Component key: `file-download`. This covers the controls that turn a manager's c
 
 Evidence grades: **[Research]** studies, usability or assistive-technology testing · **[Standard]** WCAG 2.2, WAI-ARIA APG, HTML spec, MDN platform documentation, browser behaviour documented by the vendor · **[Convention]** established design systems and widely copied practice · **[Opinion]** reasoned judgement with no direct evidence.
 
+**T44 (D104, A19, A80 amended): the daily report's file name.** Where the rest of this file differs, this block wins. The
+daily report is named by the weekday and the date, `<Weekday> dd.mm.yyyy.<format>` (for example `Monday 14.09.2026.docx`),
+in invariant English whatever the device's language; the name still holds only the date, and never the week. The name in
+the answer's `Content-Disposition` (`filename*` first, then `filename`) is what the browser saves, and the screen's
+fallback when the answer names none is `fileDay(date)` plus the format, which is the same name. A browser may swap the
+spaces for underscores, as WebKit does. The participant record export's name is unchanged.
+
 ---
 
 ## Where it's used
@@ -15,7 +22,7 @@ Both screens are for managers only (section 2). Workers never see either control
 
 | Screen (design.md) | Control | How the format is chosen | How "nothing to download" is known | Expected wait | File name (set by the server) |
 |---|---|---|---|---|---|
-| **4.7 Daily report** | Two buttons: **Download Word**, **Download PDF**, after Previous day / date field / Next day | One button per format | **Before** the click. `GET /api/reports/daily/{date}/has-notes` answers yes or no (A18). On "no", both buttons are disabled and the screen says "No submitted notes for Thursday 1 October 2026." | Usually well under 1 second ("Twenty notes render in well under a second", §7.1). Target: 20 notes in under 10 seconds (M4). | `daily-notes_2026-10-01.docx` / `.pdf` |
+| **4.7 Daily report** | Two buttons: **Download Word**, **Download PDF**, after Previous day / date field / Next day | One button per format | **Before** the click. `GET /api/reports/daily/{date}/has-notes` answers yes or no (A18). On "no", both buttons are disabled and the screen says "No submitted notes for Thursday 1 October 2026." | Usually well under 1 second ("Twenty notes render in well under a second", §7.1). Target: 20 notes in under 10 seconds (M4). | `Thursday 01.10.2026.docx` / `.pdf` |
 | **4.12 Participant record export** | One submit button, **Export**, at the end of a short form (participant fixed, From date, To date, Format, "Include earlier versions of edited notes") | A Format choice (PDF or Word) in the form | **After** the click. There is no pre-check endpoint, so "No submitted notes for Jane Citizen between … and …" is the result of pressing Export. The To-before-From check runs first (form-validation.md). | Can be long. Target: a one-year export with earlier versions in under 30 seconds (M5). | `participant-record_2026-01-01_to_2026-09-30.pdf` / `.docx` |
 
 What is the same on both screens: a manager presses a button, the server builds the file fresh and in memory (§7.1, A19), every download is audited (§11.5, §11.6), the response is `Content-Disposition: attachment` with a dates-only file name (§6.5), exports are rate-limited to 10 a minute per user (§9.9), and the file is never shown inside the app (D43).
@@ -158,7 +165,7 @@ Strings from design.md are marked **design.md**. Everything else is **Proposed**
 | 4.12 empty range | "No submitted notes for Jane Citizen between Thursday 1 January 2026 and Wednesday 30 September 2026." | design.md 4.12 (dates filled in) |
 | Preparing (shown after 1 s) | "Preparing the Word file…" · "Preparing the PDF file…" | Proposed |
 | Preparing, 4.12 only | Add a second sentence: "Keep this page open." | Proposed, reusing the design's "Keep this page open" from the save indicator (4.3) |
-| Ready | "daily-notes_2026-10-01.docx is ready. Look in your downloads." (always the real file name) | Proposed |
+| Ready | "Thursday 01.10.2026.docx is ready. Look in your downloads." (always the real file name) | Proposed |
 | No connection | "The file was not downloaded: no connection. Check your connection, then try again." | Proposed, echoing "Not saved: no connection." (4.3) |
 | `429` | "Too many downloads in a short time. Wait a minute, then try again." | Proposed |
 | `403` (role changed mid-session) | "Only managers can download these files." | Proposed |
@@ -182,7 +189,7 @@ Formatting the dates: `Intl.DateTimeFormat('en-AU', { weekday: 'long', day: 'num
 **Screen reader (expected; wording varies by reader):**
 - Tabbing to a button on an empty day: "Download Word, dimmed, button. No submitted notes for Thursday 1 October 2026." (VoiceOver says "dimmed"; NVDA says "unavailable".)
 - Changing to an empty day with Previous day: the status line announces "No submitted notes for Wednesday 30 September 2026." Focus stays on Previous day.
-- Pressing Download Word on a slow request: "Preparing the Word file…", then "daily-notes_2026-10-01.docx is ready. Look in your downloads." On iPhone, VoiceOver then reads Safari's own download prompt.
+- Pressing Download Word on a slow request: "Preparing the Word file…", then "Thursday 01.10.2026.docx is ready. Look in your downloads." On iPhone, VoiceOver then reads Safari's own download prompt.
 - A repeated identical message (for example, two connection failures in a row) may not be re-read. Clear the line, then write the new text on the next animation frame.
 
 **WCAG 2.2 criteria met.** 1.3.1 Info and Relationships · 1.4.1 Use of Color (disabled = dashed border + words; error = icon + words) · 1.4.3 Contrast (kept at 4.5:1 even for disabled labels, beyond the exemption) · 1.4.10 Reflow (wrapping file names) · 1.4.11 Non-text Contrast (button borders and focus at 3:1) · 2.1.1 Keyboard · 2.2.1 Timing Adjustable (no message times out) · 2.4.3 Focus Order · 2.4.6 Headings and Labels ("Download Word" says what and in which format) · 2.4.7 Focus Visible · 2.4.11 Focus Not Obscured (Minimum) (the header is not sticky, per app-shell-nav.md) · 2.5.3 Label in Name (name = visible text, so "Tap Download Word" works in Voice Control) · 2.5.8 Target Size (Minimum), exceeded at 48 px · 3.3.1 Error Identification (errors in words) · 4.1.2 Name, Role, Value · 4.1.3 Status Messages.
@@ -296,7 +303,7 @@ export function DailyReportDownloads({ date }: { date: string }) {
     const t = setTimeout(() => setStatus({ kind: 'busy', format, slow: true }), 400);   // the app's page-button delay
     try {
       const r = await saveResponseAsFile(
-        `/api/reports/daily/${date}/export?format=${format}`, `daily-notes_${date}.${format}`,
+        `/api/reports/daily/${date}/export?format=${format}`, `${fileDay(date)}.${format}`,
         { signal: ac.signal, timeoutMs: 30_000 });   // api() per-call timeout (empty-loading-error.md)
       if (r.kind === 'saved') setStatus({ kind: 'ready', fileName: r.fileName });
       else if (r.kind === 'error') setStatus({ kind: 'error', message: r.message });

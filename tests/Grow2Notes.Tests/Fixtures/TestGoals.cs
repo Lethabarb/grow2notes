@@ -11,7 +11,12 @@ namespace Grow2Notes.Tests.Fixtures;
 /// <see langword="null"/> for an active goal.
 /// </summary>
 internal sealed record TestGoal(
-    string Text, int SortOrder, DateTime? CreatedAtUtc = null, Guid? Id = null, DateTime? ArchivedAtUtc = null);
+    string Text,
+    int SortOrder,
+    DateTime? CreatedAtUtc = null,
+    Guid? Id = null,
+    DateTime? ArchivedAtUtc = null,
+    bool IsMediumOrLongTerm = false);
 
 /// <summary>
 /// A goal that <see cref="TestGoals.AddGoalAsync"/> added: its ID, and its <c>ETag</c>, the <c>If-Match</c> that a
@@ -57,6 +62,7 @@ internal static class TestGoals
             OrganisationId = organisation.OrganisationId,
             ParticipantId = participantId,
             Text = goal.Text,
+            IsMediumOrLongTerm = goal.IsMediumOrLongTerm,
             SortOrder = goal.SortOrder,
             ArchivedAtUtc = goal.ArchivedAtUtc,
             CreatedAtUtc = goal.CreatedAtUtc ?? AddedAtUtc,

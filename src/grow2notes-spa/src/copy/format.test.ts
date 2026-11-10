@@ -7,6 +7,7 @@ import {
   dateToday,
   dayAfter,
   dayBefore,
+  fileDay,
   isIsoDate,
   melbourneDay,
   parseDateOnly,
@@ -164,5 +165,22 @@ describe('dayAfter, dayBefore and isIsoDate', () => {
 
   it.each(['2026-02-29', '2026-13-45', '', '2026-1-1', '20261001', '0050-01-01'])('rejects %j as a date', (value) => {
     expect(isIsoDate(value)).toBe(false);
+  });
+});
+
+// The day in a downloaded daily report's name (A19, D104): the SPA's twin of the server's ReportDates.DayDotted.
+describe('fileDay', () => {
+  it.each([
+    ['2026-09-14', 'Monday 14.09.2026'],
+    ['2026-10-01', 'Thursday 01.10.2026'],
+    ['2026-09-18', 'Friday 18.09.2026'],
+    ['2026-12-31', 'Thursday 31.12.2026'],
+    ['2028-02-29', 'Tuesday 29.02.2028'],
+  ])('gives the weekday in English and the date as dd.mm.yyyy for %s', (date, name) => {
+    expect(fileDay(date)).toBe(name);
+  });
+
+  it('never holds a space the file name would lose, but the one after the weekday', () => {
+    expect(fileDay('2026-10-01').split(' ')).toEqual(['Thursday', '01.10.2026']);
   });
 });

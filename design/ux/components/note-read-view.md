@@ -13,6 +13,25 @@ This component reuses three sibling components and does not restate them:
 
 It owns the page layout, the order of everything on it, the Guided notes text block, the flag and review lines, where the actions sit, and the review panel's place and outcome.
 
+**T44 (D104, A159): the read view follows the Word template.** Where the rest of this file differs, this block wins.
+The sections, each after a rule and under an `<h2>`, are now:
+
+1. **Attendance**, a `TickListRead` of **Not In**, **Late Notice** and **Sick**, each read as ticked or not ticked;
+2. the goals under **Short term goals** and **Medium or Long term goal** (`goalsByTerm`), the snapshot's order kept in
+   each, a heading left out when its term has no goal, or **No goals set** alone when the version has none;
+3. **Medication** and its text, line breaks kept (`white-space: pre-wrap`, as Daily Support Notes), only when the
+   version has the box (`medication` is not `null`); with the box and nothing written, the heading stands alone;
+4. each group the API gives (Every note when it has items, then the picked groups, D47 kept) as a list under its own
+   name as an `<h2>`, with **Details: [text]** (`msg.itemDetails`) on a line under a ticked item that has details, or
+   **No common items set** alone when no group is shown; there is no "Common items" heading;
+5. **Daily Support Notes**, the text as written, or **Nothing written yet.** for a draft a manager reads with nothing
+   but spaces.
+
+The section numbers are gone. The byline, the Edited, Flagged and review lines and the actions are unchanged. A version
+saved before T44 reads with no Attendance tick, every goal Short term, no Medication heading and no details. The same
+sections serve the version page (version-history.md), an earlier version in the version-conflict notice, and a draft that
+a manager reads.
+
 ---
 
 ## Where it's used

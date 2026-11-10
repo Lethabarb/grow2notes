@@ -17,7 +17,9 @@ namespace Grow2Notes.Tests.Data;
 /// shows the database's denies. Each test adds a participant of its own and, where its rows need them, a goal of
 /// theirs and an archived common item in an archived group, so that no list that another test reads changes
 /// (tests/README.md). <see cref="NoteVersionModelTests"/>, <see cref="NoteVersionGroupModelTests"/> and
-/// <see cref="NoteVersionItemModelTests"/> check the model.
+/// <see cref="NoteVersionItemModelTests"/> check the model. The Word-template columns (D104) are here too: a version's
+/// attendance ticks and Medication text, a goal row's term, and a common item row's need for details and its details,
+/// with the check constraints that keep a term to a goal row and details to a ticked row that asks for them.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -47,6 +49,26 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         { 3, true, false, false },
     };
 
+    // A row of the section's arm that breaks the details rule: a goal row that asks for details or has some, and a
+    // common item row with details that is unticked or does not ask for them.
+    public static TheoryData<string, bool, bool, string?> RowsBreakingTheDetailConstraint { get; } = new()
+    {
+        { "goal", true, true, null },
+        { "goal", true, false, "Details" },
+        { "item", false, false, "Details" },
+        { "item", true, false, "Details" },
+        { "item", false, true, "Details" },
+    };
+
+    public static TheoryData<string, bool, bool, string?> RowsMeetingTheDetailConstraint { get; } = new()
+    {
+        { "goal", true, false, null },
+        { "item", false, false, null },
+        { "item", false, true, null },
+        { "item", true, true, null },
+        { "item", true, true, "Antibiotics" },
+    };
+
     public static TheoryData<string, string> ChangesToSavedRows { get; } = new()
     {
         { nameof(NoteVersion), "changed" },
@@ -70,16 +92,24 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         version.Narrative = narrative;
         version.IsFlagged = true;
         version.FlagReason = reason;
+        version.IsNotIn = true;
+        version.IsSick = true;
+        version.Medication = new string('m', Limits.Medication);
+        var goal = GoalRow(version.Id, sources);
+        goal.IsMediumOrLongTerm = true;
+        var item = CommonItemRow(version.Id, sources);
+        item.IsTicked = true;
+        item.NeedsDetail = true;
+        item.Detail = new string('d', Limits.ItemDetail);
 
-        await AddAsync(
-            A,
-            [version, GroupRow(version.Id, sources), GoalRow(version.Id, sources), CommonItemRow(version.Id, sources)]);
+        await AddAsync(A, [version, GroupRow(version.Id, sources), goal, item]);
 
         Assert.Equal(
             [
                 new VersionRow(
                     version.Id, A.OrganisationId, sources.NoteId, 1, narrative, true, reason, A.WorkerId,
-                    SubmittedAtUtc, version.IdempotencyKey),
+                    SubmittedAtUtc, version.IdempotencyKey, IsNotIn: true, IsLateNotice: false, IsSick: true,
+                    Medication: new string('m', Limits.Medication)),
             ],
             await StoredVersionsAsync(sources.NoteId));
         Assert.Equal(
@@ -89,12 +119,89 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
             [
                 new ItemRow(
                     version.Id, (byte)NoteSection.Goal, 0, A.OrganisationId, sources.GoalId, null, null,
-                    "Makes own breakfast", true),
+                    "Makes own breakfast", true, IsMediumOrLongTerm: true, NeedsDetail: false, Detail: null),
                 new ItemRow(
                     version.Id, (byte)NoteSection.CommonItem, 0, A.OrganisationId, null, sources.CommonItemId, 0,
-                    "Medication given", false),
+                    "Medication given", true, IsMediumOrLongTerm: false, NeedsDetail: true,
+                    Detail: new string('d', Limits.ItemDetail)),
             ],
             await StoredItemsAsync(version.Id));
+    }
+
+    // The columns that the migration adds default to false and null, which is what a version saved before T44 holds.
+    [Fact]
+    public async Task A_version_and_its_rows_saved_without_the_new_columns_hold_their_defaults()
+    {
+        var sources = await AddSourcesAsync();
+        var version = NewVersion(A, sources.NoteId);
+
+        await AddAsync(A, [version, GroupRow(version.Id, sources), GoalRow(version.Id, sources)]);
+
+        var stored = Assert.Single(await StoredVersionsAsync(sources.NoteId));
+        Assert.Equal(
+            (false, false, false, null), (stored.IsNotIn, stored.IsLateNotice, stored.IsSick, stored.Medication));
+        var goal = Assert.Single(await StoredItemsAsync(version.Id));
+        Assert.Equal((false, false, null), (goal.IsMediumOrLongTerm, goal.NeedsDetail, goal.Detail));
+    }
+
+    // A term is a goal row's alone: a common item row has none to hold.
+    [Fact]
+    public async Task A_common_item_row_that_is_Medium_or_long_term_is_refused_with_error_547()
+    {
+        var sources = await AddSourcesAsync();
+        var version = NewVersion(A, sources.NoteId);
+        await AddAsync(A, [version, GroupRow(version.Id, sources)]);
+        var row = CommonItemRow(version.Id, sources);
+        row.IsMediumOrLongTerm = true;
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => AddAsync(A, [row]));
+
+        var refusal = Assert.IsType<SqlException>(error.InnerException);
+        Assert.Equal(547, refusal.Number);
+        Assert.Contains("\"CK_NoteVersionItem_Term\"", refusal.Message, StringComparison.Ordinal);
+        Assert.Empty(await StoredItemsAsync(version.Id));
+    }
+
+    [Theory]
+    [MemberData(nameof(RowsBreakingTheDetailConstraint))]
+    public async Task A_row_breaking_the_detail_constraint_is_refused_with_error_547(
+        string kind, bool isTicked, bool needsDetail, string? detail)
+    {
+        var sources = await AddSourcesAsync();
+        var version = NewVersion(A, sources.NoteId);
+        await AddAsync(A, [version, GroupRow(version.Id, sources)]);
+        var row = kind == "goal" ? GoalRow(version.Id, sources) : CommonItemRow(version.Id, sources);
+        row.IsTicked = isTicked;
+        row.NeedsDetail = needsDetail;
+        row.Detail = detail;
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => AddAsync(A, [row]));
+
+        var refusal = Assert.IsType<SqlException>(error.InnerException);
+        Assert.Equal(547, refusal.Number);
+        Assert.Contains("\"CK_NoteVersionItem_Detail\"", refusal.Message, StringComparison.Ordinal);
+        Assert.Empty(await StoredItemsAsync(version.Id));
+    }
+
+    // Whether a ticked row that asks for details has some is the app's rule (a draft may lack them), so the constraint
+    // accepts it with or without.
+    [Theory]
+    [MemberData(nameof(RowsMeetingTheDetailConstraint))]
+    public async Task A_row_meeting_the_detail_constraint_is_saved_as_written(
+        string kind, bool isTicked, bool needsDetail, string? detail)
+    {
+        var sources = await AddSourcesAsync();
+        var version = NewVersion(A, sources.NoteId);
+        await AddAsync(A, [version, GroupRow(version.Id, sources)]);
+        var row = kind == "goal" ? GoalRow(version.Id, sources) : CommonItemRow(version.Id, sources);
+        row.IsTicked = isTicked;
+        row.NeedsDetail = needsDetail;
+        row.Detail = detail;
+
+        await AddAsync(A, [row]);
+
+        var stored = Assert.Single(await StoredItemsAsync(version.Id));
+        Assert.Equal((isTicked, needsDetail, detail), (stored.IsTicked, stored.NeedsDetail, stored.Detail));
     }
 
     [Fact]
@@ -412,7 +519,8 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         return await db.Database.SqlQuery<VersionRow>($"""
             SELECT [Id], [OrganisationId], [NoteId], [VersionNumber], [Narrative], [IsFlagged], [FlagReason],
-                   [CreatedByUserId], [CreatedAtUtc], [IdempotencyKey]
+                   [CreatedByUserId], [CreatedAtUtc], [IdempotencyKey], [IsNotIn], [IsLateNotice], [IsSick],
+                   [Medication]
             FROM [NoteVersion]
             WHERE [NoteId] = {noteId}
             ORDER BY [VersionNumber]
@@ -437,7 +545,7 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         return await db.Database.SqlQuery<ItemRow>($"""
             SELECT [NoteVersionId], [Section], [Position], [OrganisationId], [GoalId], [CommonItemId], [GroupPosition],
-                   [Text], [IsTicked]
+                   [Text], [IsTicked], [IsMediumOrLongTerm], [NeedsDetail], [Detail]
             FROM [NoteVersionItem]
             WHERE [NoteVersionId] = {versionId}
             ORDER BY [Section], [Position]
@@ -461,7 +569,11 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         string? FlagReason,
         Guid CreatedByUserId,
         DateTime CreatedAtUtc,
-        Guid IdempotencyKey);
+        Guid IdempotencyKey,
+        bool IsNotIn,
+        bool IsLateNotice,
+        bool IsSick,
+        string? Medication);
 
     /// <summary>A <c>NoteVersionGroup</c> row.</summary>
     private sealed record StoredGroup(
@@ -483,5 +595,8 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         Guid? CommonItemId,
         int? GroupPosition,
         string Text,
-        bool IsTicked);
+        bool IsTicked,
+        bool IsMediumOrLongTerm,
+        bool NeedsDetail,
+        string? Detail);
 }

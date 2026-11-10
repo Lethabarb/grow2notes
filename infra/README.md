@@ -179,7 +179,7 @@ az deployment group create --resource-group rg-grow2notes-<env>-ause --name grow
 Running it again changes nothing. To delete or rename the database on purpose, remove the lock first, as Owner, and run
 the command again afterwards.
 
-## Test on the free plan (once, D103)
+## Test on the free plan (once, D105)
 
 Test's App Service plan is F1, the free tier (`appServicePlanSku = 'F1'` in `test.bicepparam`). Azure will not move a
 plan to F1 while its app has Always On or VNet integration, and a deploy updates the plan before the app, so the first

@@ -60,6 +60,7 @@ const participants: AdminParticipant[] = [
     givenName: 'Jane',
     familyName: 'Citizen',
     dateOfBirth: '1987-03-07',
+    hasMedicationLine: false,
     status: 'Active',
     rowVersion: 'AAAAAAAAB9E=',
   },

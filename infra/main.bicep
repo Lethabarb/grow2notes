@@ -56,8 +56,8 @@ param mcpEnabled bool = false
 param dataProtectionKeySize 2048 | 3072
 
 // F1 has no VNet integration, so on F1 the SQL server admits the outbound addresses of the app's App Service stamp and
-// the vault every network (D103, design.md §10.3). Switching test back to B1 is this one value.
-@description('The App Service plan\'s SKU: B1 in prod, F1 (free) in test (D103).')
+// the vault every network (D105, design.md §10.3). Switching test back to B1 is this one value.
+@description('The App Service plan\'s SKU: B1 in prod, F1 (free) in test (D105).')
 param appServicePlanSku 'B1' | 'F1' = 'B1'
 
 var appVnetIntegrated = appServicePlanSku != 'F1'

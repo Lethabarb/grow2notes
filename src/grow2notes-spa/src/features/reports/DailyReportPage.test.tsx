@@ -1,10 +1,11 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
+import { fileDay } from '../../copy/format.ts';
 import { DailyReportPage } from './DailyReportPage.tsx';
 
 const today = '2026-10-01';
@@ -24,7 +25,10 @@ const todayLong = `Thursday 1${nbsp}October 2026`;
 const dateNotFuture = 'Date must be today or in the past';
 const wentWrong = 'Not downloaded: something went wrong. Try again.';
 
-const exportPath = (format: string, date = today) => `/api/reports/daily/${date}/export?format=${format}`;
+const exportPath = (format: string, date = today, week?: string) =>
+  `/api/reports/daily/${date}/export?format=${format}${week === undefined ? '' : `&week=${week}`}`;
+// The files' names as the server gives them: the weekday and the date, dotted (A19, D104).
+const todayFile = 'Thursday 01.10.2026';
 const hasNotesPath = (date = today) => `/api/reports/daily/${date}/has-notes`;
 
 type Answer = (init?: RequestInit) => Promise<Response>;
@@ -49,7 +53,7 @@ function file(format: string, date = today) {
   return Promise.resolve(
     new Response(bytes, {
       status: 200,
-      headers: { 'Content-Disposition': `attachment; filename=daily-notes_${date}.${format}` },
+      headers: { 'Content-Disposition': `attachment; filename="${fileDay(date)}.${format}"` },
     }),
   );
 }
@@ -91,7 +95,7 @@ function serve(path: string, init?: RequestInit): Promise<Response> {
     return json({ date: check[1], hasNotes: true });
   }
 
-  const report = /^\/api\/reports\/daily\/([\d-]+)\/export\?format=(docx|pdf)$/.exec(path);
+  const report = /^\/api\/reports\/daily\/([\d-]+)\/export\?format=(docx|pdf)(?:&week=[AB])?$/.exec(path);
   if (report !== null) {
     return file(report[2], report[1]);
   }
@@ -223,7 +227,7 @@ afterEach(() => {
 
 describe('the Report screen', () => {
   describe('structure', () => {
-    it('has the <h1>, the field, the steps, the date status, the alert, the status, then Word and PDF', async () => {
+    it('has the <h1>, the field, the steps, the date status, the Week, the alert, the status, buttons', async () => {
       const { container } = open();
       await settle();
 
@@ -236,7 +240,7 @@ describe('the Report screen', () => {
           }
 
           if (element.localName === 'input') {
-            return 'field';
+            return element.getAttribute('type') === 'radio' ? 'week' : 'field';
           }
 
           if (element.getAttribute('role') === 'alert') {
@@ -256,6 +260,9 @@ describe('the Report screen', () => {
         '‹ Previous day',
         'Next day ›',
         'date status',
+        'week',
+        'week',
+        'week',
         'alert',
         'download status',
         'Download Word',
@@ -279,6 +286,105 @@ describe('the Report screen', () => {
       expect(dateStatus()).toHaveAttribute('id', 'report-date-status');
       expect(dateStatus().textContent).toBe(`Wednesday 30${nbsp}September 2026`);
       expect(dateStatus().querySelector('time')).toHaveAttribute('datetime', '2026-09-30');
+    });
+  });
+
+  describe('the Week choice', () => {
+    const week = () => screen.getByRole('group', { name: 'Week' });
+    const choice = (name: string) => within(week()).getByRole('radio', { name });
+
+    it('is a group of None, Week A and Week B, None chosen, described by what it prints', async () => {
+      open();
+      await settle();
+
+      const radios = within(week()).getAllByRole<HTMLInputElement>('radio');
+      expect(radios.map((radio) => radio.labels?.[0].textContent)).toEqual(['None', 'Week A', 'Week B']);
+      expect(choice('None')).toBeChecked();
+      expect(choice('Week A')).not.toBeChecked();
+      expect(week()).toHaveAccessibleDescription('Printed in the title of the file');
+      expect(week().querySelector('legend')).toHaveTextContent('Week');
+    });
+
+    it('sends no week by default', async () => {
+      open();
+      await settle();
+
+      await press(word());
+
+      expect(exports()).toEqual([exportPath('docx')]);
+    });
+
+    it.each([
+      ['Week A', 'A', 'docx'],
+      ['Week B', 'B', 'pdf'],
+    ])('adds the week to the export when %s is chosen, whichever file is asked for', async (label, letter, format) => {
+      open();
+      await settle();
+
+      await press(choice(label));
+      await press(format === 'docx' ? word() : pdf());
+
+      expect(exports()).toEqual([exportPath(format, today, letter)]);
+      expect(saved).toEqual([`${todayFile}.${format}`]);
+    });
+
+    it('sends no week again once None is chosen after a week', async () => {
+      open();
+      await settle();
+
+      await press(choice('Week B'));
+      await press(choice('None'));
+      await press(word());
+
+      expect(exports()).toEqual([exportPath('docx')]);
+    });
+
+    it('sends nothing at the choice itself, and keeps it as the date moves to another day', async () => {
+      open();
+      await settle();
+
+      await press(choice('Week A'));
+      expect(exports()).toEqual([]);
+      await press(previousDay());
+
+      expect(choice('Week A')).toBeChecked();
+      await press(word());
+      expect(exports()).toEqual([exportPath('docx', '2026-09-30', 'A')]);
+    });
+
+    it('stays enabled on a day with no notes, where the buttons are unavailable', async () => {
+      answers.set(hasNotesPath(), () => json({ date: today, hasNotes: false }));
+      open();
+      await settle();
+
+      expectUnavailable(word());
+      expect(choice('Week A')).toBeEnabled();
+      await press(choice('Week A'));
+      expect(choice('Week A')).toBeChecked();
+    });
+
+    it('is not remembered after a reload', async () => {
+      const { unmount } = open();
+      await settle();
+      await press(choice('Week B'));
+      unmount();
+
+      open();
+      await settle();
+
+      expect(choice('None')).toBeChecked();
+      expect(localStorage.length + sessionStorage.length).toBe(0);
+    });
+  });
+
+  describe('the Word page numbers hint', () => {
+    it('says what to answer when Word asks to update the fields, after the buttons', async () => {
+      open();
+      await settle();
+
+      const hint = screen.getByText('When Word asks to update the fields, choose Yes to fill in the page numbers.');
+      expect(hint.tagName).toBe('P');
+      expect(hint.compareDocumentPosition(pdf()) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     });
   });
 
@@ -667,22 +773,22 @@ describe('the Report screen', () => {
       await press(screen.getByRole('button', { name }));
 
       expect(exports()).toEqual([exportPath(format)]);
-      expect(saved).toEqual([`daily-notes_${today}.${format}`]);
+      expect(saved).toEqual([`${todayFile}.${format}`]);
       expect(createObjectURL).toHaveBeenCalledOnce();
       expect(alertText()).toBe('');
       expectAvailable(word());
       expectAvailable(pdf());
     });
 
-    it('names the file by the date and format when the answer does not name it', async () => {
+    it('names the file by the weekday, the date and the format when the answer does not name it', async () => {
       answers.set(exportPath('pdf'), () => Promise.resolve(new Response(bytes, { status: 200 })));
       open();
       await settle();
 
       await press(pdf());
 
-      expect(saved).toEqual([`daily-notes_${today}.pdf`]);
-      expect(downloadStatus()).toHaveTextContent(`daily-notes_${today}.pdf is ready. Look in your downloads.`);
+      expect(saved).toEqual([`${todayFile}.pdf`]);
+      expect(downloadStatus()).toHaveTextContent(`${todayFile}.pdf is ready. Look in your downloads.`);
     });
 
     it.each([
@@ -726,7 +832,7 @@ describe('the Report screen', () => {
       expect(downloadStatus()).toHaveTextContent('Preparing the Word file… Keep this page open.');
       await advance(500);
 
-      expect(downloadStatus()).toHaveTextContent(`daily-notes_${today}.docx is ready. Look in your downloads.`);
+      expect(downloadStatus()).toHaveTextContent(`${todayFile}.docx is ready. Look in your downloads.`);
       expect(downloadStatus()).not.toHaveTextContent('Preparing');
       expect(word()).toHaveFocus();
       expect(word()).not.toHaveAttribute('data-busy');
@@ -745,7 +851,7 @@ describe('the Report screen', () => {
       expect(downloadStatus()).toHaveTextContent('Preparing the Word file… Keep this page open.');
       await advance(100);
 
-      expect(saved).toEqual([`daily-notes_${today}.docx`]);
+      expect(saved).toEqual([`${todayFile}.docx`]);
       expect(downloadStatus()).toHaveTextContent('is ready. Look in your downloads.');
       expect(alertText()).toBe('');
     });
@@ -902,7 +1008,7 @@ describe('the Report screen', () => {
       await press(pdf());
 
       expect(exports()).toEqual([exportPath('docx'), exportPath('pdf', '2026-09-30')]);
-      expect(saved).toEqual(['daily-notes_2026-09-30.pdf']);
+      expect(saved).toEqual(['Wednesday 30.09.2026.pdf']);
     });
 
     it('downloads the date in the field, moves the address to it, and is not aborted by its own move', async () => {

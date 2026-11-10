@@ -68,9 +68,9 @@ internal sealed class ParticipantChanges(
     /// with <c>participant.updated</c>, whose <c>Details</c> hold the old and new value of each changed field alone;
     /// or, when no value changed, saves nothing and writes no event, and answers as a save does (D84). An archived
     /// participant is not corrected (D86, D93): they are refused with <see cref="ErrorCode.ParticipantArchived"/>
-    /// before <paramref name="ifMatch"/> is looked at. A call by <see cref="Channel.Mcp"/> may leave a field out, which
-    /// keeps its stored value (<see cref="ParticipantDetailsRequest.OrStored"/>); the app's correction replaces all
-    /// three.
+    /// before <paramref name="ifMatch"/> is looked at. A call by <see cref="Channel.Mcp"/> may leave a name or the
+    /// date out, which keeps its stored value (<see cref="ParticipantDetailsRequest.OrStored"/>); the app's correction
+    /// replaces all three. Either channel may leave the Medication switch out, which keeps it (A152).
     /// </summary>
     /// <param name="actor">Who corrects them.</param>
     /// <param name="participantId">The participant.</param>
@@ -104,6 +104,7 @@ internal sealed class ParticipantChanges(
                 participant.GivenName = details.GivenName;
                 participant.FamilyName = details.FamilyName;
                 participant.DateOfBirth = details.DateOfBirth;
+                participant.HasMedicationLine = request.HasMedicationLine ?? participant.HasMedicationLine;
                 return await SaveAsync(
                     actor, AuditEventTypes.Participant.Updated, participant, before, Values(participant),
                     refuseIfChanged, cancellationToken);
@@ -226,6 +227,7 @@ internal sealed class ParticipantChanges(
         ["givenName"] = participant.GivenName,
         ["familyName"] = participant.FamilyName,
         ["dateOfBirth"] = participant.DateOfBirth.ToString("O", CultureInfo.InvariantCulture),
+        ["hasMedicationLine"] = participant.HasMedicationLine,
         ["status"] = participant.Status.ToString(),
     };
 

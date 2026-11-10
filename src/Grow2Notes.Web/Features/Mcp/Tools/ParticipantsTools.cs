@@ -55,7 +55,8 @@ internal sealed class ParticipantsTools(
         "goalIds must hold every active goal of the participant exactly once. " +
         "Look them up again with get_participant, then retry.";
 
-    private const string NoFieldToChange = "Send at least one of givenName, familyName and dateOfBirth.";
+    private const string NoFieldToChange =
+        "Send at least one of givenName, familyName, dateOfBirth and hasMedicationLine.";
 
     [McpServerTool(
         Name = "find_participants",
@@ -107,6 +108,8 @@ internal sealed class ParticipantsTools(
         OutputSchemaType = typeof(ParticipantWithGoals))]
     [Description(
         "One participant of this organisation with their goals: active goals in their order, then archived goals. " +
+        "Says whether notes started from now on have a Medication box (hasMedicationLine), and whether each goal is " +
+        "Medium or long term rather than Short term (isMediumOrLongTerm). " +
         "Use a participantId from find_participants. A later change to the participant or a goal needs its " +
         "expectedVersion. Never returns a date of birth or anything about notes. " +
         ToolResults.TypedByPeople)]
@@ -174,7 +177,8 @@ internal sealed class ParticipantsTools(
         UseStructuredContent = true,
         OutputSchemaType = typeof(UpdatedParticipant))]
     [Description(
-        "Corrects a participant's given name, family name or date of birth: send only the fields to change. " +
+        "Corrects a participant's given name, family name or date of birth, or switches the Medication box on notes " +
+        "started from now on: send only the fields to change. " +
         "Needs the participantId and expectedVersion that get_participant returned. A call that would change " +
         "nothing answers changed: false. An archived participant cannot be changed: restore the participant " +
         "first. Never returns a date of birth. " +
@@ -186,9 +190,12 @@ internal sealed class ParticipantsTools(
         [Description("The new given name: at most 100 characters.")] string? givenName = null,
         [Description("The new family name: at most 100 characters.")] string? familyName = null,
         [Description("The new date of birth, written YYYY-MM-DD and before today.")] string? dateOfBirth = null,
+        [Description(
+            "true to give notes started from now on a Medication box, false to stop; leave out to keep it as it is.")]
+        bool? hasMedicationLine = null,
         CancellationToken cancellationToken = default)
     {
-        if (givenName is null && familyName is null && dateOfBirth is null)
+        if (givenName is null && familyName is null && dateOfBirth is null && hasMedicationLine is null)
         {
             return new ToolError(ErrorCode.ValidationFailed.Code, NoFieldToChange).ToResult();
         }
@@ -207,7 +214,7 @@ internal sealed class ParticipantsTools(
             ToolActor.Of(httpContextAccessor),
             id,
             IfMatch.FromExpectedVersion(expectedVersion),
-            new(givenName, familyName, born),
+            new(givenName, familyName, born, hasMedicationLine),
             cancellationToken);
         if (!result.Found)
         {
@@ -229,6 +236,7 @@ internal sealed class ParticipantsTools(
         return ToolResults.Of(new UpdatedParticipant(
             participant.GivenName,
             participant.FamilyName,
+            participant.HasMedicationLine,
             participant.Status,
             result.Changed,
             participant.ExpectedVersion));
@@ -365,6 +373,7 @@ internal sealed class ParticipantsTools(
         return ToolResults.Of(new UpdatedParticipant(
             participant.GivenName,
             participant.FamilyName,
+            participant.HasMedicationLine,
             participant.Status,
             result.Changed,
             participant.ExpectedVersion));
@@ -380,13 +389,16 @@ internal sealed class ParticipantsTools(
         UseStructuredContent = true,
         OutputSchemaType = typeof(NewGoal))]
     [Description(
-        "Adds a goal to a participant, at the end of their active goals. Returns its goalId and the expectedVersion " +
-        "that a later change needs. An archived participant's goals cannot be changed: restore the participant " +
-        "first. The result's helpText says what a change to a goal does to notes. " +
+        "Adds a goal to a participant, at the end of their active goals, Short term unless isMediumOrLongTerm is " +
+        "true. Returns its goalId and the expectedVersion that a later change needs. An archived participant's goals " +
+        "cannot be changed: restore the participant first. The result's helpText says what a change to a goal does " +
+        "to notes. " +
         ToolResults.TypedByPeople)]
     public async Task<CallToolResult> AddGoalAsync(
         [Description("The participantId that find_participants or get_participant returned.")] string participantId,
         [Description("The goal's wording: at most 200 characters, on one line.")] string text,
+        [Description("true for a Medium or long term goal; false, the default, for a Short term goal.")]
+        bool isMediumOrLongTerm = false,
         CancellationToken cancellationToken = default)
     {
         if (TextInput.Refusal("text", "Goal", text, Limits.ItemText) is { } refusal)
@@ -399,7 +411,8 @@ internal sealed class ParticipantsTools(
             return ToolError.NotFound(ParticipantNotFound).ToResult();
         }
 
-        var result = await goals.AddAsync(ToolActor.Of(httpContextAccessor), id, new(text), cancellationToken);
+        var result = await goals.AddAsync(
+            ToolActor.Of(httpContextAccessor), id, new(text, isMediumOrLongTerm), cancellationToken);
         if (RefusalOf(result, ParticipantNotFound) is { } error)
         {
             return error.ToResult();
@@ -408,7 +421,8 @@ internal sealed class ParticipantsTools(
         var goalId = result.GoalId ?? throw new UnreachableException();
         var goal = await lookups.GetGoalAsync(goalId, cancellationToken) ?? throw new UnreachableException();
         call.Returned(McpCall.GoalIds, [goalId]);
-        return ToolResults.Of(new NewGoal(goalId, goal.Text, goal.ExpectedVersion, ToolResults.HelpText));
+        return ToolResults.Of(
+            new NewGoal(goalId, goal.Text, goal.IsMediumOrLongTerm, goal.ExpectedVersion, ToolResults.HelpText));
     }
 
     [McpServerTool(
@@ -421,15 +435,18 @@ internal sealed class ParticipantsTools(
         UseStructuredContent = true,
         OutputSchemaType = typeof(UpdatedGoal))]
     [Description(
-        "Rewords a goal. Needs the goalId and expectedVersion that get_participant returned. A call that would " +
-        "change nothing answers changed: false. A goal of an archived participant cannot be changed: restore the " +
-        "participant first. The result's helpText says what a change to a goal does to notes. " +
+        "Rewords a goal and sets its term. Needs the goalId and expectedVersion that get_participant returned. A " +
+        "call that would change nothing answers changed: false. A goal of an archived participant cannot be changed: " +
+        "restore the participant first. The result's helpText says what a change to a goal does to notes. " +
         ToolResults.TypedByPeople)]
     public async Task<CallToolResult> UpdateGoalAsync(
         [Description("The goalId that get_participant returned.")] string goalId,
         [Description("The new wording: at most 200 characters, on one line.")] string text,
         [Description("The expectedVersion that get_participant returned for this goal.")]
         string? expectedVersion = null,
+        [Description(
+            "true for a Medium or long term goal, false for a Short term goal; leave out to keep the term as it is.")]
+        bool? isMediumOrLongTerm = null,
         CancellationToken cancellationToken = default)
     {
         if (TextInput.Refusal("text", "Goal", text, Limits.ItemText) is { } refusal)
@@ -446,7 +463,7 @@ internal sealed class ParticipantsTools(
             ToolActor.Of(httpContextAccessor),
             id,
             IfMatch.FromExpectedVersion(expectedVersion),
-            new(text),
+            new(text, isMediumOrLongTerm),
             cancellationToken);
         if (RefusalOf(result, GoalNotFound) is { } error)
         {
@@ -455,7 +472,8 @@ internal sealed class ParticipantsTools(
 
         var goal = await lookups.GetGoalAsync(id, cancellationToken) ?? throw new UnreachableException();
         call.Returned(McpCall.GoalIds, [id]);
-        return ToolResults.Of(new UpdatedGoal(goal.Text, result.Changed, goal.ExpectedVersion, ToolResults.HelpText));
+        return ToolResults.Of(new UpdatedGoal(
+            goal.Text, goal.IsMediumOrLongTerm, result.Changed, goal.ExpectedVersion, ToolResults.HelpText));
     }
 
     [McpServerTool(

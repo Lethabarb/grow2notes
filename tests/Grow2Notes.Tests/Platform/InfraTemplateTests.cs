@@ -52,7 +52,7 @@ public sealed partial class InfraTemplateTests
     {
         string Infra(string file) => File.ReadAllText(Path.Combine(Repository.Root(), "infra", file));
 
-        // Production keeps B1, with its subnet and Always On; only test is on the free tier (D103).
+        // Production keeps B1, with its subnet and Always On; only test is on the free tier (D105).
         Assert.Matches(PlanSkuParameter(), Infra("main.bicep"));
         Assert.Matches(PlanSkuFree(), Infra("test.bicepparam"));
         Assert.DoesNotMatch(PlanSkuFree(), Infra("prod.bicepparam"));

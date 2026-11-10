@@ -78,8 +78,8 @@ public sealed class NoteVersionHistoryEndpointsTests(Grow2NotesFactory factory, 
 
         Assert.Equal(
             [
-                "versionNumber", "narrative", "isFlagged", "flagReason", "goals", "commonItemGroups", "createdBy",
-                "createdAtUtc",
+                "versionNumber", "narrative", "isFlagged", "flagReason", "goals", "commonItemGroups", "isNotIn",
+                "isLateNotice", "isSick", "medication", "createdBy", "createdAtUtc",
             ],
             second.EnumerateObject().Select(property => property.Name));
         Assert.Equal(2, second.GetProperty("versionNumber").GetInt32());

@@ -31,7 +31,7 @@ const noteDateField = (page: Page) => main(page).getByLabel('Note date', { exact
 const dateError = (page: Page) => main(page).locator('#past-day-date-error');
 const continueButton = (page: Page) => main(page).getByRole('button', { name: 'Continue', exact: true });
 const saveStatus = (page: Page) => page.locator('#save-status');
-const box = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
+const box = (page: Page) => main(page).getByRole('textbox', { name: 'Daily Support Notes' });
 const pickBox = (page: Page, name: string) => main(page).getByRole('checkbox', { name, exact: true });
 const submitNote = (page: Page) => main(page).getByRole('button', { name: 'Submit note', exact: true });
 const confirmation = (page: Page) => page.getByRole('alertdialog');

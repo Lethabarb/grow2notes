@@ -410,7 +410,7 @@ test('on the note form, a change made at 27:59 goes at 28:00 in place of the war
   await signInOnTheClock(page, invite, authenticator);
   await addJaneWithTwoGoals(page);
   await page.getByRole('main').locator('a[data-return-key]', { hasText: janeCitizen.name }).click();
-  const box = page.getByRole('main').getByRole('textbox', { name: '3. Guided notes' });
+  const box = page.getByRole('main').getByRole('textbox', { name: 'Daily Support Notes' });
   await expect(box).toBeVisible();
 
   // On the paused clock, the note's first save goes as its 2 s pass, and the app accepts it: the idle time counts

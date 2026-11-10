@@ -17,16 +17,21 @@ import { apiErrorCopy } from '../../copy/apiErrors.ts';
 import { dateLong, parseDateOnly, type Ymd } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { strings, type Cause } from '../../copy/strings.ts';
+import { limits } from '../../limits.ts';
 import { messageStore } from '../../routes/messageStore.ts';
 import { openerBefore } from '../../routes/routeChange.ts';
 import { useUnloadWarning } from '../../routes/useUnloadWarning.ts';
 import { invalidateToday, removeToday } from '../today/todayQuery.ts';
+import { AttendanceField, type Attendance } from './AttendanceField.tsx';
 import { CommonItemsField } from './CommonItemsField.tsx';
 import { isOffered, shownItems } from './commonItemGroups.ts';
+import { detailId } from './detailId.ts';
 import { FlagForManager, reasonId } from './FlagForManager.tsx';
+import { goalsByTerm } from './goalTerms.ts';
 import { GuidedNotes, guidedNotesId } from './GuidedNotes.tsx';
+import { MedicationField, medicationId } from './MedicationField.tsx';
 import { MoreActions, type MoreActionsHandle } from './MoreActions.tsx';
-import { checkNote, type NoteErrors } from './noteChecks.ts';
+import { checkNote, hasErrors, recheckedErrors, type NoteErrors } from './noteChecks.ts';
 import { NoteHeading } from './NoteHeading.tsx';
 import styles from './NotePage.module.css';
 import { noteBase, type Draft, type DraftGroup, type FlagStatus } from './noteQueries.ts';
@@ -66,6 +71,28 @@ function pickedIn(groups: readonly DraftGroup[]): Set<string> {
 /** The IDs of the goals and common items of a form that are ticked, in the one set that the form keeps. */
 function tickedIn({ goals, commonItemGroups }: Draft): Set<string> {
   return new Set([...goals, ...commonItemGroups.flatMap((group) => group.items)].filter(isTickedItem).map(idOf));
+}
+
+/** The details written on the items of a form's groups, by the item's ID, in the one record that the form keeps. */
+function detailsIn(groups: readonly DraftGroup[]): Record<string, string> {
+  return Object.fromEntries(
+    groups.flatMap((group) => group.items).flatMap((item) => (item.detail === null ? [] : [[item.id, item.detail]])),
+  );
+}
+
+/** The details of the items of a form's groups that are ticked and ask for them, blank ones included. */
+function askedDetailsIn(groups: readonly DraftGroup[]): Record<string, string> {
+  return Object.fromEntries(
+    groups
+      .flatMap((group) => group.items)
+      .filter((item) => item.isTicked && item.needsDetail)
+      .map((item) => [item.id, item.detail ?? '']),
+  );
+}
+
+/** The wording of an item of `groups` by its ID, for a Details box's message; none for an ID not among them. */
+function wordingIn(groups: readonly DraftGroup[]): (itemId: string) => string {
+  return (itemId) => groups.flatMap((group) => group.items).find((item) => item.id === itemId)?.text ?? '';
 }
 
 /** The Submit confirmation while it is open, and how its request goes (note-form.md *Confirmation dialog*). */
@@ -135,16 +162,20 @@ type NoteFormProps = {
  * gives a day that has passed midnight with the form open (status-messages.md *Per-screen notes*); and the Past notes
  * link; then, in a `<form noValidate>`, the
  * lists-changed notice's live region, there and empty from the first render, as a screen reader may not announce
- * words written into one added with them; Goals, its goals and ticks in this page's state, from the draft's; Common
- * items, its groups, picks and ticks in this page's state too, the picks as copied by the template or saved; Guided
- * notes; Flag for manager, its tick and reason in this page's state too, the reason kept while the box is unticked;
+ * words written into one added with them; Attendance, its three ticks in this page's state; the goals, under their term
+ * headings, their ticks in this page's state, from the draft's; Medication, only for a note that has the box, its text
+ * in this page's state too; the common items, their groups, picks, ticks and details in this page's state too, the
+ * picks as copied by the template or saved; Daily Support Notes; Flag for manager, its tick and reason in this page's
+ * state too, the reason kept while the box is unticked;
  * and Submit note, with the alert above it; then, outside the form, More actions, with Discard draft, while the note
  * is the viewer's own saved draft, reopened or saved since: never on a new note before its first "Saved …", and
  * through the takeover banner's wait, as the draft is still theirs, until a dead end, as the note at this address may
  * then be no draft of theirs, when it goes with its panel and any Discard dialog, nothing sent, focus that was in them
  * going to the `<h1>` (T12's Notes).
  * Each pick, tick and input is a change that autosave saves, and a field that loses focus sends one at once (design.md
- * §3.4). After a dead end, every tick and the text stay as they are, to change and copy, though nothing more is saved
+ * §3.4). A ticked item that asks for details shows its Details box, which Submit and Save changes require, and which an
+ * untick or the unpicking of its group takes away with its text. After a dead end, every tick and the text stay as
+ * they are, to change and copy, though nothing more is saved
  * (note-form.md *Conflicts and refusals*).
  *
  * Submit note is never disabled: while "Saving…" or "Not saved: no connection…" shows, or a dead end has stopped
@@ -220,6 +251,15 @@ export function NoteForm({
   const [picked, setPicked] = useState(() => pickedIn(draft.commonItemGroups));
   // The goals and common items ticked, by ID, in one set, so that one toggle serves both.
   const [ticked, setTicked] = useState(() => tickedIn(draft));
+  const [attendance, setAttendance] = useState<Attendance>({
+    isNotIn: draft.isNotIn,
+    isLateNotice: draft.isLateNotice,
+    isSick: draft.isSick,
+  });
+  // The Medication text, `null` for a note with no Medication box.
+  const [medication, setMedication] = useState(draft.medication);
+  // The details written, by the ID of the item, kept only for the items that are ticked and ask for them.
+  const [details, setDetails] = useState(() => detailsIn(draft.commonItemGroups));
   const [listsChanged, setListsChanged] = useState(false);
   // The text that the Guided notes box opens with, and the versions loaded in place of the draft's, by each of which
   // the uncontrolled box opens anew with the version's text.
@@ -267,13 +307,17 @@ export function NoteForm({
   const atRisk = indicator !== undefined && atRiskKinds.has(indicator.kind);
 
   function read(): DraftContent {
+    const tickedItems = shownItems(groups, picked).filter((item) => ticked.has(item.id));
     return {
       narrative: box.current!.value,
+      ...attendance,
+      medication,
       tickedGoalIds: goals.filter((goal) => ticked.has(goal.id)).map((goal) => goal.id),
       pickedGroupIds: [...picked],
-      tickedCommonItemIds: shownItems(groups, picked)
-        .filter((item) => ticked.has(item.id))
-        .map((item) => item.id),
+      tickedCommonItemIds: tickedItems.map(idOf),
+      details: Object.fromEntries(
+        tickedItems.filter((item) => item.needsDetail).map((item) => [item.id, details[item.id] ?? '']),
+      ),
       isFlagged: flagged,
       flagReason: reason,
     };
@@ -352,8 +396,9 @@ export function NoteForm({
 
   // The lists as the form now has them, after a first save found them changed (design.md §5.7): the picks of the
   // groups still offered kept, by ID, and the ticks of the goals still listed and of the items still shown, so that an
-  // item moved into a group that is not picked loses its tick; the text as it is, and the notice above Goals until the
-  // person leaves. Committed at once, so that the save sent next reads the picks and ticks shown, and focus, if the box
+  // item moved into a group that is not picked loses its tick; the Medication box as the participant's switch now has
+  // it, its text kept; the text as it is, and the notice above Attendance until the person leaves. Committed at once,
+  // so that the save sent next reads the picks and ticks shown, and focus, if the box
   // that had it has gone, goes to the notice; otherwise it stays where it is.
   function showListsAsNow(reloaded: Draft) {
     const focused = document.activeElement;
@@ -365,6 +410,7 @@ export function NoteForm({
       setGroups(reloaded.commonItemGroups);
       setPicked(stillPicked);
       setTicked((current) => new Set([...current].filter((id) => stillShown.has(id))));
+      setMedication((current) => (reloaded.medication === null ? null : (current ?? reloaded.medication)));
       setListsChanged(true);
     });
     if (focused?.isConnected === false) {
@@ -375,14 +421,19 @@ export function NoteForm({
   // The other version, as Load read it, in place of what the form held: its goals, groups, picks and ticks, its text,
   // its flag and its reason; and any message of Submit's checks checked again on it, as an input would.
   function showOtherVersion(other: Draft) {
-    const content = {
+    const content: DraftContent = {
       narrative: other.narrative,
+      isNotIn: other.isNotIn,
+      isLateNotice: other.isLateNotice,
+      isSick: other.isSick,
+      medication: other.medication,
       tickedGoalIds: other.goals.filter(isTickedItem).map(idOf),
       pickedGroupIds: [...pickedIn(other.commonItemGroups)],
       tickedCommonItemIds: other.commonItemGroups
         .flatMap((group) => group.items)
         .filter(isTickedItem)
         .map(idOf),
+      details: askedDetailsIn(other.commonItemGroups),
       isFlagged: other.isFlagged,
       flagReason: other.flagReason ?? '',
     };
@@ -390,6 +441,9 @@ export function NoteForm({
     setGroups(other.commonItemGroups);
     setPicked(new Set(content.pickedGroupIds));
     setTicked(tickedIn(other));
+    setAttendance({ isNotIn: other.isNotIn, isLateNotice: other.isLateNotice, isSick: other.isSick });
+    setMedication(other.medication);
+    setDetails(detailsIn(other.commonItemGroups));
     setTextLoaded((loaded) => ({ text: content.narrative, loads: loaded.loads + 1 }));
     setFlagged(content.isFlagged);
     setReason(content.flagReason);
@@ -397,7 +451,7 @@ export function NoteForm({
       setBase(other.baseVersion);
     }
 
-    recheck(content);
+    recheck(content, wordingIn(other.commonItemGroups));
   }
 
   function keep() {
@@ -457,7 +511,21 @@ export function NoteForm({
 
       return next;
     });
+    if (!isTicked) {
+      withoutDetails([itemId]);
+    }
+
     autosave.changed();
+  }
+
+  // The details of the items `itemIds`, and the messages about them, gone with the untick or the unpicking that took
+  // the items' Details boxes away, so that re-ticking one starts empty, as the server's copy does (A151).
+  function withoutDetails(itemIds: readonly string[]) {
+    setDetails((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !itemIds.includes(id))));
+    setErrors((shown) => {
+      const rest = Object.entries(shown.details ?? {}).filter(([id]) => !itemIds.includes(id));
+      return { ...shown, details: rest.length === 0 ? undefined : Object.fromEntries(rest) };
+    });
   }
 
   // A group picked or unpicked: unpicking takes its items' ticks away at once, with no question, so that what is on
@@ -475,6 +543,7 @@ export function NoteForm({
     });
     if (!isPicked) {
       setTicked((current) => new Set([...current].filter((id) => !group.items.some((item) => item.id === id))));
+      withoutDetails(group.items.map(idOf));
     }
 
     autosave.changed();
@@ -482,23 +551,20 @@ export function NoteForm({
 
   // An input into a field with a message checks it again (form-validation.md *Fixing*): the message goes, silently,
   // with the input that fixes it, or says what the field now fails; a field with none gets none while typing.
-  function recheck(content: DraftContent) {
-    if (errors.narrative === undefined && errors.flagReason === undefined) {
+  function recheck(content: DraftContent, wording = wordingIn(groups)) {
+    if (!hasErrors(errors)) {
       return;
     }
 
-    const now = checkNote(content, hasPrompts);
-    setErrors((shown) => ({
-      narrative: shown.narrative === undefined ? undefined : now.narrative,
-      flagReason: shown.flagReason === undefined ? undefined : now.flagReason,
-    }));
+    const now = checkNote(content, hasPrompts, wording);
+    setErrors((shown) => recheckedErrors(shown, now));
   }
 
   // Shows the messages of Submit's checks on `content`, the summary taking focus if a field fails; whether all pass.
   function passesChecks(content: DraftContent): boolean {
-    const found = checkNote(content, hasPrompts);
+    const found = checkNote(content, hasPrompts, wordingIn(groups));
     setErrors(found);
-    const passes = found.narrative === undefined && found.flagReason === undefined;
+    const passes = !hasErrors(found);
     if (!passes) {
       setAttempt((count) => count + 1);
     }
@@ -580,10 +646,41 @@ export function NoteForm({
     }
   }
 
+  // A `422` that names the Medication text or the details of a ticked item, shown on the field it names, with its link
+  // in the summary, as the form's own checks word them (form-validation.md *Server responses*); whether it named one.
+  // The checks on what is on screen now give the words, and the first Details box that fails them; the server may
+  // count blank what they do not, such as a box of U+0085 alone, and then the first ticked item that asks for details
+  // is the one told to enter them, as the server names no item.
+  function showServerFields(error: ApiError): boolean {
+    const named = error.errors === undefined ? [] : Object.keys(error.errors);
+    const content = read();
+    const wording = wordingIn(groups);
+    const found = checkNote(content, hasPrompts, wording);
+    const shown: NoteErrors = {};
+    if (named.includes('medication') && content.medication !== null) {
+      shown.medication = found.medication ?? msg.tooLong(strings.noteWords.medication, limits.medication);
+    }
+
+    const [asking] = Object.keys(content.details);
+    if (named.includes('commonItemDetails') && asking !== undefined) {
+      const [itemId = asking] = Object.keys(found.details ?? {});
+      shown.details = { [itemId]: found.details?.[itemId] ?? msg.enterDetails(wording(itemId)) };
+    }
+
+    if (!hasErrors(shown)) {
+      return false;
+    }
+
+    setErrors(shown);
+    setAttempt((count) => count + 1);
+    return true;
+  }
+
   // A version not saved (note-form.md *Confirmation dialog*). A `422` closes the confirmation for the summary's one
   // unlinked item (T09's Notes): the confirmation sends only content that the form's checks have passed, so the
   // server refuses what they do not explain, such as a text of U+0085 alone, which .NET counts as blank and `trim()`
-  // keeps; no server words show, and the summary has an item to take focus. While it is open, it keeps its key for a
+  // keeps; no server words show, and the summary has an item to take focus; but for the Medication text and the
+  // details, which show on their fields. While it is open, it keeps its key for a
   // retry: no connection or a server's failure, with the confirming button ready again; or a note submitted
   // meanwhile, after which Go back leaves the form a dead end; a `401` says nothing, as the shell closes the
   // confirmation before signing in again. Once a browser has closed it, the form shows the result itself: the failure
@@ -593,9 +690,12 @@ export function NoteForm({
     if (error instanceof ApiError && error.status === 422) {
       confirmationOpen.current = false;
       setConfirmation(undefined);
-      setErrors({});
-      setUnexplained(true);
-      setAttempt((count) => count + 1);
+      if (!showServerFields(error)) {
+        setErrors({});
+        setUnexplained(true);
+        setAttempt((count) => count + 1);
+      }
+
       autosave.resume();
       return;
     }
@@ -739,9 +839,11 @@ export function NoteForm({
     } else {
       if (error instanceof ApiError && error.status === 422) {
         lastAttempt.current = undefined;
-        setErrors({});
-        setUnexplained(true);
-        setAttempt((count) => count + 1);
+        if (!showServerFields(error)) {
+          setErrors({});
+          setUnexplained(true);
+          setAttempt((count) => count + 1);
+        }
       } else {
         setFailure(failureWords(error, msg.changesNotSaved));
       }
@@ -813,10 +915,13 @@ export function NoteForm({
 
   const summary: FormError[] = [
     ...(unexplained ? [{ message: editing ? msg.changesNotSaved('server') : msg.notSubmitted('server') }] : []),
+    ...(errors.medication === undefined ? [] : [{ message: errors.medication, fieldId: medicationId }]),
+    ...Object.entries(errors.details ?? {}).map(([itemId, message]) => ({ message, fieldId: detailId(itemId) })),
     ...(errors.narrative === undefined ? [] : [{ message: errors.narrative, fieldId: guidedNotesId }]),
     ...(errors.flagReason === undefined ? [] : [{ message: errors.flagReason, fieldId: reasonId }]),
   ];
 
+  const { shortTerm: shortTermGoals, mediumOrLongTerm: mediumOrLongTermGoals } = goalsByTerm(goals);
   const dateWords = dateLong(parseDateOnly(noteDate));
   // One notice at most: a past-day note's, which says why the date is not today's, or else an earlier day's draft's.
   const dayNotice =
@@ -855,24 +960,71 @@ export function NoteForm({
         <div ref={notice} role="status" tabIndex={-1} className={styles.listsChanged}>
           {listsChanged && <Notice>{apiErrorCopy['note.lists_changed']}</Notice>}
         </div>
-        <TickListField
-          idPrefix="goal"
+        <AttendanceField
           className={styles.section}
-          heading={strings.note.goals}
-          hint={strings.note.goalsHint}
-          emptyText={editing ? strings.readView.noGoals : msg.noGoalsSetUp(givenName)}
-          items={goals}
-          ticked={ticked}
-          onToggle={toggle}
+          attendance={attendance}
+          onChange={(next) => {
+            setAttendance(next);
+            autosave.changed();
+          }}
         />
+        {goals.length === 0 ? (
+          <p className={styles.section}>{editing ? strings.noteWords.noGoals : msg.noGoalsSetUp(givenName)}</p>
+        ) : (
+          <>
+            {shortTermGoals.length > 0 && (
+              <TickListField
+                idPrefix="goal"
+                className={styles.section}
+                heading={strings.noteWords.shortTermGoals}
+                hint={strings.note.goalsHint}
+                items={shortTermGoals}
+                ticked={ticked}
+                onToggle={toggle}
+              />
+            )}
+            {mediumOrLongTermGoals.length > 0 && (
+              <TickListField
+                idPrefix="goal"
+                className={styles.section}
+                heading={strings.noteWords.mediumOrLongTermGoal}
+                // The hint under the first list shown describes this one too.
+                hint={shortTermGoals.length > 0 ? undefined : strings.note.goalsHint}
+                hintId={shortTermGoals.length > 0 ? 'goal-hint' : undefined}
+                items={mediumOrLongTermGoals}
+                ticked={ticked}
+                onToggle={toggle}
+              />
+            )}
+          </>
+        )}
+        {medication !== null && (
+          <MedicationField
+            value={medication}
+            error={errors.medication}
+            onChange={(text) => {
+              setMedication(text);
+              autosave.changed();
+              recheck({ ...read(), medication: text });
+            }}
+          />
+        )}
         <CommonItemsField
           className={styles.section}
           groups={groups}
           picked={picked}
           ticked={ticked}
-          emptyText={editing ? strings.readView.noCommonItems : strings.note.noCommonItemsSetUp}
+          details={details}
+          detailErrors={errors.details}
+          emptyText={editing ? strings.noteWords.noCommonItems : strings.note.noCommonItemsSetUp}
           onPick={pick}
           onToggle={toggle}
+          onDetail={(itemId, text) => {
+            setDetails((current) => ({ ...current, [itemId]: text }));
+            autosave.changed();
+            const content = read();
+            recheck({ ...content, details: { ...content.details, [itemId]: text } });
+          }}
         />
         <GuidedNotes
           key={textLoaded.loads}

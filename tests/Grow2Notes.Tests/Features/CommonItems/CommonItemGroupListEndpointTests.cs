@@ -184,7 +184,7 @@ public sealed class CommonItemGroupListEndpointTests(Grow2NotesFactory factory, 
             group.GetProperty("rowVersion").GetString());
         var items = ItemsOf(group);
         Assert.Equal(
-            ["id", "text", "sortOrder", "archivedAtUtc", "rowVersion"],
+            ["id", "text", "needsDetail", "sortOrder", "archivedAtUtc", "rowVersion"],
             items[0].EnumerateObject().Select(property => property.Name));
         Assert.Equal("Cooked phở, then tidied up", items[0].GetProperty("text").GetString());
         Assert.Equal(4, items[0].GetProperty("sortOrder").GetInt32());

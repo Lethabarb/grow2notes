@@ -10,7 +10,6 @@ import buttonStyles from '../../components/Button.module.css';
 import noticeStyles from '../../components/Notice.module.css';
 import tagStyles from '../../components/Tag.module.css';
 import tickList from '../../components/TickList.module.css';
-import type { TickedItem } from '../../components/TickListRead.tsx';
 import { fullPageLoad } from '../../routes/fullPageLoad.ts';
 import { disarmUnloadGuard, rearmUnloadGuard } from '../../routes/leaveGuard.ts';
 import { routes } from '../../routes/routes.tsx';
@@ -19,14 +18,16 @@ import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery
 import type { VersionSaved } from './NoteForm.tsx';
 import type {
   Draft,
+  DraftCommonItem,
+  DraftGoal,
   DraftGroup,
-  DraftItem,
   DraftNote,
   DraftRead,
   FlagStatus,
   NoteAnswer,
   NoteReview,
   ParticipantHeader,
+  ReadGoal,
   ReadGroup,
   SubmittedNote,
 } from './noteQueries.ts';
@@ -86,9 +87,11 @@ const zara: ParticipantHeader = {
   firstNoteDate: null,
 };
 
-/** A goal of Jane's, or a common item, unticked. */
-function goal(id: string, text: string): DraftItem {
-  return { id, text, isTicked: false };
+/** A row of the form, a goal of Jane's or a common item, unticked, Short term and asking for no details. */
+type Row = DraftGoal & DraftCommonItem;
+
+function goal(id: string, text: string): Row {
+  return { id, text, isTicked: false, isMediumOrLongTerm: false, needsDetail: false, detail: null };
 }
 
 const breakfast = goal('0b2f6c1e-4d38-4a95-9e07-6c1d8f3a5b24', 'Makes own breakfast');
@@ -99,7 +102,7 @@ const garden = goal('2d7b9f4a-6c13-4e58-9a21-5f8e3c0b7d46', 'Waters the garden')
 const prompts = 'Mood and wellbeing today?\nWhat did you do together?\nAnything to follow up?';
 
 /** A group of common items, with `items`, unticked, picked or not as the template copies it. */
-function group(id: string, name: string, items: readonly DraftItem[], isPicked = false): DraftGroup {
+function group(id: string, name: string, items: readonly Row[], isPicked = false): DraftGroup {
   return { id, name, isEveryNote: false, isPicked, items: [...items] };
 }
 
@@ -125,7 +128,7 @@ const personalCare = group('b3f6d9a2-5e81-4c47-9d20-8a1c7e4b6f53', 'Personal car
  * group's `isPicked` is what the template copies.
  */
 function template(
-  goals: readonly DraftItem[] = [breakfast, bus, sister],
+  goals: readonly Row[] = [breakfast, bus, sister],
   guidePrompts = prompts,
   commonItemGroups: readonly DraftGroup[] = [],
 ): Draft {
@@ -137,6 +140,10 @@ function template(
     goals: [...goals],
     commonItemGroups: [...commonItemGroups],
     narrative: '',
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     isFlagged: false,
     flagReason: null,
   };
@@ -151,6 +158,10 @@ function savedDraft(narrative = 'Jane made toast.\nThen a walk to the shops.'): 
     goals: [{ ...breakfast, isTicked: true }, bus, { ...sister, isTicked: true }],
     commonItemGroups: [],
     narrative,
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     isFlagged: false,
     flagReason: null,
     savedAtUtc: '2026-09-30T23:42:00Z',
@@ -319,7 +330,11 @@ const shownGroups: ReadGroup[] = [
 
 type SubmittedOptions = {
   narrative?: string;
-  goals?: TickedItem[];
+  goals?: ReadGoal[];
+  /** The three Attendance ticks, none ticked unless given. */
+  attendance?: Partial<Pick<SubmittedNote['current'], 'isNotIn' | 'isLateNotice' | 'isSick'>>;
+  /** The Medication text, `null` for a note with no Medication box unless given. */
+  medication?: string | null;
   /** The groups the note shows, as the API gives them; none unless given. */
   commonItemGroups?: ReadGroup[];
   /** The flag's reason, for a note flagged for a manager; none for one that is not. */
@@ -345,10 +360,12 @@ type SubmittedOptions = {
 function submittedNote({
   narrative = 'Jane made toast.\nThen a walk to the shops.',
   goals = [
-    { text: breakfast.text, isTicked: true },
-    { text: bus.text, isTicked: false },
-    { text: sister.text, isTicked: true },
+    { text: breakfast.text, isTicked: true, isMediumOrLongTerm: false },
+    { text: bus.text, isTicked: false, isMediumOrLongTerm: false },
+    { text: sister.text, isTicked: true, isMediumOrLongTerm: false },
   ],
+  attendance = {},
+  medication = null,
   commonItemGroups = [],
   reason,
   startedAtUtc = '2026-10-01T05:00:00Z',
@@ -368,7 +385,18 @@ function submittedNote({
     startedAtUtc,
     firstSubmittedAtUtc,
     isPastDayNote,
-    current: { versionNumber, narrative, goals, commonItemGroups, ...flag },
+    current: {
+      versionNumber,
+      narrative,
+      isNotIn: false,
+      isLateNotice: false,
+      isSick: false,
+      ...attendance,
+      medication,
+      goals,
+      commonItemGroups,
+      ...flag,
+    },
     ...(lastEdit === undefined ? { isEdited: false } : { isEdited: true, lastEdit }),
   };
 }
@@ -493,19 +521,39 @@ function line(): HTMLElement {
   return shown[0];
 }
 
-/** The Guided notes box. */
+/** The Daily Support Notes box. */
 function guidedNotes(): HTMLTextAreaElement {
-  return within(main()).getByRole('textbox', { name: '3. Guided notes' });
+  return within(main()).getByRole('textbox', { name: 'Daily Support Notes' });
 }
 
-/** Types `value` into the Guided notes box, as one input. */
+/** Types `value` into the Daily Support Notes box, as one input. */
 function type(value: string) {
   fireEvent.input(guidedNotes(), { target: { value } });
 }
 
-/** The tick boxes of Goals, in its order. */
+/** The tick boxes of the goals under Short term goals, in their order. */
 function goalBoxes(): HTMLInputElement[] {
-  return within(within(main()).getByRole('group', { name: '1. Goals' })).getAllByRole('checkbox');
+  return within(within(main()).getByRole('group', { name: 'Short term goals' })).getAllByRole('checkbox');
+}
+
+/** The Attendance fieldset, at the top of the form. */
+function attendance(): HTMLElement {
+  return within(main()).getByRole('group', { name: 'Attendance' });
+}
+
+/** The three Attendance tick boxes, Not In, Late Notice and Sick, in that order. */
+function attendanceBoxes(): HTMLInputElement[] {
+  return within(attendance()).getAllByRole('checkbox');
+}
+
+/** The Medication box, which only a note for a participant with the line has. */
+function medicationBox(): HTMLTextAreaElement {
+  return within(main()).getByRole('textbox', { name: 'Medication' });
+}
+
+/** The Details box under the common item of the name given, found by its label and the item. */
+function detailsBox(itemText: string): HTMLInputElement {
+  return within(main()).getByRole('textbox', { name: `Details, ${itemText}` });
 }
 
 /** The Flag for manager tick box. */
@@ -772,29 +820,29 @@ describe('The note form once loaded', () => {
     }
   });
 
-  it('shows Goals, with its hint and an unticked row for each goal in the order given, then Guided notes', async () => {
+  it('shows Attendance, then the goals, with their hint and an unticked row each, then the notes', async () => {
     serveNote(jane);
     renderApp(paths(jane).page);
     await settle();
 
-    const goals = within(main()).getByRole('group', { name: '1. Goals' });
+    const goals = within(main()).getByRole('group', { name: 'Short term goals' });
     expect(goals).toHaveAccessibleDescription('Ticked means reached.');
     const boxes = within(goals).getAllByRole('checkbox');
     expect(boxes.map((box) => box.closest('label')?.textContent)).toEqual([breakfast.text, bus.text, sister.text]);
     expect(boxes.map((box) => (box as HTMLInputElement).checked)).toEqual([false, false, false]);
     expect(guidedNotes()).toHaveValue('');
-    const listsChanged = goals.previousElementSibling;
+    const listsChanged = attendance().previousElementSibling;
     expect(listsChanged).toHaveAttribute('role', 'status');
     expect(listsChanged).toBeEmptyDOMElement();
-    const guidedNotesHeading = within(main()).getByRole('heading', { name: '3. Guided notes' });
-    const inOrder = [pageHeading(), listsChanged!, goals, guidedNotesHeading];
+    const guidedNotesHeading = within(main()).getByRole('heading', { name: 'Daily Support Notes' });
+    const inOrder = [pageHeading(), listsChanged!, attendance(), goals, guidedNotesHeading];
     for (const [index, element] of inOrder.slice(1).entries()) {
       expect(follows(element, inOrder[index])).toBe(true);
     }
   });
 
   // note-form.md component 5: a plain link on its own line under the <h1>, outside the form, before Goals.
-  it("has the Past notes link under the <h1>, before Goals, to the participant's Past notes", async () => {
+  it("has the Past notes link under the <h1>, before Attendance, to the participant's Past notes", async () => {
     serveNote(jane);
     renderApp(paths(jane).page);
     await settle();
@@ -803,19 +851,19 @@ describe('The note form once loaded', () => {
     expect(link).toHaveAttribute('href', `/participants/${jane.id}/notes`);
     expect(link.closest('form')).toBeNull();
     expect(follows(link, pageHeading())).toBe(true);
-    expect(follows(within(main()).getByRole('group', { name: '1. Goals' }), link)).toBe(true);
+    expect(follows(attendance(), link)).toBe(true);
     expect(within(main()).getAllByRole('link')).toEqual([link]);
   });
 
-  it("says that Jane has no goals in place of the tick boxes, with no fieldset, and keeps Guided notes", async () => {
+  it('says that Jane has no goals in place of the tick boxes, with no heading, and keeps the notes box', async () => {
     serveNote(jane, json(template([])));
     renderApp(paths(jane).page);
     await settle();
 
-    expect(within(main()).getByRole('heading', { level: 2, name: '1. Goals' })).toBeInTheDocument();
     expect(within(main()).getByText('No goals set up for Jane yet. A manager can add them.')).toBeInTheDocument();
-    expect(main().querySelector('fieldset')).toBeNull();
-    expect(within(main()).getAllByRole('checkbox')).toEqual([flagBox()]);
+    expect(within(main()).queryByRole('heading', { name: /goals/i })).toBeNull();
+    expect(within(main()).queryByRole('group', { name: /goals/i })).toBeNull();
+    expect(within(main()).getAllByRole('checkbox')).toEqual([...attendanceBoxes(), flagBox()]);
     expect(guidedNotes()).toBeInTheDocument();
   });
 
@@ -938,10 +986,14 @@ describe('The note form when it did not load', () => {
 function alexsWorkingCopy(change: Partial<DraftRead> = {}): DraftRead {
   return {
     narrative: 'Jane made toast.\nThen a walk to the shops.',
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     goals: [
-      { text: breakfast.text, isTicked: true },
-      { text: bus.text, isTicked: false },
-      { text: sister.text, isTicked: true },
+      { text: breakfast.text, isTicked: true, isMediumOrLongTerm: false },
+      { text: bus.text, isTicked: false, isMediumOrLongTerm: false },
+      { text: sister.text, isTicked: true, isMediumOrLongTerm: false },
     ],
     commonItemGroups: [],
     isFlagged: true,
@@ -1048,7 +1100,9 @@ describe("Someone else's draft", () => {
     expect(within(main()).queryAllByRole('heading', { level: 2 })).toEqual([]);
     expect(within(main()).queryByRole('list')).toBeNull();
     expect(main().querySelector(`form, input, textarea, .${tickList.icon}`)).toBeNull();
-    expect(main()).not.toHaveTextContent(/Discard|Goals|Guided notes|Flag|Reason|toast|Nothing written/);
+    expect(main()).not.toHaveTextContent(
+      /Discard|goals|Daily Support Notes|Attendance|Flag|Reason|toast|Nothing written/,
+    );
     expect(tabStops().map((stop) => stop.textContent)).toEqual(['Today', 'Past notes']);
   });
 });
@@ -1067,7 +1121,7 @@ describe("Someone else's draft, read by a manager", () => {
     expect(follows(discard, startedSentence())).toBe(true);
     const link = within(main()).getByRole('link', { name: 'Past notes' });
     expect(follows(link, discard)).toBe(true);
-    const goals = section('1. Goals');
+    const goals = section('Short term goals');
     expect(follows(goals, link)).toBe(true);
     expect(within(goals).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
       'Makes own breakfast, ticked',
@@ -1077,23 +1131,24 @@ describe("Someone else's draft, read by a manager", () => {
     expect(narrative().textContent).toBe('Jane made toast.\nThen a walk to the shops.');
     expect(follows(narrative(), goals)).toBe(true);
     expect(within(main()).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
-      '1. Goals',
-      '2. Common items',
-      '3. Guided notes',
+      'Attendance',
+      'Short term goals',
+      'Daily Support Notes',
     ]);
     expect(main().querySelector('form, input, textarea')).toBeNull();
   });
 
-  it('shows "2. Common items" with the groups it is given, each item ticked or not, no question', async () => {
+  it('shows each group it is given under its own name, each item ticked or not, no question', async () => {
     await openAlexsDraft(manager, alexsWorkingCopy({ commonItemGroups: shownGroups }));
 
-    const common = section('2. Common items');
-    expect(follows(common, section('1. Goals'))).toBe(true);
-    expect(follows(section('3. Guided notes'), common)).toBe(true);
-    expect(within(common).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
+    const common = section('Every note');
+    expect(follows(common, section('Short term goals'))).toBe(true);
+    expect(follows(section('Daily Support Notes'), common)).toBe(true);
+    expect(within(common).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
       'Every note',
       'Community outing',
     ]);
+    expect(within(common).queryByRole('heading', { level: 3 })).toBeNull();
     expect(within(common).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
       'Medication prompted, ticked',
       'Meal prepared, not ticked',
@@ -1104,12 +1159,38 @@ describe("Someone else's draft, read by a manager", () => {
     expect(main()).not.toHaveTextContent('Which of these happened?');
   });
 
-  it('says "No common items set" under "2. Common items" for a draft whose working copy shows none', async () => {
+  it('says "No common items set" alone for a draft whose working copy shows none', async () => {
     await openAlexsDraft(manager, alexsWorkingCopy());
 
-    const common = section('2. Common items');
-    expect(within(common).getByText('No common items set').tagName).toBe('P');
-    expect(within(common).queryByRole('list')).toBeNull();
+    const empty = within(main()).getByText('No common items set');
+    expect(empty.tagName).toBe('P');
+    expect(within(empty.parentElement!).queryByRole('list')).toBeNull();
+    expect(follows(empty, section('Short term goals'))).toBe(true);
+    expect(follows(section('Daily Support Notes'), empty)).toBe(true);
+  });
+
+  it('shows the attendance, the Medication text and the details of a draft, as a note shows them', async () => {
+    await openAlexsDraft(
+      manager,
+      alexsWorkingCopy({
+        isLateNotice: true,
+        medication: '8 am: two tablets.\n2 pm: one.',
+        commonItemGroups: [
+          { name: 'Further supports', items: [{ text: 'Other', isTicked: true, detail: 'A haircut' }] },
+        ],
+      }),
+    );
+
+    const ticks = within(section('Attendance')).getAllByRole('listitem');
+    expect(ticks.map((item) => item.textContent)).toEqual([
+      'Not In, not ticked',
+      'Late Notice, ticked',
+      'Sick, not ticked',
+    ]);
+    expect(section('Medication').querySelector(`div.${readView.written}`)?.textContent).toBe(
+      '8 am: two tablets.\n2 pm: one.',
+    );
+    expect(within(section('Further supports')).getByText('Details: A haircut')).toBeInTheDocument();
   });
 
   it('shows a ticked flag as the read-only "Flag for manager" row with its reason, never the Flagged tag', async () => {
@@ -1138,10 +1219,10 @@ describe("Someone else's draft, read by a manager", () => {
     expect(main()).not.toHaveTextContent(/Reason|Flagged/);
   });
 
-  it.each(['', ' \n '])('says "Nothing written yet." under Guided notes for a text of %j', async (text) => {
+  it.each(['', ' \n '])('says "Nothing written yet." under Daily Support Notes for a text of %j', async (text) => {
     await openAlexsDraft(manager, alexsWorkingCopy({ narrative: text }));
 
-    const guided = section('3. Guided notes');
+    const guided = section('Daily Support Notes');
     expect(within(guided).getByText('Nothing written yet.').tagName).toBe('P');
     expect(guided.querySelector(`div.${readView.written}`)).toBeNull();
   });
@@ -1407,6 +1488,11 @@ describe('Autosave', () => {
             tickedGoalIds,
             pickedGroupIds: [],
             tickedCommonItemIds: [],
+            commonItemDetails: {},
+            isNotIn: false,
+            isLateNotice: false,
+            isSick: false,
+            medication: null,
             isFlagged: false,
             flagReason: null,
           },
@@ -1604,6 +1690,11 @@ describe('Autosave', () => {
           tickedGoalIds: [breakfast.id],
           pickedGroupIds: [],
           tickedCommonItemIds: [],
+          commonItemDetails: {},
+          isNotIn: false,
+          isLateNotice: false,
+          isSick: false,
+          medication: null,
           isFlagged: false,
           flagReason: null,
         },
@@ -1649,6 +1740,11 @@ describe('Autosave', () => {
       tickedGoalIds: [breakfast.id, sister.id],
       pickedGroupIds: [],
       tickedCommonItemIds: [],
+      commonItemDetails: {},
+      isNotIn: false,
+      isLateNotice: false,
+      isSick: false,
+      medication: null,
       isFlagged: false,
       flagReason: null,
     });
@@ -1722,6 +1818,11 @@ describe('Changed on another device or tab', () => {
     tickedGoalIds: [breakfast.id, bus.id, sister.id],
     pickedGroupIds: [],
     tickedCommonItemIds: [],
+    commonItemDetails: {},
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     isFlagged: true,
     flagReason: 'Seemed tired.',
   };
@@ -1950,6 +2051,11 @@ describe('Changed on another device or tab', () => {
       tickedGoalIds: [bus.id],
       pickedGroupIds: [],
       tickedCommonItemIds: [],
+      commonItemDetails: {},
+      isNotIn: false,
+      isLateNotice: false,
+      isSick: false,
+      medication: null,
       isFlagged: true,
       flagReason: 'Seemed tired after lunch.',
     });
@@ -2237,7 +2343,7 @@ describe('Lists changed before the first save', () => {
       expect(shownSaveStatus()).toBe('Saving…');
       expect(listsNotice()).toBe(notice);
       expect(notice.textContent).toBe('The goal or common-item list was just changed. Please check your ticks.');
-      expect(follows(within(main()).getByRole('group', { name: '1. Goals' }), notice)).toBe(true);
+      expect(follows(within(main()).getByRole('group', { name: 'Short term goals' }), notice)).toBe(true);
       expect(goalBoxes().map((box) => [box.labels?.[0].textContent, box.checked])).toEqual([
         [breakfast.text, true],
         [garden.text, false],
@@ -2265,7 +2371,7 @@ describe('Lists changed before the first save', () => {
       focused: 'a tick box whose goal is still listed',
       box: () => within(main()).getByRole('checkbox', { name: bus.text }),
     },
-    { focused: 'the Guided notes box', box: () => guidedNotes() },
+    { focused: 'the Daily Support Notes box', box: () => guidedNotes() },
   ])('keeps focus in $focused', async ({ box }) => {
     const { reload } = await openWithListsChanging();
     const focused = box();
@@ -2322,14 +2428,14 @@ describe('Lists changed before the first save', () => {
   });
 });
 
-describe('The Guided notes box', () => {
+describe('The Daily Support Notes box', () => {
   it('is labelled by its <h2>, required to screen readers, with nothing that cuts the text short', async () => {
     serveNote(jane);
     renderApp(paths(jane).page);
     await settle();
 
     const box = guidedNotes();
-    expect(within(main()).getByRole('heading', { level: 2, name: '3. Guided notes' })).toContainElement(
+    expect(within(main()).getByRole('heading', { level: 2, name: 'Daily Support Notes' })).toContainElement(
       box.labels[0],
     );
     expect(box).toHaveAttribute('id', 'guided-notes');
@@ -2415,7 +2521,7 @@ describe('Flag for manager', () => {
     return saves().map(({ body }) => [body.isFlagged, body.flagReason]);
   }
 
-  it("is a row after Guided notes, on the tick lists' row and box, with Reason in the page and hidden", async () => {
+  it("is a row after the notes, on the tick lists' row and box, with Reason in the page and hidden", async () => {
     serveNote(jane);
     renderApp(paths(jane).page);
     await settle();
@@ -2839,7 +2945,7 @@ async function openToSubmit(draft: Answer = json(template()), submit: Answer = v
   return { participant, router };
 }
 
-/** Writes `text` in the Guided notes box and lets it save. */
+/** Writes `text` in the Daily Support Notes box and lets it save. */
 async function write(text = 'Jane made toast.') {
   type(text);
   await wait(2_000);
@@ -2970,7 +3076,7 @@ describe("Submit's checks", () => {
     scrollIntoView.mockReset();
   });
 
-  const blank = 'Write your notes in the Guided notes box. The grey text is only a guide.';
+  const blank = 'Write your notes in the Daily Support Notes box. The grey text is only a guide.';
 
   it('refuses a blank box, its message above it, the summary focused at the top, "Error: " in the title', async () => {
     await openToSubmit();
@@ -2984,7 +3090,9 @@ describe("Submit's checks", () => {
     expect(summaryItems()).toEqual([[blank, '#guided-notes']]);
     const message = main().querySelector('#guided-notes-error');
     expect(message?.textContent).toBe(`Error: ${blank}`);
-    expect(follows(message!, within(main()).getByRole('heading', { level: 2, name: '3. Guided notes' }))).toBe(true);
+    expect(follows(message!, within(main()).getByRole('heading', { level: 2, name: 'Daily Support Notes' }))).toBe(
+      true,
+    );
     expect(follows(guidedNotes(), message!)).toBe(true);
     expect(guidedNotes()).toHaveAttribute('aria-invalid', 'true');
     expect(guidedNotes()).toHaveAccessibleDescription(`Error: ${blank}`);
@@ -3000,7 +3108,7 @@ describe("Submit's checks", () => {
 
     await press(submitButton());
 
-    expect(summaryItems()).toEqual([['Write your notes in the Guided notes box', '#guided-notes']]);
+    expect(summaryItems()).toEqual([['Write your notes in the Daily Support Notes box', '#guided-notes']]);
     expect(confirmation()).toBeNull();
   });
 
@@ -3012,7 +3120,7 @@ describe("Submit's checks", () => {
 
     await press(submitButton());
 
-    expect(summaryItems()).toEqual([['Guided notes must be 20,000 characters or less', '#guided-notes']]);
+    expect(summaryItems()).toEqual([['Daily Support Notes must be 20,000 characters or less', '#guided-notes']]);
     expect(saves()).toHaveLength(1);
     expect(confirmation()).toBeNull();
   });
@@ -3021,7 +3129,7 @@ describe("Submit's checks", () => {
     { reason: 'none', typed: '', message: 'Enter a reason for the flag' },
     { reason: 'spaces alone', typed: '   ', message: 'Enter a reason for the flag' },
     { reason: '201 characters', typed: 'x'.repeat(201), message: 'Reason must be 200 characters or less' },
-  ])('refuses a flagged note with $reason for its reason, after Guided notes in the summary', async ({
+  ])('refuses a flagged note with $reason for its reason, after Daily Support Notes in the summary', async ({
     typed,
     message,
   }) => {
@@ -3135,6 +3243,11 @@ describe('Pressing Submit note', () => {
           tickedGoalIds: [breakfast.id, sister.id],
           pickedGroupIds: [],
           tickedCommonItemIds: [],
+          commonItemDetails: {},
+          isNotIn: false,
+          isLateNotice: false,
+          isSick: false,
+          medication: null,
           isFlagged: false,
           flagReason: null,
         },
@@ -3480,6 +3593,11 @@ describe('The Submit confirmation', () => {
           tickedGoalIds: [bus.id],
           pickedGroupIds: [],
           tickedCommonItemIds: [],
+          commonItemDetails: {},
+          isNotIn: false,
+          isLateNotice: false,
+          isSick: false,
+          medication: null,
           isFlagged: true,
           flagReason: 'Jane seemed unwell after lunch.',
         },
@@ -4866,9 +4984,9 @@ describe('The session and Sign out', () => {
     return screen.queryByRole('dialog', { name: /^You’ll be signed out in/ });
   }
 
-  /** The Guided notes box, found while the signed-out-in-place view hides it too. */
+  /** The Daily Support Notes box, found while the signed-out-in-place view hides it too. */
   function hiddenBox(): HTMLTextAreaElement {
-    return within(main()).getByRole('textbox', { name: '3. Guided notes', hidden: true });
+    return within(main()).getByRole('textbox', { name: 'Daily Support Notes', hidden: true });
   }
 
   /** Makes the page hidden or visible, with the event that the browser fires. */
@@ -5320,11 +5438,11 @@ function section(name: string): HTMLElement {
   return block;
 }
 
-/** The Guided notes text under its heading, as the read view shows it. */
+/** The Daily Support Notes text under its heading, as the read view shows it. */
 function narrative(): HTMLElement {
-  const text = section('3. Guided notes').querySelector(`div.${readView.written}`);
+  const text = section('Daily Support Notes').querySelector(`div.${readView.written}`);
   if (!(text instanceof HTMLElement)) {
-    throw new Error('The read view shows no Guided notes text.');
+    throw new Error('The read view shows no Daily Support Notes text.');
   }
 
   return text;
@@ -5353,7 +5471,7 @@ describe('The read view of a submitted note', () => {
       late.release();
       await settle();
       expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
-      expect(within(section('1. Goals')).getAllByRole('listitem')).toHaveLength(3);
+      expect(within(section('Short term goals')).getAllByRole('listitem')).toHaveLength(3);
       expect(narrative()).toHaveTextContent(/^Jane made toast\./);
     },
   );
@@ -5505,7 +5623,7 @@ describe('The read view of a submitted note', () => {
 
   // participant-notes.md component 5, the action row, which holds Past notes alone for a worker who did not write the
   // note, with Edit before it for the author and a manager, and Version history between them for a manager.
-  it('has the Past notes link after the byline and the flag line, before Goals', async () => {
+  it('has the Past notes link after the byline and the flag line, before Attendance', async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
     renderApp(paths(jane).page);
     await settle();
@@ -5513,7 +5631,31 @@ describe('The read view of a submitted note', () => {
     const link = within(main()).getByRole('link', { name: 'Past notes' });
     expect(link).toHaveAttribute('href', `/participants/${jane.id}/notes`);
     expect(follows(link, statusLines()[1])).toBe(true);
-    expect(follows(section('1. Goals'), link)).toBe(true);
+    expect(follows(section('Attendance'), link)).toBe(true);
+  });
+
+  // note-read-view.md: the three ticks as the Word template names them, read as ticked or not ticked.
+  it.each([
+    {
+      named: 'none ticked',
+      attendance: {},
+      read: ['Not In, not ticked', 'Late Notice, not ticked', 'Sick, not ticked'],
+    },
+    {
+      named: 'Late Notice and Sick ticked',
+      attendance: { isLateNotice: true, isSick: true },
+      read: ['Not In, not ticked', 'Late Notice, ticked', 'Sick, ticked'],
+    },
+  ])('shows Attendance with $named, each tick read as text, never as a control', async ({ attendance, read }) => {
+    serveSubmitted(jane, submittedNote({ attendance }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    const ticks = section('Attendance');
+    expect(within(ticks).getAllByRole('listitem').map((item) => item.textContent)).toEqual(read);
+    expect(within(ticks).queryByRole('checkbox')).toBeNull();
+    expect(follows(ticks, statusLines()[0])).toBe(true);
+    expect(follows(section('Short term goals'), ticks)).toBe(true);
   });
 
   it('shows no flag line, and no Reason, on a note that is not flagged', async () => {
@@ -5540,7 +5682,7 @@ describe('The read view of a submitted note', () => {
     renderApp(paths(jane).page);
     await settle();
 
-    const goals = section('1. Goals');
+    const goals = section('Short term goals');
     const items = within(goals).getAllByRole('listitem');
     expect(items.map((item) => item.textContent)).toEqual([
       'Makes own breakfast, ticked',
@@ -5553,27 +5695,128 @@ describe('The read view of a submitted note', () => {
     expect(follows(goals, statusLines()[0])).toBe(true);
   });
 
-  it('says "No goals set" for a note with none, with no list', async () => {
+  it('says "No goals set" alone for a note with none, with no list and no term heading', async () => {
     serveSubmitted(jane, submittedNote({ goals: [] }));
     renderApp(paths(jane).page);
     await settle();
 
-    const goals = section('1. Goals');
-    expect(within(goals).queryByRole('list')).toBeNull();
-    expect(within(goals).getByText('No goals set')).toBeInTheDocument();
+    const empty = within(main()).getByText('No goals set');
+    expect(empty.tagName).toBe('P');
+    expect(within(empty.parentElement!).queryByRole('list')).toBeNull();
+    expect(within(main()).queryByRole('heading', { name: /goal/i })).toBeNull();
+  });
+
+  // note-read-view.md: goals under the Word template's two headings, a heading left out when its term has no goal.
+  it('groups the goals under Short term goals and Medium or Long term goal, the order kept in each', async () => {
+    serveSubmitted(
+      jane,
+      submittedNote({
+        goals: [
+          { text: 'Plans a week of meals', isTicked: false, isMediumOrLongTerm: true },
+          { text: breakfast.text, isTicked: true, isMediumOrLongTerm: false },
+          { text: 'Saves for a holiday', isTicked: true, isMediumOrLongTerm: true },
+          { text: bus.text, isTicked: false, isMediumOrLongTerm: false },
+        ],
+      }),
+    );
+    renderApp(paths(jane).page);
+    await settle();
+
+    const short = section('Short term goals');
+    const long = section('Medium or Long term goal');
+    expect(short).toBe(long);
+    const lists = within(short).getAllByRole('list');
+    expect(within(lists[0]).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Makes own breakfast, ticked',
+      'Catches bus to day program, not ticked',
+    ]);
+    expect(within(lists[1]).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Plans a week of meals, not ticked',
+      'Saves for a holiday, ticked',
+    ]);
+  });
+
+  it('leaves out the heading of a term that has no goal', async () => {
+    serveSubmitted(
+      jane,
+      submittedNote({ goals: [{ text: 'Saves for a holiday', isTicked: true, isMediumOrLongTerm: true }] }),
+    );
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(within(main()).getByRole('heading', { level: 2, name: 'Medium or Long term goal' })).toBeInTheDocument();
+    expect(within(main()).queryByRole('heading', { name: 'Short term goals' })).toBeNull();
+  });
+
+  // note-read-view.md: the Medication text only for a note that has the box, its line breaks kept.
+  it('shows Medication with its text and line breaks, between the goals and the common items', async () => {
+    serveSubmitted(
+      jane,
+      submittedNote({ medication: '8 am: two tablets.\n2 pm: one tablet.', commonItemGroups: shownGroups }),
+    );
+    renderApp(paths(jane).page);
+    await settle();
+
+    const medicationSection = section('Medication');
+    const text = medicationSection.querySelector(`div.${readView.written}`);
+    expect(text?.textContent).toBe('8 am: two tablets.\n2 pm: one tablet.');
+    expect(follows(medicationSection, section('Short term goals'))).toBe(true);
+    expect(follows(section('Every note'), medicationSection)).toBe(true);
+  });
+
+  it('shows the Medication heading alone when the box was left empty', async () => {
+    serveSubmitted(jane, submittedNote({ medication: '' }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(section('Medication').querySelector(`div.${readView.written}`)).toBeNull();
+  });
+
+  it('shows no Medication heading for a note with no box', async () => {
+    serveSubmitted(jane, submittedNote({ medication: null }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(within(main()).queryByRole('heading', { name: 'Medication' })).toBeNull();
+  });
+
+  it('shows "Details: …" under a ticked item that has details, and nothing under one that has none', async () => {
+    serveSubmitted(
+      jane,
+      submittedNote({
+        commonItemGroups: [
+          {
+            name: 'Further supports',
+            items: [
+              { text: 'Other (staff to complete if different from above)', isTicked: true, detail: 'A haircut' },
+              { text: 'Showered', isTicked: true },
+            ],
+          },
+        ],
+      }),
+    );
+    renderApp(paths(jane).page);
+    await settle();
+
+    const items = within(section('Further supports')).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      'Other (staff to complete if different from above), ticked,Details: A haircut',
+      'Showered, ticked',
+    ]);
   });
 
   // participant-notes.md item 17a: Every note and the picked groups, as the API gives them, each item ticked or not.
-  it('shows "2. Common items" between Goals and Guided notes, an <h3> per group, items ticked or not', async () => {
+  it('shows each group under its own <h2>, between the goals and the notes, items ticked or not', async () => {
     serveSubmitted(jane, submittedNote({ commonItemGroups: shownGroups }));
     renderApp(paths(jane).page);
     await settle();
 
-    const common = section('2. Common items');
-    expect(follows(common, section('1. Goals'))).toBe(true);
-    expect(follows(section('3. Guided notes'), common)).toBe(true);
-    const headings = within(common).getAllByRole('heading', { level: 3 });
+    const common = section('Every note');
+    expect(follows(common, section('Short term goals'))).toBe(true);
+    expect(follows(section('Daily Support Notes'), common)).toBe(true);
+    const headings = within(common).getAllByRole('heading', { level: 2 });
     expect(headings.map((heading) => heading.textContent)).toEqual(['Every note', 'Community outing']);
+    expect(within(common).queryByRole('heading', { level: 3 })).toBeNull();
     const [everyNoteList, outingList] = within(common).getAllByRole('list');
     expect(within(everyNoteList).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
       'Medication prompted, ticked',
@@ -5587,15 +5830,14 @@ describe('The read view of a submitted note', () => {
     expect(within(main()).queryByRole('checkbox')).toBeNull();
   });
 
-  it('says "No common items set" for a note that shows none, with no list', async () => {
+  it('says "No common items set" alone for a note that shows none, with no list', async () => {
     serveSubmitted(jane);
     renderApp(paths(jane).page);
     await settle();
 
-    const common = section('2. Common items');
-    expect(within(common).queryByRole('list')).toBeNull();
-    expect(within(common).queryByRole('heading', { level: 3 })).toBeNull();
-    expect(within(common).getByText('No common items set').tagName).toBe('P');
+    const empty = within(main()).getByText('No common items set');
+    expect(empty.tagName).toBe('P');
+    expect(within(empty.parentElement!).queryByRole('list')).toBeNull();
   });
 
   it('never asks "Which of these happened?" and shows no group but the ones it is given', async () => {
@@ -5621,7 +5863,7 @@ describe('The read view of a submitted note', () => {
     expect(narrative().textContent).toBe(text);
     expect(narrative().querySelector('b')).toBeNull();
     expect(narrative()).toHaveStyle({ whiteSpace: 'pre-wrap', overflowWrap: 'break-word' });
-    expect(follows(narrative(), section('1. Goals'))).toBe(true);
+    expect(follows(narrative(), section('Short term goals'))).toBe(true);
   });
 
   // participant-notes.md item 23: the text does not change under a reader, and comes afresh as the page opens again.
@@ -5696,7 +5938,7 @@ describe('Common items and group picks', () => {
   }
 
   /** The tick box of a common item, which is not in the accessibility tree while its group is not picked. */
-  function itemBox(item: DraftItem): HTMLInputElement {
+  function itemBox(item: Row): HTMLInputElement {
     return within(main()).getByRole('checkbox', { name: item.text });
   }
 
@@ -5705,14 +5947,17 @@ describe('Common items and group picks', () => {
     return openToSubmit(json(template([breakfast, bus, sister], prompts, groups)));
   }
 
-  it('shows "2. Common items" between Goals and Guided notes, with Every note and the picker', async () => {
+  it('shows Every note and the picker between the goals and the notes, each group under its own <h2>', async () => {
     await openWithGroups();
 
-    const heading = within(main()).getByRole('heading', { level: 2, name: '2. Common items' });
-    expect(follows(heading, within(main()).getByRole('group', { name: '1. Goals' }))).toBe(true);
-    expect(follows(guidedNotes(), heading)).toBe(true);
-    expect(within(main()).getByRole('group', { name: 'Every note' })).toHaveAccessibleDescription('Ticked means done.');
+    const every = within(main()).getByRole('group', { name: 'Every note' });
+    expect(follows(every, within(main()).getByRole('group', { name: 'Short term goals' }))).toBe(true);
+    expect(follows(guidedNotes(), every)).toBe(true);
+    expect(every).toHaveAccessibleDescription('Ticked means done.');
     expect(within(main()).getByRole('group', { name: 'Which of these happened?' })).toBeInTheDocument();
+    expect(within(main()).getByRole('heading', { level: 2, name: 'Community outing' })).toBeInTheDocument();
+    expect(within(main()).queryByRole('heading', { level: 3 })).toBeNull();
+    expect(within(main()).queryByRole('heading', { name: /common items/i })).toBeNull();
   });
 
   it('shows "No common items set up." for a draft with no groups, as one saved before common items has', async () => {
@@ -5720,10 +5965,10 @@ describe('Common items and group picks', () => {
     renderApp(paths(jane).page);
     await settle();
 
-    const heading = within(main()).getByRole('heading', { level: 2, name: '2. Common items' });
-    expect(heading.parentElement).toHaveTextContent('No common items set up.');
+    const empty = within(main()).getByText('No common items set up.');
+    expect(empty.tagName).toBe('P');
     expect(main().querySelector('#common-hint, #picker-hint')).toBeNull();
-    expect(follows(guidedNotes(), heading)).toBe(true);
+    expect(follows(guidedNotes(), empty)).toBe(true);
   });
 
   it('opens with the copied picks ticked, their items unticked, and sends nothing until the first change', async () => {
@@ -5994,6 +6239,10 @@ function editDraft(overrides: Partial<Draft> = {}): Draft {
     goals: [{ ...breakfast, isTicked: true }, bus, { ...sister, isTicked: true }],
     commonItemGroups: [],
     narrative: oldText,
+    isNotIn: false,
+    isLateNotice: false,
+    isSick: false,
+    medication: null,
     isFlagged: false,
     flagReason: null,
     ...overrides,
@@ -6282,7 +6531,7 @@ describe('At the shared address, a form read that finds the note submitted', () 
 describe('Save changes', () => {
   const newText = 'Jane made toast. Then a walk, and lunch out.';
 
-  /** The text of every Guided notes section the read view showed, as the page changed. */
+  /** The text of every Daily Support Notes section the read view showed, as the page changed. */
   function watchNarratives(): () => string[] {
     const texts: string[] = [];
     const observer = new MutationObserver(() => {
@@ -6328,6 +6577,11 @@ describe('Save changes', () => {
           tickedGoalIds: [breakfast.id, sister.id],
           pickedGroupIds: [],
           tickedCommonItemIds: [],
+          commonItemDetails: {},
+          isNotIn: false,
+          isLateNotice: false,
+          isSick: false,
+          medication: null,
           isFlagged: false,
           flagReason: null,
         },
@@ -6358,7 +6612,7 @@ describe('Save changes', () => {
     expect(sentRequests()).toContain(`GET ${mePath}`);
   });
 
-  it('refuses a blank Guided notes with the form’s checks, sending no version', async () => {
+  it('refuses a blank Daily Support Notes with the form’s checks, sending no version', async () => {
     await openToEdit({ draft: json(editDraft({ narrative: '' })) });
 
     await pressAndWait(saveChangesButton());
@@ -6366,7 +6620,7 @@ describe('Save changes', () => {
     expect(submits()).toEqual([]);
     expect(errorSummary()).not.toBeNull();
     expect(summaryItems().map(([words]) => words)).toEqual([
-      'Write your notes in the Guided notes box. The grey text is only a guide.',
+      'Write your notes in the Daily Support Notes box. The grey text is only a guide.',
     ]);
   });
 
@@ -6904,7 +7158,7 @@ describe("The read view's review lines", () => {
     const tag = within(statusLines()[2]).getByText('To review');
     expect(tag).toHaveClass(tagStyles.tag, tagStyles.attention);
     const heading = within(main()).getByRole('heading', { level: 2, name: 'Review' });
-    expect(follows(heading, section('3. Guided notes'))).toBe(true);
+    expect(follows(heading, section('Daily Support Notes'))).toBe(true);
     expect(comment()).toHaveAccessibleDescription(
       'Shown in the daily report and record exports, and cannot be changed later You can enter up to 500 characters',
     );
@@ -7475,5 +7729,368 @@ describe('The back link of a past-day note that Continue replaced the date page 
     const back = within(pageBar()).getByRole('link');
     expect(back).toHaveAccessibleName('Today');
     expect(back).toHaveAttribute('href', '/');
+  });
+});
+
+// The Word template's additions (D104; note-form.md components 4b to 6b): Attendance, the goals under their terms,
+// Medication, and the Details box of a ticked item that asks for details.
+describe('Attendance', () => {
+  it('has Not In, Late Notice and Sick, unticked, in a fieldset of their own at the top of the form', async () => {
+    await openToSubmit();
+
+    expect(within(attendance().querySelector('legend')!).getByRole('heading', { level: 2 })).toHaveTextContent(
+      'Attendance',
+    );
+    expect(attendanceBoxes().map((box) => box.labels?.[0].textContent)).toEqual(['Not In', 'Late Notice', 'Sick']);
+    expect(attendanceBoxes().map((box) => box.checked)).toEqual([false, false, false]);
+    expect(follows(goalBoxes()[0], attendanceBoxes()[2])).toBe(true);
+  });
+
+  it('autosaves each tick 2 s later, independently of the others, and hides nothing', async () => {
+    await openToSubmit();
+
+    fireEvent.click(within(attendance()).getByText('Late Notice'));
+    fireEvent.click(within(attendance()).getByText('Not In'));
+    await wait(2_000);
+
+    expect(saves()).toHaveLength(1);
+    expect(saves()[0].body).toMatchObject({ isNotIn: true, isLateNotice: true, isSick: false });
+    expect(goalBoxes()).toHaveLength(3);
+    expect(guidedNotes()).toBeInTheDocument();
+    fireEvent.click(within(attendance()).getByText('Not In'));
+    await wait(2_000);
+    expect(saves()[1].body).toMatchObject({ isNotIn: false, isLateNotice: true, isSick: false });
+  });
+
+  it('sends the ticks with Submit, and still needs the Daily Support Notes text', async () => {
+    const { participant } = await openToSubmit();
+    fireEvent.click(within(attendance()).getByText('Sick'));
+    await wait(2_000);
+
+    await press(submitButton());
+
+    expect(summaryItems()).toEqual([
+      ['Write your notes in the Daily Support Notes box. The grey text is only a guide.', '#guided-notes'],
+    ]);
+    expect(confirmation()).toBeNull();
+
+    await write();
+    await press(submitButton());
+    await confirmSubmit();
+
+    expect(submits()).toHaveLength(1);
+    expect(submits()[0]).toMatchObject({
+      path: paths(participant).versions,
+      body: { isNotIn: false, isLateNotice: false, isSick: true },
+    });
+  });
+
+  it('shows the ticks of a saved draft', async () => {
+    serveNote(jane, json({ ...savedDraft(), isNotIn: true, isSick: true }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(attendanceBoxes().map((box) => box.checked)).toEqual([true, false, true]);
+  });
+});
+
+describe('Goals under their terms', () => {
+  const planning: Row = { ...garden, isMediumOrLongTerm: true };
+
+  it('puts each term under its own <h2>, the order given kept, and one hint that describes both lists', async () => {
+    await openToSubmit(json(template([breakfast, planning, bus])));
+
+    const short = within(main()).getByRole('group', { name: 'Short term goals' });
+    const long = within(main()).getByRole('group', { name: 'Medium or Long term goal' });
+    expect(within(short).getAllByRole<HTMLInputElement>('checkbox').map((box) => box.labels?.[0].textContent)).toEqual([
+      breakfast.text,
+      bus.text,
+    ]);
+    expect(
+      within(long)
+        .getAllByRole<HTMLInputElement>('checkbox')
+        .map((box) => box.labels?.[0].textContent),
+    ).toEqual([garden.text]);
+    expect(within(short.querySelector('legend')!).getByRole('heading', { level: 2 })).toBeInTheDocument();
+    expect(within(long.querySelector('legend')!).getByRole('heading', { level: 2 })).toBeInTheDocument();
+    expect(short).toHaveAccessibleDescription('Ticked means reached.');
+    expect(long).toHaveAccessibleDescription('Ticked means reached.');
+    expect(main().querySelectorAll('#goal-hint')).toHaveLength(1);
+    expect(follows(long, short)).toBe(true);
+  });
+
+  it('leaves out the heading of a term that has no goal, the hint going to the one that is shown', async () => {
+    await openToSubmit(json(template([planning])));
+
+    expect(within(main()).queryByRole('group', { name: 'Short term goals' })).toBeNull();
+    expect(within(main()).getByRole('group', { name: 'Medium or Long term goal' })).toHaveAccessibleDescription(
+      'Ticked means reached.',
+    );
+  });
+
+  it('saves the tick of a Medium or Long term goal with the goals ticked', async () => {
+    await openToSubmit(json(template([breakfast, planning])));
+
+    fireEvent.click(within(main()).getByText(planning.text));
+    await wait(2_000);
+
+    expect(saves()[0].body).toMatchObject({ tickedGoalIds: [planning.id] });
+  });
+});
+
+describe('Medication', () => {
+  it('has no Medication box for a note without the line, and sends none', async () => {
+    await openToSubmit();
+
+    expect(within(main()).queryByRole('textbox', { name: 'Medication' })).toBeNull();
+    await write();
+    expect(saves()[0].body).toMatchObject({ medication: null });
+  });
+
+  it('shows it after the goals, before Daily Support Notes, with its hint, for a note with the line', async () => {
+    await openToSubmit(json({ ...template(), medication: '' }));
+
+    expect(medicationBox()).toHaveValue('');
+    expect(medicationBox()).toHaveAccessibleDescription('What was taken, and when.');
+    expect(within(main()).getByRole('heading', { level: 2, name: 'Medication' })).toContainElement(
+      medicationBox().labels[0],
+    );
+    expect(follows(medicationBox(), goalBoxes()[2])).toBe(true);
+    expect(follows(guidedNotes(), medicationBox())).toBe(true);
+    expect(within(main()).getByText('You can enter up to 1,000 characters')).toBeInTheDocument();
+  });
+
+  it('autosaves what is typed 2 s later, optional to submit', async () => {
+    await openToSubmit(json({ ...template(), medication: '' }));
+
+    fireEvent.change(medicationBox(), { target: { value: '8 am: two tablets.\n2 pm: one tablet.' } });
+    await wait(2_000);
+
+    expect(saves()).toHaveLength(1);
+    expect(saves()[0].body).toMatchObject({ medication: '8 am: two tablets.\n2 pm: one tablet.' });
+    fireEvent.change(medicationBox(), { target: { value: '' } });
+    await write();
+    await press(submitButton());
+    expect(errorSummary()).toBeNull();
+    expect(confirmation()).not.toBeNull();
+  });
+
+  it('shows the text of a saved draft', async () => {
+    serveNote(jane, json({ ...savedDraft(), medication: '8 am: two tablets.' }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(medicationBox()).toHaveValue('8 am: two tablets.');
+  });
+
+  it('refuses more than 1,000 characters on Submit, as the count says, autosave sending the first 1,000', async () => {
+    await openToSubmit(json({ ...template(), medication: '' }));
+    await write();
+
+    fireEvent.change(medicationBox(), { target: { value: 'x'.repeat(1_001) } });
+    expect(
+      within(main()).getByText('You have 1 character too many', { selector: '[aria-hidden="true"]' }),
+    ).toBeInTheDocument();
+    await wait(2_000);
+    expect(saves().at(-1)!.body.medication).toBe('x'.repeat(1_000));
+
+    await press(submitButton());
+
+    expect(summaryItems()).toEqual([['Medication must be 1,000 characters or less', '#medication']]);
+    expect(medicationBox()).toHaveAttribute('aria-invalid', 'true');
+    expect(medicationBox()).toHaveAccessibleDescription(
+      'Error: Medication must be 1,000 characters or less What was taken, and when.',
+    );
+    expect(confirmation()).toBeNull();
+
+    fireEvent.change(medicationBox(), { target: { value: 'x'.repeat(1_000) } });
+    expect(main().querySelector('#medication-error')).toBeNull();
+  });
+
+  it('shows a 422 under medication on the box, linked from the summary', async () => {
+    const refused = problem(422, { code: 'validation.failed', errors: { medication: ['Too long.'] } });
+    await openToSubmit(json({ ...template(), medication: '' }), refused);
+    await write();
+    await press(submitButton());
+
+    await confirmSubmit();
+
+    expect(confirmation()).toBeNull();
+    expect(errorSummary()).toHaveFocus();
+    expect(summaryItems()).toEqual([['Medication must be 1,000 characters or less', '#medication']]);
+    expect(medicationBox()).toHaveAttribute('aria-invalid', 'true');
+  });
+});
+
+describe('Details of an item that asks for them', () => {
+  const other: Row = {
+    ...goal('3f6a9c2e-8b14-4d57-a0e1-5c7d2b9f4a68', 'Other (staff to complete if different from above)'),
+    needsDetail: true,
+  };
+  const supports = group('6d1e4b8a-2f93-4c05-b7a6-9e3c0d5f1a27', 'Further supports', [other, showered], true);
+  const groups = [everyNote, supports];
+
+  /** The tick box of a common item. */
+  const itemBox = (item: Row) => within(main()).getByRole<HTMLInputElement>('checkbox', { name: item.text });
+
+  const openWithDetails = (submit?: Answer) => openToSubmit(json(template([breakfast], prompts, groups)), submit);
+
+  it('shows a Details box directly after a ticked item, named with the item, none while unticked', async () => {
+    await openWithDetails();
+    expect(within(main()).queryByRole('textbox', { name: /^Details/ })).toBeNull();
+
+    await press(itemBox(other));
+
+    const box = detailsBox(other.text);
+    expect(box).toHaveAttribute('id', `detail-${other.id}`);
+    expect(box).toHaveValue('');
+    expect(box.labels?.[0]).toHaveTextContent('Details');
+    expect(itemBox(other).closest('label')!.nextElementSibling).toContainElement(box);
+    expect(itemBox(other)).toHaveFocus();
+    expect(within(main()).queryByRole('textbox', { name: `Details, ${showered.text}` })).toBeNull();
+    expect(within(box.closest('div')!).getByText('You can enter up to 200 characters')).toBeInTheDocument();
+  });
+
+  it('autosaves the details with the ticks, and drops them with the untick, a re-tick starting empty', async () => {
+    await openWithDetails();
+    await press(itemBox(other));
+
+    fireEvent.change(detailsBox(other.text), { target: { value: 'A haircut' } });
+    await wait(2_000);
+
+    expect(saves()).toHaveLength(1);
+    expect(saves()[0].body).toMatchObject({
+      tickedCommonItemIds: [other.id],
+      commonItemDetails: { [other.id]: 'A haircut' },
+    });
+
+    await press(itemBox(other));
+    expect(within(main()).queryByRole('textbox', { name: /^Details/ })).toBeNull();
+    expect(itemBox(other)).toHaveFocus();
+    await wait(2_000);
+    expect(saves()[1].body).toMatchObject({ tickedCommonItemIds: [], commonItemDetails: {} });
+
+    await press(itemBox(other));
+    expect(detailsBox(other.text)).toHaveValue('');
+  });
+
+  it('sends a ticked item with a blank box as a blank detail, which a draft accepts', async () => {
+    await openWithDetails();
+
+    await press(itemBox(other));
+    await wait(2_000);
+
+    expect(saves()[0].body).toMatchObject({ commonItemDetails: { [other.id]: '' } });
+  });
+
+  it('takes the box and its text away with the unpicking of the group of the item', async () => {
+    await openWithDetails();
+    await press(itemBox(other));
+    fireEvent.change(detailsBox(other.text), { target: { value: 'A haircut' } });
+
+    await press(within(main()).getByRole('checkbox', { name: supports.name }));
+    expect(within(main()).queryByRole('textbox', { name: /^Details/ })).toBeNull();
+    await wait(2_000);
+    expect(saves()[0].body).toMatchObject({ pickedGroupIds: [], tickedCommonItemIds: [], commonItemDetails: {} });
+
+    await press(within(main()).getByRole('checkbox', { name: supports.name }));
+    await press(itemBox(other));
+    expect(detailsBox(other.text)).toHaveValue('');
+  });
+
+  it('refuses a blank box on Submit, inline and in the summary, linked to the box', async () => {
+    await openWithDetails();
+    await write();
+    await press(itemBox(other));
+
+    await press(submitButton());
+
+    const message = `Enter the details for ${other.text}`;
+    expect(summaryItems()).toEqual([[message, `#detail-${other.id}`]]);
+    expect(errorSummary()).toHaveFocus();
+    expect(detailsBox(other.text)).toHaveAttribute('aria-invalid', 'true');
+    expect(main().querySelector(`#detail-${other.id}-error`)?.textContent).toBe(`Error: ${message}`);
+    expect(detailsBox(other.text)).toHaveAccessibleDescription(`Error: ${message}`);
+    expect(confirmation()).toBeNull();
+    expect(document.title).toBe('Error: Grow2Notes – Note');
+  });
+
+  it('clears the message with the input that fixes it, then submits the details', async () => {
+    const { participant } = await openWithDetails();
+    await write();
+    await press(itemBox(other));
+    await press(submitButton());
+    expect(errorSummary()).not.toBeNull();
+
+    fireEvent.change(detailsBox(other.text), { target: { value: 'A haircut' } });
+    expect(main().querySelector(`#detail-${other.id}-error`)).toBeNull();
+    expect(detailsBox(other.text)).not.toHaveAttribute('aria-invalid');
+    await wait(2_000);
+    await press(submitButton());
+    await confirmSubmit();
+
+    expect(submits()).toHaveLength(1);
+    expect(submits()[0]).toMatchObject({
+      path: paths(participant).versions,
+      body: { tickedCommonItemIds: [other.id], commonItemDetails: { [other.id]: 'A haircut' } },
+    });
+  });
+
+  it('refuses a box of spaces alone, and one over 200 characters, with the count’s words', async () => {
+    await openWithDetails();
+    await write();
+    await press(itemBox(other));
+    fireEvent.change(detailsBox(other.text), { target: { value: '   ' } });
+    await press(submitButton());
+    expect(summaryItems()).toEqual([[`Enter the details for ${other.text}`, `#detail-${other.id}`]]);
+
+    fireEvent.change(detailsBox(other.text), { target: { value: 'x'.repeat(201) } });
+    expect(main().querySelector(`#detail-${other.id}-error`)?.textContent).toBe(
+      'Error: Details must be 200 characters or less',
+    );
+    await wait(2_000);
+    expect(saves().at(-1)!.body.commonItemDetails).toEqual({ [other.id]: 'x'.repeat(200) });
+  });
+
+  it('shows a 422 under commonItemDetails on the first ticked item whose box fails, in the summary', async () => {
+    const refused = problem(422, { code: 'validation.failed', errors: { commonItemDetails: ['Refused.'] } });
+    await openWithDetails(refused);
+    await write();
+    await press(itemBox(other));
+    // The server counts U+0085 as blank, where the form’s checks do not.
+    fireEvent.change(detailsBox(other.text), { target: { value: '\u0085' } });
+    await wait(2_000);
+    await press(submitButton());
+
+    await confirmSubmit();
+
+    expect(confirmation()).toBeNull();
+    expect(errorSummary()).toHaveFocus();
+    expect(summaryItems()).toEqual([[`Enter the details for ${other.text}`, `#detail-${other.id}`]]);
+    expect(detailsBox(other.text)).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('shows the details of a saved draft in the box of its ticked item', async () => {
+    serveNote(
+      jane,
+      json({
+        ...savedDraft(),
+        commonItemGroups: [{ ...supports, items: [{ ...other, isTicked: true, detail: 'A haircut' }, showered] }],
+      }),
+    );
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(detailsBox(other.text)).toHaveValue('A haircut');
+  });
+
+  it('is required on Save changes too, with the same message', async () => {
+    const tickedOther: DraftGroup = { ...supports, items: [{ ...other, isTicked: true }, showered] };
+    await openToEdit({ draft: json(editDraft({ commonItemGroups: [tickedOther] })) });
+
+    await pressAndWait(saveChangesButton());
+
+    expect(summaryItems()).toEqual([[`Enter the details for ${other.text}`, `#detail-${other.id}`]]);
+    expect(submits()).toEqual([]);
   });
 });

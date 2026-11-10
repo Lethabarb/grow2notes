@@ -25,6 +25,22 @@ sign-off.
 WAI-ARIA, HTML spec, framework docs · **[Convention]** established design systems · **[Opinion]** reasoned judgement.
 Every grade below is carried over from the component file named next to it, where the full evidence and sources sit.
 
+**T44 (D104, A150, A152, A163): a goal's term, the Medication switch, and the empty-goals sentence.** Where the rest of
+this file differs, this block wins. New strings are marked **(P)** and ship as proposed (D67).
+
+- **Medication box on notes** (P), a tick box in the Details, after the date of birth and before Save, with the hint
+  **Shows a Medication box on notes started from now on.** (P). It is saved with the Details' Save, sent with the
+  participant's version as `If-Match` (the `412` copy is unchanged), and is not on the Add participant form (a new
+  participant starts with it off). Switching it on or off affects only notes started afterwards; a note already started
+  keeps its box or its lack (A152, A3). An archived participant's summary list does not show it.
+- **Goals** (list-editor.md's setting slot). A goal's **Edit** form gains a **Term** fieldset of two radios, **Short
+  term** (the default, and what a goal added is) and **Medium or long term** (P), the goal's stored term chosen, sent with
+  Save under `If-Match` with the text. A goal that is Medium or long term shows the muted second line **Medium or long
+  term** under its text. A Save whose text and term are both as they were closes the form and sends nothing. The add
+  form is unchanged.
+- **T38: the empty sentence** in place of an empty goals list is now **No goals yet. Notes will show “No goals set”.**,
+  the words a note prints for a participant with no goals (A163).
+
 ---
 
 ## Purpose and who uses it
@@ -542,7 +558,7 @@ typed; `4:12 pm` = the save time in Melbourne.
 | **Saving** | Fields stay editable; Save busy after 400 ms | `Saving…` (P) |
 | **Validation failed** | Summary above the `<h1>`, inline messages above the inputs (table below), title `Error: Grow2Notes – Add participant` | `There is a problem` |
 | **Network or server failure** | Alert above Save (not the summary); typed values kept; focus stays on Save | `Not saved: no connection. Try again.` · `Not saved: something went wrong. Try again.` (P, microcopy.md) |
-| **Saved (`201`)** | Becomes the detail page: `<h1>` is the name, status next to Save, Goals (empty) and Actions appear | `Saved 4:12 pm` (P, status-messages.md) · `No goals yet. Notes will show an empty Goals section.` (see Goals) |
+| **Saved (`201`)** | Becomes the detail page: `<h1>` is the name, status next to Save, Goals (empty) and Actions appear | `Saved 4:12 pm` (P, status-messages.md) · `No goals yet. Notes will show “No goals set”.` (see Goals) |
 
 **Details validation messages** (same on Add participant and detail; checked on Save in page order; the first failing
 check per field is shown; inline and summary text are identical; all (P) unless marked, following GOV.UK templates via
@@ -570,7 +586,7 @@ form-validation.md and text-and-date-inputs.md):
 | **Still failing** | Same; focus stays on Try again | `This participant still did not load: no connection. Try again.` (P) |
 | **Not found** (unknown ID, `404`, `403`) | Whole-page not found (see list table) | `Page not found` |
 | **Active, default** | Details form, Goals, Actions | Goals help text (V, above) |
-| **No goals** | The sentence in place of the `<ol>`; the add form is still there; Archived goals only if any | `No goals yet. Notes will show an empty Goals section.` (second sentence V; first sentence P, the design's own name for the state) |
+| **No goals** | The sentence in place of the `<ol>`; the add form is still there; Archived goals only if any | `No goals yet. Notes will show “No goals set”.` (second sentence V; first sentence P, the design's own name for the state) |
 | **No archived goals** | The Archived goals section is left out entirely | — |
 | **Details saving** | Fields editable; Save busy | `Saving…` (P) |
 | **Details saved** | Status next to Save; focus stays on Save; `<h1>` shows the saved name | `Saved 4:12 pm` (P) |
@@ -865,7 +881,7 @@ content, not context) · 3.2.3 Consistent Navigation · 3.2.4 Consistent Identif
 | 2 | Request failures: list-editor.md "…something went wrong in Grow2Notes. Try again.", form-validation.md "Not saved: no connection. Check your connection and try again." | microcopy.md's shape with **one verb per action**, as common-items.md: `Not moved / added / saved / archived / restored: [cause]. Try again.` | One shape per message kind (microcopy.md section 4), modelled on design's "Not saved: no connection."; "Not saved" after a failed Move is not literally true (editorial pass aligned the two list editors). |
 | 3 | No-match text: design and search-filter.md `No participant matches ‘xyz’` (no full stop); empty-loading-error.md and participant-list-rows.md with straight quotes. | `No participant matches ‘xyz’.` | microcopy.md (N): typographic quotes and a full stop for sentences. |
 | 4 | Goal row button order: foundations.md "Edit, Move up, Move down, Archive"; list-editor.md "Move up, Move down, Edit, Archive". | **list-editor.md** order. | The component owner's reasoning: the move pair stays together and Archive sits furthest from the text. Matches design 4.8's list of four. |
-| 5 | Empty goals: microcopy.md (V) "Notes will show an empty Goals section." only; list-editor.md and empty-loading-error.md add "No goals yet." first. | `No goals yet. Notes will show an empty Goals section.` | "No goals yet" is the design's own name for the state; microcopy.md's own empty-state pattern is "what is empty, then the path". Flagged for sign-off. |
+| 5 | Empty goals: microcopy.md (V) "Notes will show an empty Goals section." only; list-editor.md and empty-loading-error.md add "No goals yet." first. | `No goals yet. Notes will show “No goals set”.` (T38, A163) | "No goals yet" is the design's own name for the state; microcopy.md's own empty-state pattern is "what is empty, then the path". Flagged for sign-off. |
 | 6 | Goal hint: form-validation.md "Up to 200 characters"; list-editor.md and microcopy.md "You can enter up to 200 characters". | `You can enter up to 200 characters` (the character count). | Two of three, the GOV.UK default, and the same count component as the flag Reason. |
 | 7 | Active view empty when every participant is archived: empty-loading-error.md "No participants yet."; tabs-segmented.md "No active participants." | `No active participants.` (P); "No participants yet." only when there are none at all. | "No participants yet." would be untrue when archived participants exist (NN/g: misleading system status is harmful, https://www.nngroup.com/articles/empty-state-interface-design/). |
 | 8 | Where goal announcements go: list-editor.md "the app's single role=status region"; status-messages.md "no global live region; pages render their own"; primary-actions.md "a page-level role=status region". | One **page-level** hidden status region on participant detail. | Satisfies all three: a single region for the page, owned by the page, present from the first render. |

@@ -60,6 +60,7 @@ internal sealed class CommonItemChanges(
             OrganisationId = tenant.OrganisationId,
             GroupId = groupId,
             Text = text,
+            NeedsDetail = request.NeedsDetail ?? false,
             SortOrder = ListOrder.End(await ActiveItemsAsync(groupId, cancellationToken)),
             CreatedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
         };
@@ -88,7 +89,8 @@ internal sealed class CommonItemChanges(
     /// (<see cref="ItemText.CommonItem"/>); then puts a moved item at the end of the chosen group's active items
     /// (<see cref="ListOrder.End"/>, A42), keeping its archived state, and saves it with
     /// <c>common_item.updated</c>, which names no participant, and whose <c>Details</c> hold the old and new values of
-    /// those of its <c>groupId</c>, <c>sortOrder</c> and <c>text</c> that changed (S01.03.08's Note); or, when none
+    /// those of its <c>groupId</c>, <c>sortOrder</c>, <c>text</c> and <c>needsDetail</c> that changed (S01.03.08's
+    /// Note); a <c>needsDetail</c> the request leaves out keeps the stored one on either channel (A151); or, when none
     /// changed, saves nothing and writes no event, and answers <see cref="CommonItemChangeResult.Changed"/>
     /// <see langword="false"/> (D84). A missing or <c>null</c> <c>groupId</c>, or the item's own, keeps it in its place
     /// in its group. Any active group can be chosen, Every note included. An archived item of an active group is
@@ -155,6 +157,7 @@ internal sealed class CommonItemChanges(
 
                 var before = UpdateValues(item);
                 item.Text = text;
+                item.NeedsDetail = sent.NeedsDetail ?? item.NeedsDetail;
                 if (moved)
                 {
                     item.SortOrder = ListOrder.End(await ActiveItemsAsync(groupId, cancellationToken));
@@ -379,6 +382,7 @@ internal sealed class CommonItemChanges(
     {
         ["groupId"] = item.GroupId,
         ["text"] = item.Text,
+        ["needsDetail"] = item.NeedsDetail,
         ["sortOrder"] = item.SortOrder,
         ["archivedAtUtc"] = item.ArchivedAtUtc,
     };
@@ -391,6 +395,7 @@ internal sealed class CommonItemChanges(
     {
         ["groupId"] = item.GroupId,
         ["text"] = item.Text,
+        ["needsDetail"] = item.NeedsDetail,
         ["sortOrder"] = item.SortOrder,
     };
 

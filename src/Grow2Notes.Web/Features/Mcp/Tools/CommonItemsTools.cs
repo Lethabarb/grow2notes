@@ -53,7 +53,7 @@ internal sealed class CommonItemsTools(
         "An archived group's items cannot be added, reworded or moved, and no item can be moved into one. " +
         "Restore the group with restore_common_item_group first.";
 
-    private const string NoFieldToChange = "Send at least one of text and groupId.";
+    private const string NoFieldToChange = "Send at least one of text, groupId and needsDetail.";
 
     private const string EveryNoteFixed =
         "The Every note group cannot be renamed, archived or restored, and always comes first. Choose another group.";
@@ -73,7 +73,9 @@ internal sealed class CommonItemsTools(
         OutputSchemaType = typeof(CommonItemGroups))]
     [Description(
         "Lists the common item groups of this organisation with their items, in the order the app shows them: the " +
-        "Every note group first, then the other groups, and in each group its items. Each group and item has its " +
+        "Every note group first, then the other groups, and in each group its items. " +
+        "An item says whether ticking it on a note asks for details (needsDetail), as an Other item does. " +
+        "Each group and item has its " +
         "ID and the expectedVersion that a later change needs. Archived groups and items are listed only with " +
         "includeArchived, after the active ones. " +
         ToolResults.TypedByPeople)]
@@ -251,12 +253,18 @@ internal sealed class CommonItemsTools(
         OutputSchemaType = typeof(ItemChange))]
     [Description(
         "Adds a common item at the end of the active items of a group, which can be the Every note group. An " +
-        "archived group takes no item: restore it first. Returns the new item's itemId and expectedVersion, which a " +
+        "archived group takes no item: restore it first. " +
+        "Ticking it on a note asks for details if needsDetail is true. " +
+        "Returns the new item's itemId and expectedVersion, which a " +
         "later change needs. The result's helpText says what a change to an item does to notes. " +
         ToolResults.TypedByPeople)]
     public async Task<CallToolResult> AddCommonItemAsync(
         [Description("The groupId that list_common_items returned.")] string groupId,
         [Description("The item's wording: at most 200 characters, on one line.")] string text,
+        [Description(
+            "true if ticking the item on a note should ask for details, as an Other item does; false, the default, " +
+            "if not.")]
+        bool needsDetail = false,
         CancellationToken cancellationToken = default)
     {
         if (TextInput.Refusal("text", "Common item", text, Limits.ItemText) is { } refusal)
@@ -270,7 +278,7 @@ internal sealed class CommonItemsTools(
         }
 
         var actor = ToolActor.Of(httpContextAccessor);
-        var result = await itemChanges.AddAsync(actor, id, new(text), cancellationToken);
+        var result = await itemChanges.AddAsync(actor, id, new(text, needsDetail), cancellationToken);
         return RefusalOf(result, Words.ItemOfGroup) is { } error
             ? error.ToResult()
             : await ItemChangeAsync(
@@ -287,7 +295,8 @@ internal sealed class CommonItemsTools(
         UseStructuredContent = true,
         OutputSchemaType = typeof(ItemChange))]
     [Description(
-        "Rewords an item, moves it to another group, or both: send only text, only groupId, or both. Needs the " +
+        "Rewords an item, moves it to another group, sets whether ticking it asks for details, or any of these: " +
+        "send only the fields to change. Needs the " +
         "itemId and expectedVersion that list_common_items returned. A move puts the item at the end of the active " +
         "items of the new group, which can be the Every note group; a groupId that is the item's own group is not a " +
         "move. An item of an archived group cannot be reworded or moved, and no item can be moved into an archived " +
@@ -300,9 +309,12 @@ internal sealed class CommonItemsTools(
         string? expectedVersion = null,
         [Description("The new wording: at most 200 characters, on one line.")] string? text = null,
         [Description("The groupId of the group to move the item to.")] string? groupId = null,
+        [Description(
+            "true if ticking the item on a note should ask for details, false if not; leave out to keep it as it is.")]
+        bool? needsDetail = null,
         CancellationToken cancellationToken = default)
     {
-        if (text is null && groupId is null)
+        if (text is null && groupId is null && needsDetail is null)
         {
             return new ToolError(ErrorCode.ValidationFailed.Code, NoFieldToChange).ToResult();
         }
@@ -330,7 +342,7 @@ internal sealed class CommonItemsTools(
 
         var actor = ToolActor.Of(httpContextAccessor);
         var result = await itemChanges.UpdateAsync(
-            actor, id, IfMatch.FromExpectedVersion(expectedVersion), new(text, chosen), cancellationToken);
+            actor, id, IfMatch.FromExpectedVersion(expectedVersion), new(text, chosen, needsDetail), cancellationToken);
         return RefusalOf(result, Words.UpdatedItem) is { } error
             ? error.ToResult()
             : await ItemChangeAsync(actor, id, result.Changed, cancellationToken);
@@ -472,7 +484,14 @@ internal sealed class CommonItemsTools(
         call.Returned(McpCall.GroupIds, [group.GroupId]);
         call.Returned(McpCall.CommonItemIds, [itemId]);
         return ToolResults.Of(new ItemChange(
-            item.ItemId, group.GroupId, item.Text, item.Archived, changed, item.ExpectedVersion, ToolResults.HelpText));
+            item.ItemId,
+            group.GroupId,
+            item.Text,
+            item.NeedsDetail,
+            item.Archived,
+            changed,
+            item.ExpectedVersion,
+            ToolResults.HelpText));
     }
 
     private async Task<CallToolResult> GroupChangeAsync(
@@ -510,7 +529,7 @@ internal sealed class CommonItemsTools(
             [.. group.Items.Select(EntryOf).OrderBy(item => item.Archived)]);
 
     private static CommonItemEntry EntryOf(AdminCommonItem item) =>
-        new(item.Id, item.Text, item.ArchivedAtUtc is not null, item.RowVersion);
+        new(item.Id, item.Text, item.NeedsDetail, item.ArchivedAtUtc is not null, item.RowVersion);
 
     // The refusal that a handler gave, or null when it gave none: what it did not find in the words given, then its
     // code, then the messages of the name or text.

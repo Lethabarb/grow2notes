@@ -7,6 +7,7 @@ import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
 import { buttonClass } from '../../components/buttonClass.ts';
 import { ButtonGroup } from '../../components/ButtonGroup.tsx';
+import choiceRow from '../../components/ChoiceRow.module.css';
 import { DateOfBirthField } from '../../components/DateOfBirthField.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
@@ -24,6 +25,7 @@ import { SaveStatus, type SaveState } from '../../components/SaveStatus.tsx';
 import { SummaryList } from '../../components/SummaryList.tsx';
 import { SummaryRow } from '../../components/SummaryRow.tsx';
 import textInput from '../../components/textInput.module.css';
+import tickList from '../../components/TickList.module.css';
 import { datePlain, parseDateOnly } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
@@ -32,6 +34,7 @@ import { limits } from '../../limits.ts';
 import { PageNotFound } from '../../routes/PageNotFound.tsx';
 import { invalidateToday } from '../today/todayQuery.ts';
 import { goalsApi, goalsQuery } from './goalsQuery.ts';
+import { goalTerm } from './goalTerm.tsx';
 import styles from './ParticipantPage.module.css';
 import { fullName, participantsQuery, type AdminParticipant, type ParticipantStatus } from './participantsQuery.ts';
 
@@ -43,6 +46,7 @@ const ids = {
   givenName: 'details-givenName',
   familyName: 'details-familyName',
   dateOfBirth: 'details-dateOfBirth',
+  medicationLine: 'details-medicationLine',
 } as const;
 
 /** The Details as typed. */
@@ -159,12 +163,14 @@ function summaryItems({ givenName, familyName, dateOfBirth }: Errors): FormError
 /**
  * The participant as the server last confirmed them: their ID; their details, whose name the `<h1>` shows, so that it
  * changes only once a save is done, never as the name is typed (text-and-date-inputs.md), and which an archived
- * participant's Details show, and Restore puts back in the form; their status, which decides whether the page is the
+ * participant's Details show, and Restore puts back in the form; whether their notes have a Medication box (A152);
+ * their status, which decides whether the page is the
  * form or read-only; and their version, which the next change sends as `If-Match`.
  */
 type Known = {
   id: string;
   details: Details;
+  hasMedicationLine: boolean;
   status: ParticipantStatus;
   /**
    * The version that the page loaded them at, then the one that the list gives after each change and each refusal as
@@ -176,12 +182,23 @@ type Known = {
 };
 
 /** The participant as the page knows them, from the list. */
-function knownOf({ id, givenName, familyName, dateOfBirth, status, rowVersion }: AdminParticipant): Known {
-  return { id, details: { givenName, familyName, dateOfBirth }, status, version: rowVersion };
+function knownOf({
+  id,
+  givenName,
+  familyName,
+  dateOfBirth,
+  hasMedicationLine,
+  status,
+  rowVersion,
+}: AdminParticipant): Known {
+  return { id, details: { givenName, familyName, dateOfBirth }, hasMedicationLine, status, version: rowVersion };
 }
 
-/** A correction of a participant's Details, and the version it is sent with. */
-type Correction = { id: string; details: Details; version: string | undefined };
+/**
+ * A correction of a participant's Details and their Medication box switch, and the version it is sent with. The switch
+ * is sent with every correction, as the page shows it, under the same `If-Match`.
+ */
+type Correction = { id: string; details: Details; hasMedicationLine: boolean; version: string | undefined };
 
 /** An archive or a restore of a participant, and the version it is sent with. */
 type StatusChange = { id: string; action: 'archive' | 'restore'; version: string | undefined };
@@ -343,6 +360,9 @@ function Participant({ participant, onAdded }: ParticipantProps) {
   );
   // As typed, in this page's memory only (D22), copied once from the participant, so that no refetch overwrites them.
   const [typed, setTyped] = useState<Typed>(() => (participant === undefined ? nothingTyped : typedOf(participant)));
+  // Whether their notes have a Medication box, as the tick box shows it, copied once from the participant like the
+  // rest.
+  const [medicationLine, setMedicationLine] = useState(participant?.hasMedicationLine ?? false);
   const [errors, setErrors] = useState<Errors>({});
   // The presses that found a field in error, so that each moves focus to the summary, even with the same messages.
   const [attempt, setAttempt] = useState(0);
@@ -369,9 +389,13 @@ function Participant({ participant, onAdded }: ParticipantProps) {
   // as a `412`. Each reads the list again itself, and leaves Today to fetch its list again too, as it shows the
   // participant's name, and only while they are active (participants.md *Interactions*).
   const correct = useMutation({
-    mutationFn: ({ id, details, version }: Correction): Promise<Outcome<WithHeaders<undefined>>> =>
+    mutationFn: ({ id, details, hasMedicationLine, version }: Correction): Promise<Outcome<WithHeaders<undefined>>> =>
       changeAndReread(queryClient, id, version, (ifMatch) =>
-        apiWithHeaders<undefined>(`${participantsPath}/${id}`, { method: 'PUT', body: details, ifMatch }),
+        apiWithHeaders<undefined>(`${participantsPath}/${id}`, {
+          method: 'PUT',
+          body: { ...details, hasMedicationLine },
+          ifMatch,
+        }),
       ),
     onSuccess: () => {
       void invalidateToday(queryClient);
@@ -421,6 +445,7 @@ function Participant({ participant, onAdded }: ParticipantProps) {
   function turn(next: Known) {
     setKnown(next);
     setTyped(typedOf(next.details));
+    setMedicationLine(next.hasMedicationLine);
     setErrors({});
     setFailure(undefined);
     setSaved('none');
@@ -465,7 +490,7 @@ function Participant({ participant, onAdded }: ParticipantProps) {
     const details = checked.details;
     if (known !== undefined) {
       correct.mutate(
-        { id: known.id, details, version: known.version },
+        { id: known.id, details, hasMedicationLine: medicationLine, version: known.version },
         {
           onSuccess: (outcome) => {
             // Archived by someone else meanwhile, which the read shows (participants.md *Interactions*).
@@ -480,7 +505,7 @@ function Participant({ participant, onAdded }: ParticipantProps) {
               return;
             }
 
-            setKnown({ ...known, details, version: outcome.now?.rowVersion });
+            setKnown({ ...known, details, hasMedicationLine: medicationLine, version: outcome.now?.rowVersion });
             setSaved({ savedAtUtc: outcome.answer.dateUtc });
           },
           onError: refused,
@@ -493,7 +518,7 @@ function Participant({ participant, onAdded }: ParticipantProps) {
       onSuccess: ({ body, dateUtc }) => {
         // Before the Goals section appears, so that it shows them at once, with nothing to wait for.
         queryClient.setQueryData(goalsQuery(body.id).queryKey, []);
-        setKnown({ id: body.id, details, status: 'Active', version: undefined });
+        setKnown({ id: body.id, details, hasMedicationLine: false, status: 'Active', version: undefined });
         onAdded?.(body.id);
         setSaved({ savedAtUtc: dateUtc });
         // Replaced, so that Back goes to the list, not to an empty form, and in the screen, so that the shell moves
@@ -597,6 +622,27 @@ function Participant({ participant, onAdded }: ParticipantProps) {
                 error={errors.dateOfBirth?.message}
                 invalid={errors.dateOfBirth?.parts ?? []}
               />
+              {known !== undefined && (
+                <div>
+                  <label htmlFor={ids.medicationLine} className={tickList.row}>
+                    <input
+                      id={ids.medicationLine}
+                      type="checkbox"
+                      className={tickList.box}
+                      checked={medicationLine}
+                      aria-describedby={`${ids.medicationLine}-hint`}
+                      onChange={(event) => {
+                        setMedicationLine(event.currentTarget.checked);
+                        setSaved('none');
+                      }}
+                    />
+                    <span className={tickList.text}>{strings.participantDetails.medicationLine}</span>
+                  </label>
+                  <p id={`${ids.medicationLine}-hint`} className={choiceRow.hint}>
+                    {strings.participantDetails.medicationLineHint}
+                  </p>
+                </div>
+              )}
             </div>
             <RequestAlert>{failure}</RequestAlert>
             <div className={styles.save}>
@@ -618,7 +664,7 @@ function Participant({ participant, onAdded }: ParticipantProps) {
           <h2 id={goalsHeadingId}>{strings.participantGoals.heading}</h2>
           <ListFrame helpId={goalsHelpId} help={archived ? undefined : strings.listEditor.goal.help}>
             <ListConflict />
-            <ListEditor kind="goal" api={goalsApi(known.id)} readOnly={archived} />
+            <ListEditor kind="goal" api={goalsApi(known.id)} setting={goalTerm} readOnly={archived} />
           </ListFrame>
         </section>
       )}

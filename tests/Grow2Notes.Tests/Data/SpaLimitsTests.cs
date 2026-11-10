@@ -26,6 +26,17 @@ public sealed partial class SpaLimitsTests
         Assert.Empty(Problems(limitsTs));
     }
 
+    // The limits of a common item's details and of the Medication text (D104), which the note form checks as it types.
+    [Fact]
+    public void The_limits_of_the_item_details_and_the_Medication_text_are_in_limits_ts()
+    {
+        var limitsTs = File.ReadAllText(Path.Combine(Repository.Root(), "src", "grow2notes-spa", "src", "limits.ts"));
+
+        Assert.Equal((200, 1_000), (Limits.ItemDetail, Limits.Medication));
+        Assert.Contains("itemDetail: 200,", limitsTs, StringComparison.Ordinal);
+        Assert.Contains("medication: 1_000,", limitsTs, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_sample_with_comments_and_digit_separators_passes()
     {

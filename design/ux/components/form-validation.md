@@ -24,6 +24,19 @@ Component key: `form-validation`. This covers how Grow2Notes checks what people 
 
 Evidence grades: **[Research]** studies, usability or assistive-technology testing · **[Standard]** WCAG 2.2, WAI-ARIA, HTML spec, NIST · **[Convention]** established design systems · **[Opinion]** reasoned judgement with no direct evidence.
 
+**T44 (D104, A151, A152): two limits and two checks.** Where the rest of this file differs, this block wins.
+
+- **Limits** (`limits.ts`, held to `Limits.cs` by `SpaLimitsTests`): **200 characters** for a Details box
+  (`limits.itemDetail`, single line) and **1,000 characters** for the Medication text (`limits.medication`). Both are
+  counted as the server counts them, with the shared count under the field and no `maxlength`.
+- **Messages.** A blank Details box on Submit or Save changes: **Enter the details for [item]** (P), with the item's
+  wording, inline above the box and in the summary linked to `#detail-[item ID]`; a Details box too long: **Details must
+  be 200 characters or less**; the Medication text too long: **Medication must be 1,000 characters or less**, linked to
+  `#medication`. The Medication text is optional, so it has no blank message. A box's message goes with the input that
+  fixes it, and a Details box's message goes with its item's untick.
+- **Server responses.** A `422` under `commonItemDetails` or `medication` is shown on the field it names, with its link
+  in the summary (note-form.md); the other `422`s of a note stay the summary's one unlinked item.
+
 ---
 
 ## Where it's used
