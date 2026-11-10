@@ -269,16 +269,22 @@ Draft --Discard (author or manager)--> Discarded (kept, hidden, audited; frees t
 **On screen, in order:**
 1. Top bar: back to Today, and the save indicator.
 2. The participant's full name in large type, and the note date. On a manager's past-day note, a banner: "Past-day note for Mon 28 Sep 2026, written on 1 Oct."
-3. **1. Goals.** The participant's goals as full-width tick-box rows. Ticked means reached.
-4. **2. Common items.** "Ticked means done." Then, in this order, all as full-width tick-box rows (`ux/components/group-picker.md`):
+3. **Attendance.** Three independent tick boxes, **Not In**, **Late Notice** and **Sick**, as the Word template names them (D104, A153). They hide nothing: a note ticked Not In still needs its text. They are saved with the draft and versioned like any tick.
+4. **The goals,** as full-width tick-box rows, under **Short term goals** and **Medium or Long term goal**, the snapshot's order kept in each, and a heading left out when its term has no goal (A150). Ticked means reached.
+5. **Medication,** only on a note whose participant has the Medication box switched on when the note is started (A152): a text box under the hint "What was taken, and when." Optional, up to 1,000 characters, free text only (D14 stands).
+6. **The common items.** "Ticked means done." Then, in this order, all as full-width tick-box rows, each list under its group's name (`ux/components/group-picker.md`):
    - **Every note:** that group's items, always shown (D45).
    - **The groups:** the question "Which of these happened?" with the hint "Tick all that happened. Their items show below.", then one tick box per group that has items, in the managers' order. On a new note the groups picked on the participant's most recent submitted note are already ticked (D46, A44), with no line about where they came from (D83). Only group picks are copied; item ticks never are.
    - **Each picked group's items,** as its own list under the group's name, in the managers' order (never the order they were ticked).
 
    Ticking a group shows its items, unticked. Unticking it hides them and clears their ticks, with no confirmation (A46). Focus stays on the tick box and nothing scrolls. Workers never see the word "group".
-5. **3. Guided notes.** A permanently visible label and one text box that grows as you type. The guide prompts show in grey until typing starts (D34). The box is large enough for phone keyboard dictation (A31).
-6. **Flag for manager** tick box. When ticked, a Reason field appears (required, up to 200 characters).
-7. **Submit note** button. A menu holds "Discard draft".
+
+   **Details.** Under a ticked item that a manager marked "Ask for details when ticked" (the Word template's "Other" items), a labelled "Details" box (up to 200 characters) shows at once. It is required to submit and to save changes, is cleared with the tick, and starts empty if the item is ticked again (A151).
+7. **Daily Support Notes** (the screen label of the Guided notes box, A159). A permanently visible label and one text box that grows as you type. The guide prompts show in grey until typing starts (D34). The box is large enough for phone keyboard dictation (A31).
+8. **Flag for manager** tick box. When ticked, a Reason field appears (required, up to 200 characters).
+9. **Submit note** button. A menu holds "Discard draft".
+
+The section numbers are gone (A159): each heading is the Word template's word, and the report uses the same ones (§11).
 
 **Save indicator:** "Saving…" / "Saved 9:42 am" / "Not saved: no connection. Keep this page open; retrying." Submit is disabled while the latest change is not saved.
 
@@ -289,7 +295,7 @@ Draft --Discard (author or manager)--> Discarded (kept, hidden, audited; frees t
 - **Group picks copied from the last note** (D46, A44): the groups picked on the participant's most recent submitted note start ticked, with their items unticked. With no earlier submitted note, or none of its groups still offered, nothing is ticked. Nothing says where the picks came from (D83).
 - **Lists changed before the first save:** if a manager changed the goals, the common items or their groups between the form opening and the first change, the form reloads the lists, keeps the text and any picks and ticks that still apply (a tick on an item moved into an unpicked group is dropped), and says "The goal or common-item list was just changed. Please check your ticks."
 - **Changed on another device or tab:** banner "This note was changed on another device or tab." with **Keep the text on this screen** or **Load the other version**. The text on screen is never replaced without asking.
-- **Validation:** an empty Guided notes box or a missing flag reason shows an error next to the field, plus a summary at the top when Submit is tapped.
+- **Validation:** an empty Daily Support Notes box, a ticked item that asks for details with a blank Details box ("Enter the details for [item]") or a missing flag reason shows an error next to the field, plus a summary at the top when Submit is tapped. Save changes checks the same.
 - **No goals set up:** "No goals set up for Jane yet. A manager can add them." The note can still be submitted.
 - **No common items set up:** "No common items set up." If only the Every note group has items, there is no question. If the Every note group has no items, it is not shown. A group with no items is not offered (A45).
 - **Editing a submitted note** (author or manager): the same form, headed "Editing submitted note (version 2)", with **Save changes** and **Cancel**. It shows the version's groups and picks, including a group archived since, and the picks can be changed. With no common items: "No common items set".
@@ -306,12 +312,22 @@ Draft --Discard (author or manager)--> Discarded (kept, hidden, audited; frees t
 | JANE CITIZEN                      |
 | Thursday 1 October 2026           |
 +-----------------------------------+
-| 1. Goals                          |
+| Attendance                        |
+| [ ] Not In                        |
+| [x] Late Notice                   |
+| [ ] Sick                          |
++-----------------------------------+
+| Short term goals                  |
 | [x] Makes own breakfast           |
 | [ ] Catches bus to day program    |
+|                                   |
+| Medium or Long term goal          |
 | [x] Phones her sister             |
 +-----------------------------------+
-| 2. Common items                   |
+| Medication                        |
+| What was taken, and when.         |
+| [___________________________]     |
++-----------------------------------+
 | Ticked means done.                |
 |                                   |
 | Every note                        |
@@ -329,8 +345,10 @@ Draft --Discard (author or manager)--> Discarded (kept, hidden, audited; frees t
 | [x] Travelled by bus or train     |
 | [ ] Paid for own purchases        |
 |  (only picked groups' items show) |
+| [x] Other (staff to complete ...) |
+|     Details [__________________]  |
 +-----------------------------------+
-| 3. Guided notes                   |
+| Daily Support Notes               |
 | +-------------------------------+ |
 | | Mood and wellbeing today?     | |
 | | What did you do together?     | |
@@ -375,10 +393,12 @@ After submitting, the user returns to Today with "Note for Jane Citizen submitte
 1. Participant name. Managers also see Write past-day note, Export record and Edit participant.
 2. Notes, newest first: date, author, status (Draft or Submitted) and tags (Edited, Flagged; managers also see To review or Reviewed). No Past-day note tag on these rows: the read view shows the past-day line (D81). 30 at a time, then "Show older".
 
-**Read view of one note:**
-- Every goal from the note's snapshot, shown as ticked or not ticked.
-- Common items (D47): the Every note group, then each group picked on the note, under the group's name in the managers' order, each item shown as ticked or not ticked. Groups not picked and the "Which of these happened?" question do not appear. If no common items are shown: "No common items set".
-- The Guided notes text, the flag and its reason, the author, and the submitted time (with its date when it was a later day).
+**Read view of one note** (the Word template's words, A159):
+- **Attendance:** Not In, Late Notice and Sick, each shown as ticked or not ticked.
+- Every goal from the note's snapshot, shown as ticked or not ticked, under **Short term goals** and **Medium or Long term goal**; a heading with no goal is left out. If the note has no goals: "No goals set".
+- **Medication** and its text, where the note has the box.
+- Common items (D47): the Every note group, then each group picked on the note, under the group's name in the managers' order, each item shown as ticked or not ticked, with "Details: [text]" under a ticked item that has details. Groups not picked and the "Which of these happened?" question do not appear. If no common items are shown: "No common items set".
+- The Daily Support Notes text, the flag and its reason, the author, and the submitted time (with its date when it was a later day).
 - "Past-day note, written on … by …" where it applies, and the "Edited" label.
 - Managers also see the review status and comment, and a "Version history" link.
 - Actions: Edit (author or manager); Mark reviewed (manager, when the note is in To review).
@@ -396,7 +416,7 @@ After submitting, the user returns to Today with "Note for Jane Citizen submitte
 **On screen:**
 1. Participant, note date, current version number.
 2. Versions, newest first, for example "Version 3 · Sam Lee (manager) · 1 Oct 2026, 5:03 pm". Version 1 is labelled "Submitted".
-3. Tapping a version shows it in full, read-only, laid out like the read view, with the groups picked in that version.
+3. Tapping a version shows it in full, read-only, laid out like the read view (so with its attendance, term headings, Medication and details), with the groups picked in that version. The list's rows say nothing of the note's content (A159).
 
 **States:** only one version: "Not edited since submit".
 
@@ -425,7 +445,7 @@ After submitting, the user returns to Today with "Note for Jane Citizen submitte
 **On screen, in order:**
 1. **Previous day**, a native date field and **Next day**. The screen opens on today's date (Melbourne). Future dates cannot be picked, so Next day is disabled on today.
 2. **Week**, a choice of None (the default), Week A or Week B, which the file prints in its title (D104, A158). It is not remembered, and it is not part of the screen's URL or of the file's name.
-3. **Download Word** and **Download PDF**. The file is named by its weekday and date, such as `Monday 14.09.2026.docx` (A19, A80, D104).
+3. **Download Word** and **Download PDF**. The file is named by its weekday and date, such as `Monday 14.09.2026.docx` (A19, A80, D104). Under them, one line says what to answer when Word asks to update the fields: "When Word asks to update the fields, choose Yes to fill in the page numbers." (A156).
 
 The screen URL is `/reports/daily/2026-10-01`: a date only, so back, forward and bookmarks work and no personal data is in the URL.
 
@@ -440,14 +460,14 @@ The screen URL is `/reports/daily/2026-10-01`: a date only, so back, forward and
 **List screen:** search, an Active / Archived toggle, names, and "Add participant".
 
 **Participant detail, in order:**
-1. **Details:** given name, family name, date of birth (A5). Save.
-2. **Goals:** the active goals in order. Each row has Edit, Move up, Move down and Archive. "Add goal" takes up to 200 characters. Archived goals sit in a collapsed section, each with Restore. Help text: "Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written with."
+1. **Details:** given name, family name, date of birth (A5), and, once the participant exists, a tick box "Medication box on notes" that shows a Medication box on notes started from now on (D104, A152). Save.
+2. **Goals:** the active goals in order. Each row has Edit, Move up, Move down and Archive. Edit also sets the goal's **Term**, Short term or Medium or long term (A150); a Medium or long term goal shows that under its text. "Add goal" takes up to 200 characters. Archived goals sit in a collapsed section, each with Restore. Help text: "Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written with."
 3. **Actions:** Past notes (4.4), Write past-day note, Export record (4.12), Archive participant or Restore.
 
 **Write past-day note:** a date field allowing past dates only. If that date already has a note, it opens; otherwise the note form (4.3) opens for that date with the past-day banner.
 
 **States:**
-- No goals yet: "Notes will show an empty Goals section."
+- No goals yet: "Notes will show “No goals set”." (T38, A163)
 - Archived participant: a read-only banner with Restore. The page is read-only on screen, and the server refuses a change to their details or goals with `422 participant.archived` until they are restored (D86, D93).
 
 **Primary action:** Save / Add goal.
@@ -460,7 +480,7 @@ The screen URL is `/reports/daily/2026-10-01`: a date only, so back, forward and
 1. Help text: "Items in Every note show on every note. For other groups, the writer ticks the ones that happened. Changes apply to notes started from now on."
 2. **Every note,** always first, with the line "Always shown first, on every note." It has no group buttons: it cannot be renamed, moved or archived (A43).
 3. One section per active group, in order, headed with the group's name, with **Move up**, **Move down**, **Rename** and **Archive**. Rename uses one field, "Group name", up to 200 characters.
-4. In every section, the same item list as before: active items, each with Edit, Move up, Move down and Archive; a "New item in [group name]" field (up to 200 characters) with **Add item**, which adds at the end of that group; and the group's archived items, collapsed, each with Restore.
+4. In every section, the same item list as before: active items, each with Edit, Move up, Move down and Archive (Edit also has the tick box "Ask for details when ticked", and an item that has it shows "Asks for details" under its text, A151); a "New item in [group name]" field (up to 200 characters) with **Add item**, which adds at the end of that group; and the group's archived items, collapsed, each with Restore.
 5. "New group" (up to 200 characters) with **Add group**. The new group goes at the end, empty.
 6. Archived groups, collapsed, each with Restore. A restored group returns at the end of the groups with its active items.
 

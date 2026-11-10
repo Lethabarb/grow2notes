@@ -29,6 +29,12 @@ export type DraftSave = {
   tickedGoalIds: string[];
   pickedGroupIds: string[];
   tickedCommonItemIds: string[];
+  /** The three Attendance ticks, the Medication text and the details of ticked items, none of which the store holds. */
+  isNotIn: boolean;
+  isLateNotice: boolean;
+  isSick: boolean;
+  medication: string | null;
+  commonItemDetails: Record<string, string>;
   isFlagged: boolean;
   flagReason: string | null;
 };
@@ -40,6 +46,12 @@ export type VersionBody = {
   tickedGoalIds: string[];
   pickedGroupIds: string[];
   tickedCommonItemIds: string[];
+  /** The three Attendance ticks, the Medication text and the details of ticked items, none of which the store holds. */
+  isNotIn: boolean;
+  isLateNotice: boolean;
+  isSick: boolean;
+  medication: string | null;
+  commonItemDetails: Record<string, string>;
   isFlagged: boolean;
   flagReason: string | null;
 };
@@ -234,6 +246,21 @@ const isBlank = (text: string | null) => text === null || /^[\s\u0085]*$/.test(t
 /** A GUID, as the API binds the `Idempotency-Key` header. */
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * What a version or a working copy has since the Word template's additions (D104) that this store holds none of: no
+ * Attendance tick, and no Medication box; its goals are Short term and its common items ask for no details, which
+ * `formItemsOf` and `readGoalsOf` say.
+ */
+const wordDefaults = { isNotIn: false, isLateNotice: false, isSick: false, medication: null };
+
+/** Goals as a version gives them: their wording and tick, all Short term. */
+const readGoalsOf = (goals: readonly { text: string; isTicked: boolean }[]) =>
+  goals.map(({ text, isTicked }) => ({ text, isTicked, isMediumOrLongTerm: false }));
+
+/** Goals as the note form gives them: their ID, wording and tick, all Short term. */
+const formGoalsOf = (goals: readonly NoteGoal[], ticked: readonly string[]) =>
+  goals.map(({ id, text }) => ({ id, text, isTicked: ticked.includes(id), isMediumOrLongTerm: false }));
+
 /** A goal as the API gives it, its ID and wording alone, from a goal with more, such as goals.ts's. */
 const goalOf = ({ id, text }: NoteGoal): NoteGoal => ({ id, text });
 
@@ -287,7 +314,13 @@ const formGroupsOf = (groups: readonly NoteGroup[], picked: readonly string[], t
     name,
     isEveryNote,
     isPicked: picked.includes(id),
-    items: items.map((item) => ({ ...item, isTicked: ticked.includes(item.id) })),
+    items: items.map(({ id, text }) => ({
+      id,
+      text,
+      isTicked: ticked.includes(id),
+      needsDetail: false,
+      detail: null,
+    })),
   }));
 
 /** The groups as `GET {base}` gives them for a note: those shown, with every item and its tick, and no IDs. */
@@ -419,9 +452,10 @@ export function notesStore({
       const current = {
         versionNumber: held.currentVersionNumber,
         narrative,
+        ...wordDefaults,
         isFlagged,
         flagReason,
-        goals: ticks,
+        goals: readGoalsOf(ticks),
         commonItemGroups: held.commonItemGroups,
       };
       const edit = held.lastEdit === null ? { isEdited: false } : { isEdited: true, lastEdit: held.lastEdit };
@@ -438,11 +472,13 @@ export function notesStore({
 
     const { authorDisplayName, startedAtUtc, snapshot, ticked, narrative, isFlagged, flagReason } = draft;
     const { isPastDayNote = false } = draft;
-    const goalsTicked = snapshot.map(({ id, text }) => ({ text, isTicked: ticked.includes(id) }));
+    const goalsTicked = readGoalsOf(snapshot.map(({ id, text }) => ({ text, isTicked: ticked.includes(id) })));
     const shown = readGroupsOf(draft.groups, draft.picked, draft.tickedItems);
     const content =
       me.role === 'Manager'
-        ? { current: { narrative, isFlagged, flagReason, goals: goalsTicked, commonItemGroups: shown } }
+        ? {
+            current: { narrative, ...wordDefaults, isFlagged, flagReason, goals: goalsTicked, commonItemGroups: shown },
+          }
         : {};
     return { json: { status: 'Draft', authorDisplayName, startedAtUtc, isPastDayNote, ...content } };
   }
@@ -492,9 +528,10 @@ export function notesStore({
         baseVersion: edit?.baseVersion ?? held.currentVersionNumber,
         isSaved: edit !== undefined,
         guidePrompts: prompts,
-        goals: content.snapshot.map((goal) => ({ ...goal, isTicked: content.ticked.includes(goal.id) })),
+        goals: formGoalsOf(content.snapshot, content.ticked),
         commonItemGroups: formGroupsOf(content.groups, content.picked, content.tickedItems),
         narrative: content.narrative,
+        ...wordDefaults,
         isFlagged: content.isFlagged,
         flagReason: content.flagReason,
         ...saved,
@@ -512,9 +549,10 @@ export function notesStore({
         baseVersion: 0,
         isSaved: true,
         guidePrompts: prompts,
-        goals: draft.snapshot.map((goal) => ({ ...goal, isTicked: draft.ticked.includes(goal.id) })),
+        goals: formGoalsOf(draft.snapshot, draft.ticked),
         commonItemGroups: formGroupsOf(draft.groups, draft.picked, draft.tickedItems),
         narrative: draft.narrative,
+        ...wordDefaults,
         isFlagged: draft.isFlagged,
         flagReason: draft.flagReason,
         savedAtUtc: draft.savedAtUtc,
@@ -531,9 +569,10 @@ export function notesStore({
       isSaved: false,
       listsVersion: versionOf(listed, commonItemGroups),
       guidePrompts: prompts,
-      goals: listed.map((goal) => ({ ...goal, isTicked: false })),
+      goals: formGoalsOf(listed, []),
       commonItemGroups: formGroupsOf(commonItemGroups, startingPicks(participantId, noteDate), []),
       narrative: '',
+      ...wordDefaults,
       isFlagged: false,
       flagReason: null,
     };

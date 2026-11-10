@@ -305,7 +305,7 @@ for (const press of ['Save changes', 'Cancel'] as const) {
     );
     await page.goto(`/participants/${jane.id}/notes/${manager.today}/edit`);
     await expect(heading(page)).toContainText('Editing submitted note (version 1)');
-    await main(page).getByRole('textbox', { name: '3. Guided notes' }).fill('Went to the shops. Then home.');
+    await main(page).getByRole('textbox', { name: 'Daily Support Notes' }).fill('Went to the shops. Then home.');
     await expect(page.locator('#save-status')).toHaveText('Saved 4:12 pm');
 
     // The session has gone, so that /api/auth/me answers 401 too, as the window's focus asks it again below.
@@ -327,7 +327,7 @@ for (const press of ['Save changes', 'Cancel'] as const) {
 
     // The form as it was, its words kept, with nothing said above its buttons, and the request sent only the once.
     await expect(heading(page)).toContainText('Editing submitted note (version 1)');
-    await expect(main(page).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue(
+    await expect(main(page).getByRole('textbox', { name: 'Daily Support Notes' })).toHaveValue(
       'Went to the shops. Then home.',
     );
     await expect(main(page).locator('form [role="alert"]')).toBeEmpty();

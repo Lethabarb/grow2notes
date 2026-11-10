@@ -153,9 +153,9 @@ describe('the wording check', () => {
 describe('the picker for common items', () => {
   // group-picker.md: no "group", "select", "check" or "today", as the people who use it read them differently.
   it('has no "group", "select", "check" or "today" in its words, in any form of them', () => {
-    const { commonItems, commonItemsHint, whichHappened, whichHappenedHint, noCommonItemsSetUp } = strings.note;
+    const { commonItemsHint, whichHappened, whichHappenedHint, noCommonItemsSetUp } = strings.note;
 
-    for (const words of [commonItems, commonItemsHint, whichHappened, whichHappenedHint, noCommonItemsSetUp]) {
+    for (const words of [commonItemsHint, whichHappened, whichHappenedHint, noCommonItemsSetUp]) {
       expect(words).not.toMatch(/\b(?:group|select|check|today)\w*/i);
     }
   });

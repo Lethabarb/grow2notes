@@ -48,6 +48,16 @@ export function isIsoDate(value: string): boolean {
 const dayName = ({ y, m, d }: Ymd) => days[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
 const monthName = ({ m }: Ymd) => months[m - 1];
 
+/**
+ * "Monday 14.09.2026", the day in a downloaded daily report's file name and title: the SPA's twin of the server's
+ * `ReportDates.DayDotted` (A19, D104), in English whatever the device's language.
+ */
+export function fileDay(isoDate: string): string {
+  const date = parseDateOnly(isoDate);
+  const pad = (n: number, width: number) => String(n).padStart(width, '0');
+  return `${dayName(date)} ${pad(date.d, 2)}.${pad(date.m, 2)}.${pad(date.y, 4)}`;
+}
+
 /** "Thursday 1 October 2026", for a date that names something. */
 export function dateLong(date: Ymd): string {
   return `${dayName(date)} ${date.d}${nbsp}${monthName(date)} ${date.y}`;

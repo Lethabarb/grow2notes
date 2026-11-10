@@ -399,7 +399,7 @@ function serveNote(row: ToReviewAnswer, flagStatus?: FlagStatus) {
   const flag = row.flagRemovedLater
     ? ({ isFlagged: false, flagReason: null } as const)
     : ({ isFlagged: true, flagReason: row.flagReason } as const);
-  const goals = [{ text: 'Catches bus to day program', isTicked: true }];
+  const goals = [{ text: 'Catches bus to day program', isTicked: true, isMediumOrLongTerm: false }];
   const edit = { by: 'Jo Smith', atUtc: row.flaggedAtUtc };
   const note: SubmittedNote = {
     status: 'Submitted',
@@ -412,6 +412,10 @@ function serveNote(row: ToReviewAnswer, flagStatus?: FlagStatus) {
     current: {
       versionNumber: row.currentVersionNumber,
       narrative: 'Had lunch at the cafe, then a walk.',
+      isNotIn: false,
+      isLateNotice: false,
+      isSick: false,
+      medication: null,
       goals,
       commonItemGroups: [],
       ...flag,

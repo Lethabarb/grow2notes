@@ -982,14 +982,14 @@ describe('apiFile', () => {
     fetchMock.mockResolvedValue(
       new Response(bytes, {
         status: 200,
-        headers: { 'Content-Disposition': 'attachment; filename=daily-notes_2026-10-01.docx' },
+        headers: { 'Content-Disposition': 'attachment; filename="Thursday 01.10.2026.docx"' },
       }),
     );
 
     const file = await apiFile(exportPath);
 
     expect(new Uint8Array(await file.body.arrayBuffer())).toEqual(bytes);
-    expect(file.headers.get('Content-Disposition')).toBe('attachment; filename=daily-notes_2026-10-01.docx');
+    expect(file.headers.get('Content-Disposition')).toBe('attachment; filename="Thursday 01.10.2026.docx"');
     const request = sentRequest();
     expect(request.path).toBe(exportPath);
     expect(request.method).toBe('GET');

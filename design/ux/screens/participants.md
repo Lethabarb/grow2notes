@@ -25,6 +25,22 @@ sign-off.
 WAI-ARIA, HTML spec, framework docs · **[Convention]** established design systems · **[Opinion]** reasoned judgement.
 Every grade below is carried over from the component file named next to it, where the full evidence and sources sit.
 
+**T44 (D104, A150, A152, A163): a goal's term, the Medication switch, and the empty-goals sentence.** Where the rest of
+this file differs, this block wins. New strings are marked **(P)** and ship as proposed (D67).
+
+- **Medication box on notes** (P), a tick box in the Details, after the date of birth and before Save, with the hint
+  **Shows a Medication box on notes started from now on.** (P). It is saved with the Details' Save, sent with the
+  participant's version as `If-Match` (the `412` copy is unchanged), and is not on the Add participant form (a new
+  participant starts with it off). Switching it on or off affects only notes started afterwards; a note already started
+  keeps its box or its lack (A152, A3). An archived participant's summary list does not show it.
+- **Goals** (list-editor.md's setting slot). A goal's **Edit** form gains a **Term** fieldset of two radios, **Short
+  term** (the default, and what a goal added is) and **Medium or long term** (P), the goal's stored term chosen, sent with
+  Save under `If-Match` with the text. A goal that is Medium or long term shows the muted second line **Medium or long
+  term** under its text. A Save whose text and term are both as they were closes the form and sends nothing. The add
+  form is unchanged.
+- **T38: the empty sentence** in place of an empty goals list is now **No goals yet. Notes will show “No goals set”.**,
+  the words a note prints for a participant with no goals (A163).
+
 ---
 
 ## Purpose and who uses it

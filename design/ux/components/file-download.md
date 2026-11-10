@@ -7,6 +7,13 @@ Component key: `file-download`. This covers the controls that turn a manager's c
 
 Evidence grades: **[Research]** studies, usability or assistive-technology testing · **[Standard]** WCAG 2.2, WAI-ARIA APG, HTML spec, MDN platform documentation, browser behaviour documented by the vendor · **[Convention]** established design systems and widely copied practice · **[Opinion]** reasoned judgement with no direct evidence.
 
+**T44 (D104, A19, A80 amended): the daily report's file name.** Where the rest of this file differs, this block wins. The
+daily report is named by the weekday and the date, `<Weekday> dd.mm.yyyy.<format>` (for example `Monday 14.09.2026.docx`),
+in invariant English whatever the device's language; the name still holds only the date, and never the week. The name in
+the answer's `Content-Disposition` (`filename*` first, then `filename`) is what the browser saves, and the screen's
+fallback when the answer names none is `fileDay(date)` plus the format, which is the same name. A browser may swap the
+spaces for underscores, as WebKit does. The participant record export's name is unchanged.
+
 ---
 
 ## Where it's used

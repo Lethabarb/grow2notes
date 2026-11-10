@@ -96,11 +96,7 @@ export function VersionConflictNotice({
               <details open={!restarted}>
                 <summary className={styles.summary}>{msg.versionBy(current.versionNumber, lastEdit.by)}</summary>
                 <FlagLine current={current} />
-                <ReadSections
-                  goals={current.goals}
-                  commonItemGroups={current.commonItemGroups}
-                  narrative={current.narrative}
-                />
+                <ReadSections content={current} />
               </details>
               {!restarted && (
                 <Button

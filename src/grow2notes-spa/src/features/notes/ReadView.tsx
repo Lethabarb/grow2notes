@@ -3,14 +3,15 @@ import { Link } from 'react-router';
 import { useMe } from '../../api/me.ts';
 import { buttonClass } from '../../components/buttonClass.ts';
 import { Tag } from '../../components/Tag.tsx';
-import { TickListRead, type TickedItem } from '../../components/TickListRead.tsx';
+import { TickListRead } from '../../components/TickListRead.tsx';
 import { dateTime, parseDateOnly, stamp } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { Pause } from '../../copy/Pause.tsx';
 import { Sep } from '../../copy/Sep.tsx';
 import { strings } from '../../copy/strings.ts';
-import type { ReadGroup, SubmittedNote } from './noteQueries.ts';
+import { goalsByTerm } from './goalTerms.ts';
+import type { ReadContent, SubmittedNote } from './noteQueries.ts';
 import { PastDayLine } from './PastDayLine.tsx';
 import pastNotesLinkStyles from './PastNotesLink.module.css';
 import { PastNotesLink } from './PastNotesLink.tsx';
@@ -117,11 +118,7 @@ export function ReadView({ heading, participantId, note, noteDate, removedFlagRe
         )}
         <PastNotesLink participantId={participantId} />
       </div>
-      <ReadSections
-        goals={current.goals}
-        commonItemGroups={current.commonItemGroups}
-        narrative={current.narrative}
-      />
+      <ReadSections content={current} />
       {reviewing && (
         <div className={styles.section}>
           <ReviewPanel participantId={participantId} noteDate={noteDate} versionNumber={current.versionNumber} />
@@ -150,42 +147,64 @@ export function FlagLine({ current }: { current: SubmittedNote['current'] }) {
   );
 }
 
-type ReadSectionsProps = {
-  /** Every goal of the snapshot, in its order. */
-  goals: readonly TickedItem[];
-  /** The groups the note shows, Every note and the picked ones, each with every item, in the order given. */
-  commonItemGroups: readonly ReadGroup[];
-  narrative: string;
-};
-
 /**
- * A note's sections as the read view shows them (participant-notes.md components 6 and 7), on a submitted note and on
- * the draft that a manager reads alike, each after a rule: "1. Goals", every goal of the snapshot ticked or not ticked;
- * "2. Common items", a list under an `<h3>` of the group's name for each group the API gives, which has already left
+ * A note's sections as the read view shows them (participant-notes.md components 6 and 7), on a submitted note, an
+ * earlier version and the draft that a manager reads alike, in the daily report's order and words (D104), each after a
+ * rule and under an `<h2>`: "Attendance", the three ticks; the goals under "Short term goals" and "Medium or Long term
+ * goal", a heading left out when its term has none, or "No goals set" alone; "Medication", only when the note has the
+ * box, its text with every line break kept; a list for each group the API gives, under its name, which has already left
  * out the groups that were not picked (design.md D47), so that it shows what it is given and never puts the writer's
- * question; and "3. Guided notes", the text as React's escaped text, never HTML, or "Nothing written yet." for a draft
- * with nothing but spaces in it, as Submit's checks judge blank, which a submitted note never is.
+ * question, with "Details: …" under a ticked item that has them, or "No common items set" alone; and "Daily Support
+ * Notes", the text as React's escaped text, never HTML, or "Nothing written yet." for a draft with nothing but spaces
+ * in it, as Submit's checks judge blank, which a submitted note never is.
  */
-export function ReadSections({ goals, commonItemGroups, narrative }: ReadSectionsProps) {
+export function ReadSections({ content }: { content: ReadContent }) {
+  const { isNotIn, isLateNotice, isSick, medication, goals, commonItemGroups, narrative } = content;
+  const { shortTerm, mediumOrLongTerm } = goalsByTerm(goals);
+  const { noteWords } = strings;
   return (
     <>
       <div className={styles.section}>
-        <TickListRead heading={strings.note.goals} emptyText={strings.readView.noGoals} items={goals} />
+        <TickListRead
+          heading={strings.note.attendance}
+          items={[
+            { text: noteWords.notIn, isTicked: isNotIn },
+            { text: noteWords.lateNotice, isTicked: isLateNotice },
+            { text: noteWords.sick, isTicked: isSick },
+          ]}
+        />
       </div>
       <div className={styles.section}>
-        <h2>{strings.note.commonItems}</h2>
+        {goals.length === 0 ? (
+          <p className={styles.empty}>{noteWords.noGoals}</p>
+        ) : (
+          <div className={styles.groups}>
+            {shortTerm.length > 0 && <TickListRead heading={noteWords.shortTermGoals} items={shortTerm} />}
+            {mediumOrLongTerm.length > 0 && (
+              <TickListRead heading={noteWords.mediumOrLongTermGoal} items={mediumOrLongTerm} />
+            )}
+          </div>
+        )}
+      </div>
+      {medication !== null && (
+        <div className={styles.section}>
+          <h2>{noteWords.medication}</h2>
+          {medication.trim() !== '' && <div className={styles.written}>{medication}</div>}
+        </div>
+      )}
+      <div className={styles.section}>
         {commonItemGroups.length === 0 ? (
-          <p className={styles.empty}>{strings.readView.noCommonItems}</p>
+          <p className={styles.empty}>{noteWords.noCommonItems}</p>
         ) : (
           <div className={styles.groups}>
             {commonItemGroups.map((each, index) => (
-              <TickListRead key={index} heading={each.name} headingLevel={3} items={each.items} />
+              <TickListRead key={index} heading={each.name} items={each.items} />
             ))}
           </div>
         )}
       </div>
       <div className={styles.section}>
-        <h2>{strings.note.guidedNotes}</h2>
+        <h2>{noteWords.dailySupportNotes}</h2>
         {narrative.trim() === '' ? (
           <p className={styles.empty}>{strings.readView.nothingWrittenYet}</p>
         ) : (

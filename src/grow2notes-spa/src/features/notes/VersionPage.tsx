@@ -122,11 +122,7 @@ function Loaded({ name, noteDate, note, currentNumber, versionNumber, version }:
         {note.isPastDayNote && <PastDayLine author={note.author} startedAtUtc={note.startedAtUtc} />}
         <FlagLine current={version} />
       </div>
-      <ReadSections
-        goals={version.goals}
-        commonItemGroups={version.commonItemGroups}
-        narrative={version.narrative}
-      />
+      <ReadSections content={version} />
     </>
   );
 }

@@ -130,7 +130,7 @@ const busyButton = (page: Page) => main(page).locator('button[data-busy]');
 const goalsHelp =
   'Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written '
   + 'with.';
-const noGoals = 'No goals yet. Notes will show an empty Goals section.';
+const noGoals = 'No goals yet. Notes will show “No goals set”.';
 
 /** "Saved 4:12 pm", at whatever time the app saved, the time with its non-breaking space (status-messages.md). */
 const savedAtAnyTime = /^Saved (\d{1,2}:\d{2}\s[ap]m|midday|midnight)$/;
@@ -444,7 +444,7 @@ test('signed in for real at 375 px, a manager adds five goals, then rewords, mov
   await saveGoal(page).click();
   const putAnswer = await put;
   expect(putAnswer.status()).toBe(200);
-  expect(putAnswer.request().postDataJSON()).toEqual({ text: reworded });
+  expect(putAnswer.request().postDataJSON()).toEqual({ text: reworded, isMediumOrLongTerm: false });
   expect(await putAnswer.request().headerValue('if-match')).toBe(`"${listed[1].rowVersion}"`);
   listed = (await (await reread).json()) as AdminGoal[];
   expect(listed[1]).toMatchObject({ id: ids[1], text: reworded, sortOrder: 1 });
@@ -541,6 +541,8 @@ for (const width of [375, 1280]) {
     await expect(heading(page)).toHaveText('Add participant');
     await expect(heading(page)).toBeFocused();
     const form = ['Given name', 'Family name', 'Day', 'Month', 'Year', 'Save'];
+    // Once the participant exists, their Details also hold the Medication box switch, between the date and Save.
+    const savedForm = ['Given name', 'Family name', 'Day', 'Month', 'Year', 'Medication box on notes', 'Save'];
     // Goals' add form alone, while the participant has no goal yet.
     const addForm = ['New goal', 'Add goal'];
     await expectStops(page, 'Shift+Tab', ['Participants', 'Manage']);
@@ -569,13 +571,14 @@ for (const width of [375, 1280]) {
       'Past notes',
       ...[...addForm].reverse(),
       'Save',
+      'Medication box on notes',
       'Year',
       'Month',
       'Day',
     ]);
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('8');
-    await expectStops(page, 'Tab', ['Month', 'Year', 'Save']);
+    await expectStops(page, 'Tab', ['Month', 'Year', 'Medication box on notes', 'Save']);
     const corrected = page.waitForResponse(isChange('PUT', `/${id}`));
     await page.keyboard.press('Enter');
     expect((await corrected).status()).toBe(200);
@@ -659,7 +662,7 @@ for (const width of [375, 1280]) {
     await page.keyboard.press('Enter');
     expect((await restored).status()).toBe(204);
     await expect(heading(page)).toBeFocused();
-    await expectStops(page, 'Tab', [...form, ...goalStops, ...actionStops, 'outside the page']);
+    await expectStops(page, 'Tab', [...savedForm, ...goalStops, ...actionStops, 'outside the page']);
 
     // Back to the list, where they are now to be found: Find a participant, then Clear while it holds text.
     await expectStops(page, 'Shift+Tab', [
@@ -667,7 +670,7 @@ for (const width of [375, 1280]) {
       'Export record',
       'Write past-day note',
       'Past notes',
-      ...[...form, ...goalStops].reverse(),
+      ...[...savedForm, ...goalStops].reverse(),
       'Participants',
     ]);
     await page.keyboard.press('Enter');
@@ -1110,7 +1113,7 @@ test('in forced colours, the focus ring shows in Highlight at each stop, and una
     page,
     'Tab',
     [
-      ...['Given name', 'Family name', 'Day', 'Month', 'Year', 'Save'],
+      ...['Given name', 'Family name', 'Day', 'Month', 'Year', 'Medication box on notes', 'Save'],
       ...[breakfast, bus, sister].flatMap((goal) => rowStops(goal.text)),
       ...['New goal', 'Add goal', 'Archived goals'],
     ],

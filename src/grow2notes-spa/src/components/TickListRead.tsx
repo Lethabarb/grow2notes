@@ -1,15 +1,20 @@
+import { msg } from '../copy/messages.ts';
 import { Pause } from '../copy/Pause.tsx';
 import { strings } from '../copy/strings.ts';
 import styles from './TickList.module.css';
 
-/** An item of a saved note's tick list: its wording as the version holds it, and whether it is ticked. */
-export type TickedItem = { text: string; isTicked: boolean };
+/**
+ * An item of a saved note's tick list: its wording as the version holds it, whether it is ticked, and, for a ticked
+ * common item that asked for details, the details written (A151).
+ */
+export type TickedItem = { text: string; isTicked: boolean; detail?: string };
 
 type TickListReadProps = {
-  /** The list's heading, the form's own for it, such as "1. Goals" or, among the common items, a group's name. */
+  /**
+   * The list's heading, the form's own for it, such as "Short term goals" or, among the common items, a group's
+   * name.
+   */
   heading: string;
-  /** The heading's level: an `<h2>` for a section of the note, which is the default, or an `<h3>` inside one. */
-  headingLevel?: 2 | 3;
   /** In place of the list when it has no items, such as "No goals set". */
   emptyText?: string;
   /** In the snapshot's order, which the list keeps. */
@@ -19,13 +24,12 @@ type TickListReadProps = {
 /**
  * A read-only tick list (checkbox-list.md `TickListRead`), for a note that is shown, not edited: the list's heading,
  * then each item as a read-only tick; or, with no items, the heading and the sentence alone. Keyed by place, as the API
- * gives the items no ID and the snapshot's order never changes. The common items' groups take `<h3>`s.
+ * gives the items no ID and the snapshot's order never changes.
  */
-export function TickListRead({ heading, headingLevel = 2, emptyText, items }: TickListReadProps) {
-  const Heading = headingLevel === 2 ? 'h2' : 'h3';
+export function TickListRead({ heading, emptyText, items }: TickListReadProps) {
   return (
     <div className={styles.group}>
-      <Heading className={styles.heading}>{heading}</Heading>
+      <h2 className={styles.heading}>{heading}</h2>
       {items.length === 0 ? (
         emptyText !== undefined && <p className={styles.empty}>{emptyText}</p>
       ) : (
@@ -56,9 +60,10 @@ export function TickRowRead(item: TickedItem) {
 
 /**
  * A read-only tick: its wording as text, never a form control, after one icon, a box drawn the same way whether ticked
- * or not, with a tick inside when it is, and followed, for screen readers, by a pause and "ticked" or "not ticked".
+ * or not, with a tick inside when it is, and followed, for screen readers, by a pause and "ticked" or "not ticked";
+ * then, for an item with details, "Details: …" on a line of its own.
  */
-function Tick({ text, isTicked }: TickedItem) {
+function Tick({ text, isTicked, detail }: TickedItem) {
   return (
     <>
       <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -72,6 +77,12 @@ function Tick({ text, isTicked }: TickedItem) {
           {' '}
           {isTicked ? strings.tickState.ticked : strings.tickState.notTicked}
         </span>
+        {detail !== undefined && (
+          <>
+            <Pause />
+            <span className={styles.detail}>{msg.itemDetails(detail)}</span>
+          </>
+        )}
       </span>
     </>
   );

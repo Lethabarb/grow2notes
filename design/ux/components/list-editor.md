@@ -22,6 +22,23 @@ This spec covers how to build what the design already lists. It adds no screen, 
 is no drag and drop, no delete, no "Save order" step and no separate edit page. None of these is in the design, and
 none is needed to meet WCAG 2.2 AA.
 
+**T44 (D104, A150, A151): a setting per row.** Where the rest of this file differs, this block wins. `ListEditor` gains
+an optional `setting` (`RowSetting`), the one on-or-off setting that a kind of list's rows have: a goal's term and a
+common item's **Ask for details when ticked**. A page that has one passes it; the editor stays one component.
+
+- A row's **Edit** form shows the setting's control after the text field (and after the Group radios on Common items),
+  starting at the row's stored value, and **Save** sends the setting with the text and the group, under the row's
+  version as `If-Match`. Choosing sends nothing until Save (SC 3.2.2).
+- Save closes the form and sends nothing only when the text, the group and the setting are all as they were; a change of
+  the setting alone is saved.
+- A row whose setting is on shows a muted second line under its text, on a line of its own: **Medium or long term** or
+  **Asks for details**. An archived row, a read-only row and a row with it off show none.
+- The writes' `update` takes `{ groupId, setting }`; an omitted value is kept by the server (`OrStored`), so a stale
+  page never resets it.
+- Words: `listEditor.goal` gains `term`, `shortTerm`, `mediumOrLongTerm`; `listEditor.item` gains `needsDetail`,
+  `needsDetailHint` and `asksForDetails`. T38: `listEditor.goal.empty` is **No goals yet. Notes will show “No goals
+  set”.**
+
 ---
 
 ## Where it's used

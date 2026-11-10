@@ -26,7 +26,7 @@ const title = (pageName: string) => `Grow2Notes – ${pageName}`;
 const main = (page: Page) => page.getByRole('main');
 const heading = (page: Page) => main(page).getByRole('heading', { level: 1 });
 const saveStatus = (page: Page) => page.locator('#save-status');
-const box = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
+const box = (page: Page) => main(page).getByRole('textbox', { name: 'Daily Support Notes' });
 const editLink = (page: Page) => main(page).getByRole('link', { name: 'Edit', exact: true });
 const pastNotesLink = (page: Page) => main(page).getByRole('link', { name: 'Past notes', exact: true });
 // Either name, because a busy button renames itself while its request is out.
@@ -37,7 +37,9 @@ const requestAlert = (page: Page) => main(page).locator('form [role="alert"]');
 const byline = (page: Page) => main(page).locator('p').filter({ hasText: /^Written by / });
 const editedLine = (page: Page) => main(page).locator('p').filter({ hasText: /^Edited/ });
 const readText = (page: Page) =>
-  main(page).getByRole('heading', { name: '3. Guided notes', exact: true }).locator('xpath=following-sibling::div[1]');
+  main(page)
+    .getByRole('heading', { name: 'Daily Support Notes', exact: true })
+    .locator('xpath=following-sibling::div[1]');
 // The version-conflict notice (note-form.md component 6), a region named by its heading.
 const notice = (page: Page) => main(page).getByRole('region', { name: /while you were editing/ });
 const startAgain = (page: Page) => notice(page).getByRole('button', { name: 'Start again from the latest version' });
@@ -455,9 +457,18 @@ test('the keyboard alone goes through the form, Save changes and Cancel, and the
   await openEdit(page, store);
   await expect(heading(page)).toBeFocused();
 
-  // note-form.md *Focus order (Tab)*: Past notes, each goal's box, Guided notes, Flag for manager, Save changes,
+  // note-form.md *Focus order (Tab)*: Past notes, Attendance, each goal's box, Daily Support Notes, Flag for manager,
+  // Save changes,
   // Cancel.
-  await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes']);
+  await expectStops(page, 'Tab', [
+    'Past notes',
+    'Not In',
+    'Late Notice',
+    'Sick',
+    breakfast.text,
+    bus.text,
+    'Daily Support Notes',
+  ]);
   await page.keyboard.type(' Then home.');
   await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
   await expectStops(page, 'Tab', ['Flag for manager', 'Save changes', 'Cancel']);
@@ -470,7 +481,7 @@ test('the keyboard alone goes through the form, Save changes and Cancel, and the
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   await expect(startAgain(page)).toBeFocused();
-  await expectStops(page, 'Tab', [breakfast.text]);
+  await expectStops(page, 'Tab', ['Not In']);
 
   // Enter on Start again, reached by Shift+Tab, rebases the edit and puts focus on the <h1>.
   await expectStops(page, 'Shift+Tab', ['Start again from the latest version']);

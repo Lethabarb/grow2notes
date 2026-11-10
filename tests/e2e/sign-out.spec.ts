@@ -205,7 +205,7 @@ test('signed in for real, Sign out with a change waiting saves it before the log
   await signInThroughSetup(page, invite, authenticator);
   await addJaneWithTwoGoals(page);
   await page.getByRole('main').locator('a[data-return-key]', { hasText: janeCitizen.name }).click();
-  const box = page.getByRole('main').getByRole('textbox', { name: '3. Guided notes' });
+  const box = page.getByRole('main').getByRole('textbox', { name: 'Daily Support Notes' });
   await expect(box).toBeVisible();
 
   // The note's save and the logout, as the page sends them and has the save answered.

@@ -33,6 +33,7 @@ import {
 } from './commonItemsQuery.ts';
 import { useGroupName } from './groupName.ts';
 import { GroupNameField } from './GroupNameField.tsx';
+import { needsDetail } from './needsDetail.tsx';
 
 // The help text's id, by which every item field names it in its description (common-items.md component 2).
 const itemsHelpId = 'items-help';
@@ -206,6 +207,7 @@ function GroupSection({ group, writer, active, first, last }: GroupSectionProps)
         addFieldId={newItemFieldId(group.id)}
         editFieldId={itemFieldId}
         groups={{ own: group.id, active, fieldName: itemGroupFieldName }}
+        setting={needsDetail}
       />
     </section>
   );
