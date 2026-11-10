@@ -1894,3 +1894,50 @@ the agent's route is used in production.
      In Application Insights for test, look for nothing from the command's run. Then clean up as by-hand.md D says, and
      look for no Bash allow rule in `/permissions` before the folder goes. Record only pass or fail. This step holds
      nothing open. (S07.06.02; A144.)
+
+### The report and the note follow the Word template (T44)
+
+These steps check what only a person with the real programs, printers and devices can see (D104). Use made-up names
+only, and a copy of one of the provider's Word days, for the comparison only, kept off the repository. Each step ends
+with the story and the assumed default it confirms.
+
+223. Print in greyscale. As a manager, download the Word file and the PDF for a day with a note that ticks Not In and
+     Late Notice, a Medium or Long term goal, a Medication line, a ticked "Other" item with details, and a group the
+     note did not pick. Print both on a black-and-white printer, or set the print dialog to greyscale. Look for: every
+     ☑ and ☐ told apart without colour, each NAME block starting its own page, the attendance boxes in a row under the
+     name, the unpicked group with every box empty, and the "Details:" line after the ticked item. This step holds
+     nothing open. (S04.01.07; A153, A161.)
+224. Curly quotes and the en dash. Write a note whose Daily Support Notes hold two paragraphs with curly quotes
+     (“like this”), an apostrophe (it’s) and a line break, and whose Medication holds the same. Download Week A in
+     both formats. Look for: the quotes and apostrophes drawn as typed and the paragraphs kept in the Word file and
+     the PDF; the title "SUPPORT NOTES – WEEK A" with the long dash; and no □ or ? in place of a character. This step
+     holds nothing open. (S04.01.07; A155, A158.)
+225. A busy day against a Word day. Make notes for 16 or more made-up participants on one day,
+     a few of them Not In or Sick, and download the Word file and the PDF. Put one of the provider's
+     Word days beside them. Compare: the title, DATE and STAFF rows, the Participants index, one participant to a page,
+     the order (by first name), the position of the attendance row against the Word template's NAME row, and the page
+     count. Write down every difference; the attendance row's place is the deliberate one in A153, and the owner
+     decides whether it stays. This step holds nothing open. (S04.01.07; A153, A155, A160.)
+226. The index numbers in Word. Open the Word file from step 225 in desktop Word. Look for: Word asking whether to
+     update the fields; choose Yes, and look for each index page number to equal the page where that participant's
+     block starts. Open the same file in Word on the web, and on a phone if you can, and look for a dash where a
+     number should be, never a wrong number. Then check that the hint under the buttons on the Report screen says what
+     to answer. This step holds nothing open. (S04.01.07; A156.)
+227. The file names. On the laptop, in Chrome and Edge, and on an iPhone and an Android phone, download both formats
+     for Monday 14 September 2026 with Week B chosen. Look for: the saved name "Monday 14.09.2026.docx" and ".pdf",
+     with no week, no organisation and no participant in it (a browser may swap the spaces for underscores; that is the
+     browser). This step holds nothing open. (S04.01.08; A19, A80, A158.)
+228. Keyboard and screen reader. Using NVDA with Chrome on the laptop, and VoiceOver on the iPhone, go through: the
+     Attendance group and its three boxes; a goal's Term radios in its Edit form; a ticked "Other" item's Details box
+     and its error "Enter the details for …" on Submit, with the summary link taking focus to the box; the Medication
+     box and its hint; and the Report screen's Week choice. Look for: each control announced by its label and group
+     (Attendance, Term, Week), the Details box named with its item, focus staying on the tick box when the box
+     appears, and the whole of it reachable by Tab, Space and the arrow keys alone. This step holds nothing open.
+     (S02.02.09, S02.02.10, S02.05.05, S01.02.09, S04.02.06; WCAG 2.2 AA.)
+229. The Word-template set-up. In test, with a manager (or `/onboard-provider` for the groups and items, as
+     [word-template-setup.md](word-template-setup.md) says), enter the list in
+     [word-template-setup.md](word-template-setup.md): each group and its items in the order given, with the items
+     marked "needs detail" set to ask for details. Write a note for a pretend day that ticks items in three of the
+     groups, download the report, and compare it with a Word day. Write down every wording marked "Wording to confirm
+     against the Word template" that you could not match, and give the list to the owner. This step holds nothing open.
+     (S04.01.09, S07.03.09, S01.03.09; A145, A146, A147.)

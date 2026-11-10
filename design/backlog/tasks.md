@@ -21,6 +21,9 @@ T44, added on 10 November 2026 (D104), is a Release 1 task in lane A with 13 new
 template becomes the report layout, with attendance, goal terms, a Medication line and text for Other items. It
 depends on T43.
 
+With T40 to T44 there are 44 tasks, and the 5 new stories of T40 to T43 and the 13 of T44 take the stories the tasks
+absorb to 156.
+
 - **The stories are the acceptance criteria.** An absorbed story keeps its section in its epic folder: its criteria
   and Notes are the task's acceptance criteria, and the task adds no new spec. Each task links its stories under
   *Absorbs*.
@@ -8299,7 +8302,7 @@ Decisions where the design is silent: A144 and D101, as in the Notes.
 
 ```yaml
 id: T44
-status: doing
+status: done
 release: R1
 lane: A
 size: L
@@ -8350,7 +8353,8 @@ fill in details for an "Other" item. One feature branch, one PR into main (owner
   If-Match for set-up, the seven MCP tools extended in place (28 tools, no note content), `ReportLayout` and both
   renderers with new `IndexEntry` and `TickRow` blocks, DejaVu Sans (nothing downloaded), `TickListField`,
   `FlagForManager`'s reveal, `FieldGroup` and `ChoiceRow`.
-- **Where the design is silent** (A145 to A163, recorded in V4; the owner may overturn them): goal term is a bool;
+- **Where the design is silent** (A145 to A163, recorded in design.md §13; the owner may overturn them): goal term is
+  a bool;
   Medication is one nullable column; PUT draft stays a whole working copy; item details keyed by item ID, dropped
   when unticked; Word index uses PAGEREF fields with a dash cached and `updateFields`, the PDF is exact; week is
   `A` or `B`, ordinal, else 400; STAFF is by display name, not a counted list; one `ReportStyle` for both files.
@@ -8385,13 +8389,56 @@ fill in details for an "Other" item. One feature branch, one PR into main (owner
   that is a manager's choice per participant, not part of the fixed template list, and the skill never calls
   `update_participant` (its rule 7). The tool accepts `hasMedicationLine` for any other caller (10 November 2026).
 
+- Done on 10 November 2026 in one pull request into main, built as five verticals on the feature branch
+  `feat/t44-word-template-parity`. D104 is in decisions.md, and D47 and D9 are marked amended by it; A4, A5, A19, A68,
+  A80 and A85 and §11.5's "no forced page breaks" are amended by name. T37 (§1's "No rostering" row cites D20), T38
+  (A163), T39 (A162) and T40 (`NoteHeadingWordsTests`) are criteria of the stories above. The migration
+  `AddWordTemplateParity` is expand-only and is in the diff for review. The by-hand checks are first-use steps 223 to 229
+  and hold nothing open.
+- **Assumed defaults A145 to A149** (the owner's brief, verbatim in design.md §13): each Word section is one group named
+  with its Word heading, bracketed tags kept, items in Word order, and a sub-heading is its own group named
+  `<section>: <sub-heading>` (A145); a parent line with child options is items whose wording includes the option
+  (A146); travel groups name the venue, the pick-up and drop-off options and the 11 Further Supports are groups like
+  any other, and group order stays organisation-wide (A147); one author per note, no day planning, and changed wording
+  applies to notes started afterwards (A148); no new form warnings beyond the required "Other" text, and no preferred
+  names (A149). `ops/word-template-setup.md` lists what to enter.
+- **The developer's choices A150 to A163**, each "Taken by the developer on 10 November 2026 (T44); the owner may
+  overturn it.":
+  - A150: the goal's term is a bool, `Goal.IsMediumOrLongTerm`, false for Short term; set in a goal's Edit and by
+    `add_goal` and `update_goal`; snapshotted on the draft and the version.
+  - A151: `CommonItem.NeedsDetail`, set in an item's Edit; the Details text is up to 200 characters, keyed by item ID
+    in `commonItemDetails`, dropped when the item is not ticked, cleared on untick or unpick, and required on Submit and
+    Save changes only.
+  - A152: `Participant.HasMedicationLine` is switched on and off on the Details page and applies to notes started
+    afterwards; the note's one nullable `Medication` column is null for no box and empty for a box with nothing
+    written; up to 1,000 characters; the box comes from the stored working copy, never from a request.
+  - A153: attendance is three flat bools; the legend is Attendance; the boxes sit directly under the NAME heading, not
+    in it; `PUT` draft stays a whole working copy.
+  - A154: `listsVersion` takes a term, a need for details and the Medication box only when set, so the deploy refuses
+    no open form (amends A68); a draft rewritten by the old release during a swap loses them until the next note.
+  - A155: the title block and the labels (SUPPORT NOTES, DATE:, STAFF:, NAME:, Note written by:); the umbrella headings
+    are gone; the organisation is only Word's Company property and the PDF's Subject (amends A85).
+  - A156: PDF index numbers are exact; the Word index holds PAGEREF fields with a dash stored, the file asks Word to
+    update fields, and the Report screen's hint says to choose Yes.
+  - A157: STAFF is the distinct authors by user ID of the day's submitted notes without past-day notes, sorted by
+    display name then user ID; names, never a count.
+  - A158: `week=A|B` exactly, else `400` before any read; not remembered; kept only in `report.downloaded`; the file
+    name never carries it.
+  - A159: the screens use the Word labels and a test holds them to the report's; the Guided notes box is Daily
+    Support Notes; "version history" means the version page.
+  - A160: the report and its index sort by given name, family name, ID (amends A5 for the report only).
+  - A161: the report prints every snapshot group that has an item, unpicked ones unticked (reverses D47 for the
+    report only).
+  - A162: one `ReportStyle` for both files (T39).
+  - A163: "No goals set" wins; the manager's empty copy says so (T38).
+
 ### Steps
 
-- [ ] v0 Plan and design prose (feature branch)
-- [ ] v1 Server foundation
-- [ ] v2 Report and renderers
-- [ ] v3 SPA and UX docs
-- [ ] v4 Records, set-up list and by-hand checks
+- [x] v0 Plan and design prose (feature branch)
+- [x] v1 Server foundation
+- [x] v2 Report and renderers
+- [x] v3 SPA and UX docs
+- [x] v4 Records, set-up list and by-hand checks
 
 ---
 

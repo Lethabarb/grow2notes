@@ -171,7 +171,7 @@ Why the device font and not Atkinson Hyperlegible:
 | Token | Phone | ≥ 40rem | Weight | Line height | Used for |
 |---|---|---|---|---|---|
 | `--font-size-h1` | 1.75rem (28 px) | 2rem (32 px) | 700 | 1.25 | One per screen: "Today · Thursday 1 October", the participant's name on the note form and read view, setup screen titles |
-| `--font-size-h2` | 1.375rem (22 px) | 1.5rem (24 px) | 700 | 1.25 | Section headings: "1. Goals", "2. Common items", "3. Guided notes", "Your unfinished drafts", "Details", "Goals", "Actions" |
+| `--font-size-h2` | 1.375rem (22 px) | 1.5rem (24 px) | 700 | 1.25 | Section headings: "Attendance", "Short term goals", "Medium or Long term goal", "Medication", "Daily Support Notes", each common item group's name, "Your unfinished drafts", "Details", "Goals", "Actions" |
 | `--font-size-body` | 1.125rem (18 px) | same | 400; 700 for emphasis and h3 | 1.5 | All body text, labels, tick-row text, inputs, textarea, buttons |
 | `--font-size-small` | 1rem (16 px) | same | 400; 700 for the status word | 1.5 | Status lines, hints, help text, the save indicator, tags, timestamps, error-message text under a field |
 

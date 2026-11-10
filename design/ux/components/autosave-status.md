@@ -111,7 +111,7 @@ Phone, normal                         Phone, Not saved (connection)        Phone
 Parts:
 1. **Sticky top bar**: `< Today` link, then the **save indicator**, one `<p role="status">` that is always in the DOM. In the failed state the same element spans a second, full-width row and is styled as a warning banner. That is the design's "banner" (§3.4) and its indicator string (4.3) in one element, so the text is never duplicated or announced twice.
 2. **Blocking banner** (inside the sticky bar, under row 1), only one at a time: the takeover banner (two buttons), "someone else started this note" or the after-midnight message.
-3. **Lists-changed notice**: in the page flow, directly above "1. Goals".
+3. **Lists-changed notice**: in the page flow, directly above Attendance, the first part of the note (D104).
 4. **Version-conflict notice** (editing a submitted note only): in the page flow at the top of the form, under the participant header.
 5. **Submit note / Save changes**: `aria-disabled` while the latest change is not saved, with `aria-describedby="save-status"`.
 6. **App-level announcer**: two visually hidden regions, `role="status"` and `role="alert"`, mounted once at app start. These are the same regions `form-validation.md` uses.
