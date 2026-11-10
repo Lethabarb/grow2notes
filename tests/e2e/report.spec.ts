@@ -12,6 +12,7 @@ import {
   recordExports,
   reportAddress,
   reportDay,
+  reportFileDay,
   serveHasNotes,
   serveNoNotes,
   serveReport,
@@ -204,8 +205,8 @@ test('S10: a slow download is quiet for 399 ms, then says "Downloading…" and t
   const download = page.waitForEvent('download');
   await route.fallback();
 
-  expect((await download).suggestedFilename()).toBe('daily-notes_2026-10-01.docx');
-  await expect(downloadStatus(page)).toHaveText('daily-notes_2026-10-01.docx is ready. Look in your downloads.');
+  expect((await download).suggestedFilename()).toBe(`${reportFileDay}.docx`);
+  await expect(downloadStatus(page)).toHaveText(`${reportFileDay}.docx is ready. Look in your downloads.`);
   await expect(button(page, 'Download Word')).not.toHaveAttribute('aria-disabled');
 });
 
@@ -257,7 +258,7 @@ test('keyboard: Enter on the unavailable Next day does nothing, and on Download 
   const download = page.waitForEvent('download');
   await page.keyboard.press('Enter');
 
-  expect((await download).suggestedFilename()).toBe('daily-notes_2026-10-01.docx');
+  expect((await download).suggestedFilename()).toBe(`${reportFileDay}.docx`);
   await expect(button(page, 'Download Word')).toBeFocused();
   await expectNothingKept(page);
 });

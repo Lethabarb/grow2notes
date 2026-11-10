@@ -5,9 +5,10 @@ using PdfSharp.Fonts;
 namespace Grow2Notes.Web.Features.Reports;
 
 /// <summary>
-/// Renders a report document as a PDF: DejaVu Sans 11 pt embedded in the file, on A4 portrait with 20 mm margins.
-/// Heading 1 carries a 0.5 pt rule above it, which is the thin line between notes. Only a heading keeps with the next
-/// paragraph, and no page break is forced. The running header starts on page 2; the footer is on every page.
+/// Renders a report document as a PDF: DejaVu Sans 11 pt embedded in the file, on A4 portrait with 20 mm margins. Only
+/// a heading keeps with the next paragraph; a heading that asks for it starts a new page and is bookmarked, and the
+/// index's page numbers are page references to those bookmarks, which MigraDoc fills in exactly (A156). The running
+/// header starts on page 2; the footer is on every page. The sizes and distances are <see cref="ReportStyle"/>'s.
 /// </summary>
 internal static class PdfReport
 {
@@ -30,12 +31,12 @@ internal static class PdfReport
         var section = document.AddSection();
         section.PageSetup.PageFormat = PageFormat.A4;
         section.PageSetup.Orientation = Orientation.Portrait;
-        section.PageSetup.TopMargin = Unit.FromMillimeter(20);
-        section.PageSetup.RightMargin = Unit.FromMillimeter(20);
-        section.PageSetup.BottomMargin = Unit.FromMillimeter(20);
-        section.PageSetup.LeftMargin = Unit.FromMillimeter(20);
-        section.PageSetup.HeaderDistance = Unit.FromMillimeter(10);
-        section.PageSetup.FooterDistance = Unit.FromMillimeter(6);
+        section.PageSetup.TopMargin = Unit.FromMillimeter(ReportStyle.MarginMillimetres);
+        section.PageSetup.RightMargin = Unit.FromMillimeter(ReportStyle.MarginMillimetres);
+        section.PageSetup.BottomMargin = Unit.FromMillimeter(ReportStyle.MarginMillimetres);
+        section.PageSetup.LeftMargin = Unit.FromMillimeter(ReportStyle.MarginMillimetres);
+        section.PageSetup.HeaderDistance = Unit.FromMillimeter(ReportStyle.FurnitureDistanceMillimetres);
+        section.PageSetup.FooterDistance = Unit.FromMillimeter(ReportStyle.FurnitureDistanceMillimetres);
         section.PageSetup.DifferentFirstPageHeaderFooter = true;
 
         // The first-page header is left empty, so that page 1 has no running header.
@@ -57,11 +58,23 @@ internal static class PdfReport
                 ReportBlockKind.Heading3 => StyleNames.Heading3,
                 ReportBlockKind.Line => StyleNames.Normal,
                 ReportBlockKind.Tick => "Tick",
+                ReportBlockKind.TickRow => StyleNames.Normal,
+                ReportBlockKind.IndexEntry => "IndexEntry",
                 _ => throw new ArgumentOutOfRangeException(nameof(block)),
             };
 
-            var isTick = block.Kind == ReportBlockKind.Tick;
-            AddText(paragraph, isTick ? Box(block.IsTicked) + " " + block.Text : block.Text);
+            if (block.PageBreakBefore)
+            {
+                paragraph.Format.PageBreakBefore = true;
+            }
+
+            // The bookmark comes first, so that it is on the page that the heading starts.
+            if (block.Anchor is { } anchor && block.Kind == ReportBlockKind.Heading1)
+            {
+                paragraph.AddBookmark(anchor);
+            }
+
+            AddBlockText(paragraph, block);
         }
 
         var renderer = new PdfDocumentRenderer { Document = document };
@@ -69,6 +82,29 @@ internal static class PdfReport
         using var stream = new MemoryStream();
         renderer.Save(stream, false);
         return stream.ToArray();
+    }
+
+    // An index entry is the name, a tab with a dot leader and the page of its anchor, which MigraDoc resolves when it
+    // lays the document out. A row of boxes is its boxes and labels, two spaces apart.
+    private static void AddBlockText(Paragraph paragraph, ReportBlock block)
+    {
+        switch (block.Kind)
+        {
+            case ReportBlockKind.IndexEntry:
+                AddText(paragraph, block.Text);
+                paragraph.AddTab();
+                paragraph.AddPageRefField(block.Anchor!);
+                break;
+            case ReportBlockKind.TickRow:
+                AddText(paragraph, string.Join("  ", block.Ticks.Select(tick => Box(tick.IsTicked) + " " + tick.Text)));
+                break;
+            case ReportBlockKind.Tick:
+                AddText(paragraph, Box(block.IsTicked) + " " + block.Text);
+                break;
+            default:
+                AddText(paragraph, block.Text);
+                break;
+        }
     }
 
     // The sentence, then "Page n of N" from the page and page-count fields.
@@ -112,28 +148,26 @@ internal static class PdfReport
     {
         var normal = document.Styles[StyleNames.Normal]!;
         normal.Font.Name = FontName;
-        normal.Font.Size = 11;
+        normal.Font.Size = ReportStyle.BodyPoints;
         normal.ParagraphFormat.SpaceAfter = Unit.FromPoint(6);
 
         var title = document.Styles.AddStyle("Title", StyleNames.Normal);
-        title.Font.Size = 18;
+        title.Font.Size = ReportStyle.TitlePoints;
         title.Font.Bold = true;
 
         document.Styles.AddStyle("Subtitle", StyleNames.Normal).ParagraphFormat.SpaceAfter = Unit.FromPoint(3);
 
         var heading1 = document.Styles[StyleNames.Heading1]!;
         heading1.BaseStyle = StyleNames.Normal;
-        heading1.Font.Size = 14;
+        heading1.Font.Size = ReportStyle.Heading1Points;
         heading1.Font.Bold = true;
         heading1.ParagraphFormat.SpaceBefore = Unit.FromPoint(18);
         heading1.ParagraphFormat.SpaceAfter = Unit.FromPoint(6);
         heading1.ParagraphFormat.KeepWithNext = true;
-        heading1.ParagraphFormat.Borders.Top.Width = Unit.FromPoint(0.5);
-        heading1.ParagraphFormat.Borders.DistanceFromTop = Unit.FromPoint(6);
 
         var heading2 = document.Styles[StyleNames.Heading2]!;
         heading2.BaseStyle = StyleNames.Normal;
-        heading2.Font.Size = 11;
+        heading2.Font.Size = ReportStyle.Heading2Points;
         heading2.Font.Bold = true;
         heading2.ParagraphFormat.SpaceBefore = Unit.FromPoint(12);
         heading2.ParagraphFormat.SpaceAfter = Unit.FromPoint(6);
@@ -141,9 +175,8 @@ internal static class PdfReport
 
         var heading3 = document.Styles[StyleNames.Heading3]!;
         heading3.BaseStyle = StyleNames.Normal;
-        heading3.Font.Size = 11;
+        heading3.Font.Size = ReportStyle.Heading3Points;
         heading3.Font.Bold = true;
-        heading3.Font.Italic = true;
         heading3.ParagraphFormat.SpaceBefore = Unit.FromPoint(6);
         heading3.ParagraphFormat.SpaceAfter = Unit.FromPoint(3);
         heading3.ParagraphFormat.KeepWithNext = true;
@@ -152,11 +185,16 @@ internal static class PdfReport
         {
             var furniture = document.Styles[name]!;
             furniture.BaseStyle = StyleNames.Normal;
-            furniture.Font.Size = 8;
+            furniture.Font.Size = ReportStyle.FurniturePoints;
             furniture.ParagraphFormat.SpaceBefore = Unit.FromPoint(0);
             furniture.ParagraphFormat.SpaceAfter = Unit.FromPoint(0);
         }
 
         document.Styles.AddStyle("Tick", StyleNames.Normal).ParagraphFormat.LeftIndent = Unit.FromMillimeter(5);
+
+        // The entry runs out to the right margin: the page is 210 mm wide.
+        var indexEntry = document.Styles.AddStyle("IndexEntry", StyleNames.Normal);
+        indexEntry.ParagraphFormat.TabStops.AddTabStop(
+            Unit.FromMillimeter(210 - (2 * ReportStyle.MarginMillimetres)), TabAlignment.Right, TabLeader.Dots);
     }
 }

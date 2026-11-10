@@ -166,7 +166,8 @@ accessibility steps. Besides the kit in *Before you start*, they need an Android
 and TalkBack, and Dragon on the laptop if you have it.
 
 20. As a manager, on the Report screen, download a day's Word file and PDF on each of iPhone Safari, iPhone Chrome,
-    Android Chrome and Samsung Internet. Look for each file saved. On the iPhone, choose a future date in the picker
+    Android Chrome and Samsung Internet. Look for each file saved, named like 'Monday 14.09.2026.docx' (Safari may
+    show underscores for the spaces; that is the browser, not the app). On the iPhone, choose a future date in the picker
     and look for the error once you leave the field; on Android, pick a date in the dialog and look for it to take
     effect within about a second, without leaving the field. If a browser cannot save a file, tell the developer: the
     plain-link contingency in file-download.md is then built for that case. (S04.02.05; daily-report.md's *Real
@@ -1020,12 +1021,14 @@ manager and one submitted on the next day. Every word typed is made up. Download
      both times in T20's Notes. (S04.01.06; design.md §14 M4.)
 122. Do the same on a phone. If either is over 10 seconds, T20 fixes the speed and the check is repeated. Write the
      times in T20's Notes. (S04.01.06.)
-123. Open the PDF in a PDF viewer. Look for no header on page 1, the running header "Daily progress notes: {date}"
-     from page 2, and on every page the footer with your name, page 1's "As at" time and a correct "Page n of N". Open
+123. Open the PDF in a PDF viewer. Look for no header on page 1, the running header "SUPPORT NOTES: Monday 14.09.2026"
+     (or "SUPPORT NOTES – WEEK A: Monday 14.09.2026" when a week was chosen) from page 2, the Participants index on
+     page 1, and on every page the footer with your name, page 1's "As at" time and a correct "Page n of N". Open
      Document Properties and look for only the title and the organisation, with no author. (S04.01.05; design.md
      §11.5, A85.)
 124. Open the Word file in desktop Word and then in Word on a phone. Look for the same header and footer, correct page
-     numbers on screen and when printed, each common item group as a Heading 3 in the Navigation pane, and File > Info
+     numbers on screen and when printed, each participant's NAME block as a Heading 1 with each common item group as a
+     Heading 2 under it in the Navigation pane, and File > Info
      showing only the Title and the Company. (S04.01.03 and S04.01.05; design.md §11.5, A85.)
 125. Open the Word file in a phone preview that is not Word, such as iOS Files or Quick Look or an Android preview.
      Look for whether the page numbers show, and write down what you see. (S04.01.05.)

@@ -27,6 +27,8 @@ public sealed class ParticipantExportTimingTests(Grow2NotesFactory factory) : IC
     // A no-break space, which the file puts between a day and its month and between a time and am or pm.
     private const string Nb = " ";
 
+    private const string NoBoxes = "☐ Not In  ☐ Late Notice  ☐ Sick";
+
     private const int NoteCount = 365;
 
     private const string Sentence = "Jane had a quiet morning and ate her breakfast without help. ";
@@ -144,59 +146,56 @@ public sealed class ParticipantExportTimingTests(Grow2NotesFactory factory) : IC
         string[] plain =
         [
             $"Wednesday 15{Nb}April 2026",
-            $"Written by Priya Nair · Submitted Wed 15{Nb}Apr, 3:00{Nb}pm",
+            NoBoxes,
             .. GoalLines(196),
-            "Common items",
             .. CommonItemLines(outing: true, care: true, household: false),
-            "Guided notes",
+            "Daily Support Notes",
             Narrative(196, 1),
+            $"Note written by: Priya Nair · Submitted Wed 15{Nb}Apr, 3:00{Nb}pm",
         ];
         string[] editedAndFlagged =
         [
             $"Tuesday 19{Nb}May 2026",
-            $"Written by Priya Nair · Submitted Tue 19{Nb}May, 3:00{Nb}pm",
+            NoBoxes,
+            "No goals set",
+            .. CommonItemLines(outing: false, care: true, household: true),
+            "Daily Support Notes",
+            Narrative(230, 2),
+            $"Note written by: Priya Nair · Submitted Tue 19{Nb}May, 3:00{Nb}pm",
             $"Edited · 2 versions · last change by Priya Nair, Tue 19{Nb}May 2026, 5:00{Nb}pm",
             "Flagged for manager: \"Mentioned pain in her left knee, note 230.\"",
             "To review",
-            "Goals",
-            "No goals set",
-            "Common items",
-            .. CommonItemLines(outing: false, care: true, household: true),
-            "Guided notes",
-            Narrative(230, 2),
             "Earlier versions",
             $"Version 1: submitted by Priya Nair, Tue 19{Nb}May 2026, 3:00{Nb}pm",
             "Flagged for manager: \"Mentioned pain in her left knee, note 230.\"",
+            NoBoxes,
             .. GoalLines(230),
-            "Common items",
             .. CommonItemLines(outing: true, care: true, household: false),
-            "Guided notes",
+            "Daily Support Notes",
             Narrative(230, 1),
         ];
         string[] editedTwice =
         [
             $"Thursday 14{Nb}May 2026",
-            $"Written by Priya Nair · Submitted Thu 14{Nb}May, 3:00{Nb}pm",
-            $"Edited · 3 versions · last change by Priya Nair, Thu 14{Nb}May 2026, 6:00{Nb}pm",
-            "Goals",
+            NoBoxes,
             "No goals set",
-            "Common items",
             .. CommonItemLines(outing: true, care: false, household: true),
-            "Guided notes",
+            "Daily Support Notes",
             Narrative(225, 3),
+            $"Note written by: Priya Nair · Submitted Thu 14{Nb}May, 3:00{Nb}pm",
+            $"Edited · 3 versions · last change by Priya Nair, Thu 14{Nb}May 2026, 6:00{Nb}pm",
             "Earlier versions",
             $"Version 2: saved by Priya Nair, Thu 14{Nb}May 2026, 5:00{Nb}pm",
-            "Goals",
+            NoBoxes,
             "No goals set",
-            "Common items",
             .. CommonItemLines(outing: false, care: true, household: true),
-            "Guided notes",
+            "Daily Support Notes",
             Narrative(225, 2),
             $"Version 1: submitted by Priya Nair, Thu 14{Nb}May 2026, 3:00{Nb}pm",
+            NoBoxes,
             .. GoalLines(225),
-            "Common items",
             .. CommonItemLines(outing: true, care: true, household: false),
-            "Guided notes",
+            "Daily Support Notes",
             Narrative(225, 1),
         ];
 
@@ -216,7 +215,7 @@ public sealed class ParticipantExportTimingTests(Grow2NotesFactory factory) : IC
 
     // The three goals of version 1, the first reached.
     private static IEnumerable<string> GoalLines(int number) =>
-        ["Goals", $"☑ Goal 1 of {number}", $"☐ Goal 2 of {number}", $"☐ Goal 3 of {number}"];
+        ["Short term goals", $"☑ Goal 1 of {number}", $"☐ Goal 2 of {number}", $"☐ Goal 3 of {number}"];
 
     // Every note and the picked groups, each with its first item done, as the seed gives them.
     private static IEnumerable<string> CommonItemLines(bool outing, bool care, bool household)

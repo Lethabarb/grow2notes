@@ -17,7 +17,8 @@ namespace Grow2Notes.Tests.Features.Reports;
 /// list's. Equality proves the order, the archived participant, the current version alone, each marker, the common
 /// items by group with the version's own wording, and the absence of drafts, pending edits, discarded drafts, other
 /// days, participants with no note and counts. The PDF match is of word order only, as wrapping and spacing are the
-/// renderer's. The footer and the file properties are checked on the same files.
+/// renderer's. The Word index is checked as PAGEREF fields and the PDF's as the page numbers. The footer and the file
+/// properties are checked on the same files.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class DailyReportTextMatchTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
@@ -56,22 +57,102 @@ public sealed class DailyReportTextMatchTests(Grow2NotesFactory factory) : IClas
         using var client = app.CreateHttpsClient().SignInAs(jo);
         var footer = "Confidential: health information. Copy exported from Grow2Notes by Jo Smith, "
             + $"Fri 2{Nb}Oct 2026, 9:14{Nb}am. The record in Grow2Notes is authoritative.";
-        string[] expected =
+        string[] head =
         [
-            await OrganisationNameAsync(organisation),
-            "Daily progress notes",
-            $"Thursday 1{Nb}October 2026",
+            "SUPPORT NOTES",
+            "DATE: Thursday 01.10.2026",
+            "STAFF: Alex Pham, Priya Nair",
             $"As at Fri 2{Nb}Oct 2026, 9:14{Nb}am",
             "Exported by Jo Smith",
+            "Participants",
+        ];
+        string[] names =
+            ["AMÉLIE NGUYEN", "AVA WILSON", "LIAM NGUYEN", "MIA BROWN", "NOAH CLARK", "SAM TAYLOR", "ZOË ADAMS"];
+        const string noBoxes = "☐ Not In  ☐ Late Notice  ☐ Sick";
+        string[] body =
+        [
+            // Given-name order, each on a page of its own. The current version alone: no goals, and no items.
+            "NAME: AMÉLIE NGUYEN",
+            noBoxes,
+            "No goals set",
+            "No common items set",
+            "Daily Support Notes",
+            EditedNarrative,
+            $"Note written by: Alex Pham · Submitted Thu 1{Nb}Oct, 3:30{Nb}pm",
+            $"Edited · 3 versions · last change by Alex Pham, Fri 2{Nb}Oct 2026, 8:45{Nb}am",
 
-            // Every note and the two picked groups show; the unpicked group leaves no trace, and Jo's pending edit,
-            // flagged, adds neither a flag line nor an Edited line.
-            "Zoë Adams",
-            $"Written by Priya Nair · Submitted Thu 1{Nb}Oct, 4:42{Nb}pm",
-            "Goals",
+            // Started the next morning by the manager, so it is a past-day note. Its Every note group has no item, so
+            // it is dropped, and the picked group shows.
+            "NAME: AVA WILSON",
+            noBoxes,
+            "No goals set",
+            "Personal care",
+            "☐ Showered with prompting",
+            "Daily Support Notes",
+            "Ava's note was written the next morning.",
+            $"Note written by: Jo Smith (manager) · Past-day note, written Fri 2{Nb}Oct 2026, 8:10{Nb}am · "
+                + $"Submitted Fri 2{Nb}Oct, 8:20{Nb}am",
+
+            // Submitted the next morning, but started on the note's own day, so it is not a past-day note. The two
+            // groups that were not picked print too, with their items unticked.
+            "NAME: LIAM NGUYEN",
+            noBoxes,
+            "Short term goals",
+            "☑ Walk to the shops",
+            "Every note",
+            "☐ Medication prompted",
+            "☑ Meal prepared",
+            "Community outing",
+            "☐ Travelled by bus or train",
+            "Personal care",
+            "☐ Showered with prompting",
+            "Daily Support Notes",
+            "Liam walked to the shops.\nHe bought bread.",
+            $"Note written by: Priya Nair · Submitted Fri 2{Nb}Oct, 8:05{Nb}am",
+
+            // Version 2 is flagged again and reviewed again, so the reason is version 2's and the review the newest.
+            "NAME: MIA BROWN",
+            noBoxes,
+            "No goals set",
+            "Every note",
+            "☑ Medication prompted",
+            "Daily Support Notes",
+            EditedNarrative,
+            $"Note written by: Priya Nair · Submitted Thu 1{Nb}Oct, 3:00{Nb}pm",
+            $"Edited · 2 versions · last change by Priya Nair, Fri 2{Nb}Oct 2026, 8:30{Nb}am",
+            "Flagged for manager: \"Knee still sore this morning.\"",
+            $"Reviewed by Jo Smith on Fri 2{Nb}Oct 2026, 9:05{Nb}am",
+            "Comment: Booked a physio visit.\nWill check on Monday.",
+
+            "NAME: NOAH CLARK",
+            noBoxes,
+            "No goals set",
+            "No common items set",
+            "Daily Support Notes",
+            EditedNarrative,
+            $"Note written by: Alex Pham · Submitted Thu 1{Nb}Oct, 2:00{Nb}pm",
+            $"Edited · 2 versions · last change by Alex Pham, Thu 1{Nb}Oct 2026, 5:00{Nb}pm",
+            "Flagged for manager: \"Seemed tired all day.\" (flag removed in a later edit)",
+            "To review",
+
+            // The note's flag status is None for Amélie above, so there is no flag line there; Sam's is to review.
+            "NAME: SAM TAYLOR",
+            noBoxes,
+            "No goals set",
+            "No common items set",
+            "Daily Support Notes",
+            "Sam walked slowly.",
+            $"Note written by: Priya Nair · Submitted Thu 1{Nb}Oct, 1:20{Nb}pm",
+            "Flagged for manager: \"Mentioned pain in his left knee after the walk.\"",
+            "To review",
+
+            // Every note and the two picked groups show with the group that was not picked, unticked, and Jo's pending
+            // edit, flagged, adds neither a flag line nor an Edited line.
+            "NAME: ZOË ADAMS",
+            noBoxes,
+            "Short term goals",
             "☑ Catch the 903 bus to the library on her own",
             "☐ Make her own lunch",
-            "Common items",
             "Every note",
             "☑ Medication prompted",
             "☐ Meal prepared",
@@ -80,93 +161,30 @@ public sealed class DailyReportTextMatchTests(Grow2NotesFactory factory) : IClas
             "☐ Paid for own purchases",
             "Personal care",
             "☑ Showered with prompting",
-            "Guided notes",
+            "Unpicked group",
+            "☐ Unpicked item",
+            "Daily Support Notes",
             ZoeNarrative,
-
-            // Version 2 is flagged again and reviewed again, so the reason is version 2's and the review the newest.
-            "Mia Brown",
-            $"Written by Priya Nair · Submitted Thu 1{Nb}Oct, 3:00{Nb}pm",
-            $"Edited · 2 versions · last change by Priya Nair, Fri 2{Nb}Oct 2026, 8:30{Nb}am",
-            "Flagged for manager: \"Knee still sore this morning.\"",
-            $"Reviewed by Jo Smith on Fri 2{Nb}Oct 2026, 9:05{Nb}am",
-            "Comment: Booked a physio visit.\nWill check on Monday.",
-            "Goals",
-            "No goals set",
-            "Common items",
-            "Every note",
-            "☑ Medication prompted",
-            "Guided notes",
-            EditedNarrative,
-
-            "Noah Clark",
-            $"Written by Alex Pham · Submitted Thu 1{Nb}Oct, 2:00{Nb}pm",
-            $"Edited · 2 versions · last change by Alex Pham, Thu 1{Nb}Oct 2026, 5:00{Nb}pm",
-            "Flagged for manager: \"Seemed tired all day.\" (flag removed in a later edit)",
-            "To review",
-            "Goals",
-            "No goals set",
-            "Common items",
-            "No common items set",
-            "Guided notes",
-            EditedNarrative,
-
-            // The note's flag status is None, so there is no flag line, although version 1 is its flagged version.
-            "Amélie Nguyen",
-            $"Written by Alex Pham · Submitted Thu 1{Nb}Oct, 3:30{Nb}pm",
-            $"Edited · 3 versions · last change by Alex Pham, Fri 2{Nb}Oct 2026, 8:45{Nb}am",
-            "Goals",
-            "No goals set",
-            "Common items",
-            "No common items set",
-            "Guided notes",
-            EditedNarrative,
-
-            // Submitted the next morning, but started on the note's own day, so it is not a past-day note.
-            "Liam Nguyen",
-            $"Written by Priya Nair · Submitted Fri 2{Nb}Oct, 8:05{Nb}am",
-            "Goals",
-            "☑ Walk to the shops",
-            "Common items",
-            "Every note",
-            "☐ Medication prompted",
-            "☑ Meal prepared",
-            "Guided notes",
-            "Liam walked to the shops.\nHe bought bread.",
-
-            "Sam Taylor",
-            $"Written by Priya Nair · Submitted Thu 1{Nb}Oct, 1:20{Nb}pm",
-            "Flagged for manager: \"Mentioned pain in his left knee after the walk.\"",
-            "To review",
-            "Goals",
-            "No goals set",
-            "Common items",
-            "No common items set",
-            "Guided notes",
-            "Sam walked slowly.",
-
-            // Started the next morning by the manager, so it is a past-day note. Its Every note group has no item, so
-            // it is dropped, and the picked group shows.
-            "Ava Wilson",
-            $"Past-day note, written by Jo Smith (manager) on Fri 2{Nb}Oct 2026, 8:10{Nb}am · Submitted "
-                + $"Fri 2{Nb}Oct, 8:20{Nb}am",
-            "Goals",
-            "No goals set",
-            "Common items",
-            "Personal care",
-            "☐ Showered with prompting",
-            "Guided notes",
-            "Ava's note was written the next morning.",
+            $"Note written by: Priya Nair · Submitted Thu 1{Nb}Oct, 4:42{Nb}pm",
         ];
+
+        // The index is on page 1, which the title block starts, and each note fits on a page of its own after it.
+        string[] wordIndex = [.. names.Select((name, i) => $"{name}\t{{PAGEREF p{i + 1} \\h}}–")];
+        string[] pdfIndex = [.. names.Select((name, i) => $"{name} {i + 2}")];
 
         var docx = await client.GetByteArrayAsync(
             $"/api/reports/daily/{NoteDate:yyyy-MM-dd}/export?format=docx", TestContext.Current.CancellationToken);
         var pdf = await client.GetByteArrayAsync(
             $"/api/reports/daily/{NoteDate:yyyy-MM-dd}/export?format=pdf", TestContext.Current.CancellationToken);
 
-        Assert.Equal(expected, ReportText.WordParagraphs(docx));
+        Assert.Equal([.. head, .. wordIndex, .. body], ReportText.WordParagraphs(docx));
         Assert.Equal(
-            ReportText.Normalised(string.Join(' ', expected)),
-            ReportText.Normalised(string.Join(' ', ReportText.PdfWords(pdf))));
+            ReportText.Normalised(string.Join(' ', [.. head, .. pdfIndex, .. body])),
+            ReportText.Normalised(ReportText.WithoutLeaders(string.Join(' ', ReportText.PdfWords(pdf)))));
+        Assert.DoesNotContain(
+            await OrganisationNameAsync(organisation),
+            string.Join('\n', ReportText.WordParagraphs(docx)),
+            StringComparison.Ordinal);
         Assert.Equal(footer + " Page {PAGE} of {NUMPAGES}", ReportText.WordHeadersAndFooters(docx).DefaultFooter);
         using (var pdfDocument = PdfDocument.Open(pdf))
         {
@@ -251,10 +269,10 @@ public sealed class DailyReportTextMatchTests(Grow2NotesFactory factory) : IClas
                         [new(items.Care, "Showered with prompting", true)]),
                     new(
                         items.UnpickedGroup,
-                        "Unpicked group that must not appear",
+                        "Unpicked group",
                         false,
                         false,
-                        [new(items.Unpicked, "Unpicked item that must not appear", false)]),
+                        [new(items.Unpicked, "Unpicked item", false)]),
                 ]));
         await factory.Services.AddPendingEditAsync(
             organisation, noteId, jo, Melbourne(2, 9, 0), flagReason: "Pending flag that must not appear");
