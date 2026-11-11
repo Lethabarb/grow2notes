@@ -57,7 +57,6 @@ internal sealed record ParticipantExportModel(
                 && n.Status == NoteStatus.Submitted
                 && n.NoteDate >= from
                 && n.NoteDate <= to),
-            everyGroup: false,
             cancellationToken);
         if (reads.Count == 0)
         {
@@ -113,7 +112,7 @@ internal sealed record ParticipantExportModel(
             var content = await NoteVersionContent.ReadAsync(db, noteId, summary.VersionNumber, cancellationToken);
             versions.Add(new(
                 summary,
-                NoteReadVersion.Of(summary.VersionNumber, content, everyGroup: false),
+                NoteReadVersion.Of(summary.VersionNumber, content),
                 [.. reviews.Where(review => review.VersionNumber == summary.VersionNumber)]));
         }
 

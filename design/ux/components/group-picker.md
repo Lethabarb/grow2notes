@@ -45,8 +45,9 @@ are, and the picker's legend **Which of these happened?** is an `<h2>` too. The 
 and is said once for all the lists. The picker's behaviour, the picks copied from the last note (D46) and the rule that
 unpicking clears the group's ticks (A46) are unchanged, and unpicking also takes away the details written under its
 items. Under a ticked item that a manager marked **Ask for details when ticked**, the form shows a **Details** box
-(note-form.md). D47 stands for the note form, the read view, the version page and the record export; the daily report
-alone prints every group that has an item, picked or not, with an unpicked group's items unticked (D104, A161).
+(note-form.md). D47 stands for the note form, the read view, the version page, the record export and the daily
+report: an unpicked group does not appear in any of them (D106, which reversed the daily report's printing of every
+group under D104 and A161 on 11 November 2026).
 
 ---
 

@@ -73,17 +73,11 @@ internal sealed record NoteSnapshot(
     public IEnumerable<DraftItem> CommonItems => Items.Where(item => item.Section == NoteSection.CommonItem);
 
     /// <summary>
-    /// The groups that a note shows (D47): Every note and the picked groups, each with at least one item, with every
-    /// item, ticked or not, in the snapshot's order. A group that is not picked leaves no trace.
+    /// The groups that a note shows, and that its read view, versions and files print (D47, D106): Every note and the
+    /// picked groups, each with at least one item, with every item, ticked or not, in the snapshot's order. A group
+    /// that is not picked leaves no trace.
     /// </summary>
     public IReadOnlyList<NoteReadGroup> ShownGroups => ReadGroups(group => group.IsEveryNote || group.IsPicked);
-
-    /// <summary>
-    /// The groups that the daily report prints (D104, A161): every group with at least one item, Every note first,
-    /// picked or not, each with every item in the snapshot's order. The items of a group that is not picked are all
-    /// unticked.
-    /// </summary>
-    public IReadOnlyList<NoteReadGroup> PrintedGroups => ReadGroups(_ => true);
 
     public IEnumerable<DraftItem> ItemsOf(DraftGroup group) =>
         CommonItems.Where(item => item.GroupId == group.GroupId);

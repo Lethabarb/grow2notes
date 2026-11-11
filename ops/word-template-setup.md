@@ -41,10 +41,10 @@ to A147 (design.md §13).
 6. An item marked **needs detail** asks for a short text when it is ticked on a note, required to submit (A151).
 7. The names and items are at most 200 characters each; every one below is within that.
 
-The full list is 32 groups and 431 items, besides the four pick-up and drop-off lines. The daily report prints every
-group, picked or not, with the unpicked ones empty (A161), so entering all of it prints over 400 tick lines for every
-participant every day. Enter only the groups that the provider wants on every participant's page; the activities that
-few people do can be left out until the owner has seen a busy day (first-use step 225).
+The full list is 32 groups and 431 items, besides the four pick-up and drop-off lines. The daily report prints only the
+Every note group and the groups picked on each note (D106), as the Word documents do, so the provider can enter every
+group it uses. The writer picks the groups that applied that day, as staff kept the day's sections in the Word
+documents, and a group not picked does not appear on that participant's page (first-use step 225).
 
 ## The groups, in order
 

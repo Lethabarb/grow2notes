@@ -401,7 +401,7 @@ story S04.01.09, which records the decision, and says so in its Notes.
 | 14 | "Further Supports Provided" with its 11 items | F01.03 | F06.05 | `ops/word-template-setup.md`; A147 |
 | 15 | A parent line with child options, as items worded with the option | F01.03 | | `ops/word-template-setup.md`; A146 |
 | 16 | "Other (staff to complete if different from above)": a Details text, required while ticked | F02.05 | F01.03 (the flag on the item) | Done in T44 (S02.05.05, S01.03.09): `CommonItemNeedsDetailEndpointTests`, `NoteWordTemplateEndpointsTests`, `NotePage.test.tsx`; A151 |
-| 17 | Every group of the note printed, unpicked ones with empty boxes | F04.01 | | Done in T44 (S04.01.07): `NoteToReportTests`, `ReportLayoutTests`; A161 (reverses D47 for the report) |
+| 17 | The Every note group and the groups picked on the note printed, an unpicked group not at all | F04.01 | | Done in T44 (S04.01.07) and changed in T45 (D106, which supersedes A161 and restores D47 for the report): `NoteToReportTests`, `DailyReportTextMatchTests`, `ReportLayoutTests` |
 | 18 | "Daily Support Notes", paragraphs kept | F02.02 | F04.01 (the files) | Done in T44 (S02.02.11): `NoteHeadingWordsTests`, `NoteToReportTests`; A159 |
 | 19 | "Note written by:" with the author | F04.01 | | Done in T44 (S04.01.07): `ReportLayoutTests`; A155 |
 | 20 | The file named "Monday 14.09.2026.docx" | F04.01 | F04.02 (the screen's fallback name) | Done in T44 (S04.01.08): `DailyReportEndpointTests`, `ReportDatesTests`, `format.test.ts`; A158; by hand, first-use step 227 |
