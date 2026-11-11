@@ -93,8 +93,8 @@ jobs:
               | extend client = tostring(customDimensions.ClientId)
               | extend client = iif(isempty(client), extract(@"from client (\S+): ", 1, message), client)
               | where client startswith "https://claude.ai/" and client != "https://claude.ai/oauth/claude-code-client-metadata"
-              | summarize last = max(timestamp), attempts = count() by client
-              | top 1 by last desc'
+              | summarize lastSeen = max(timestamp), attempts = count() by client
+              | top 1 by lastSeen desc'
             body=$(jq -n --arg q "$query" '{query: $q}')
             rows=$(az rest --method post --url "https://api.applicationinsights.io/v1/apps/$app_id/query" \
                      --resource https://api.applicationinsights.io --body "$body" --only-show-errors) \
