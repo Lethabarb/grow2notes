@@ -1943,6 +1943,6 @@ with the story and the assumed default it confirms.
      [word-template-setup.md](word-template-setup.md) says), enter the list in
      [word-template-setup.md](word-template-setup.md): each group and its items in the order given, with the items
      marked "needs detail" set to ask for details. Write a note for a pretend day that ticks items in three of the
-     groups, download the report, and compare it with a Word day. Write down every wording marked "Wording to confirm
-     against the Word template" that you could not match, and give the list to the owner. This step holds nothing open.
+     groups, download the report, and compare it with a Word day. Write down any group or item whose wording does not
+     match the Word day, and give the list to the owner. This step holds nothing open.
      (S04.01.09, S07.03.09, S01.03.09; A145, A146, A147.)
