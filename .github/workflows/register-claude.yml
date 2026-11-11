@@ -1,0 +1,169 @@
+# Approves the hosted Claude apps (claude.ai on the web, Desktop and mobile, and Claude Code's cloud sessions, which
+# connect through them) to connect to an environment's AI-assistant access, by running the app's own
+# `admin mcp-client add` in the web app's container, as ops/setup-tool/register-claude-code.sh does for Claude Code on a
+# computer (ops/break-glass.md, admin mcp-client). It is for an operator who has no Azure portal or Azure CLI to hand,
+# such as on a phone: Actions → Register Claude → Run workflow.
+#
+# Anthropic publishes the hosted apps' redirect URI, https://claude.ai/api/mcp/auth_callback, but not the client ID
+# metadata document they present. So, unless a client ID is given, the job reads it from the authorisation server's
+# own log: every refused authorisation request logs its client ID (AuthorisationRefusals.cs, mcp-server.md §11.2), so
+# press Connect in Claude once, see "There is a problem with Grow2Notes", then run this. Only a client ID on
+# https://claude.ai/ whose document lists that redirect URI is accepted. Running it again updates the one registration.
+name: Register Claude
+
+run-name: Register Claude in ${{ inputs.environment }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: The environment to approve Claude in.
+        required: true
+        type: choice
+        options: [test, prod]
+      client-id:
+        description: >-
+          Claude's client ID metadata document, if known. Leave empty to take it from the last day's refused
+          authorisation requests.
+        required: false
+        type: string
+
+# Nothing is granted unless a job asks for it.
+permissions: {}
+
+jobs:
+  register:
+    name: Register Claude in ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The environment's own rules apply: prod takes main only, and its deployment identity trusts only the
+    # environment:prod subject (deploy.yml).
+    environment: ${{ inputs.environment }}
+    # Never at the same time as a deploy, which restarts the app.
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      CLIENT_ID: ${{ inputs.client-id }}
+      RESOURCE_GROUP: rg-grow2notes-${{ inputs.environment }}-ause
+      WEB_APP: app-grow2notes-${{ inputs.environment }}
+      APP_INSIGHTS: appi-grow2notes-${{ inputs.environment }}
+      REDIRECT_URI: https://claude.ai/api/mcp/auth_callback
+      AZURE_CORE_COLLECT_TELEMETRY: 'no'
+      AZURE_LOGGING_ENABLE_LOG_FILE: 'no'
+    steps:
+      - name: Sign in to Azure
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # `az webapp exec` is a preview command of Azure CLI 2.90.0 and later (ops/onboard-provider.md).
+      - name: Check the Azure CLI has az webapp exec
+        run: |
+          if ! az webapp exec --help > /dev/null 2>&1; then
+            echo "The runner's Azure CLI $(az version --query '"azure-cli"' -o tsv) has no az webapp exec. Upgrading."
+            sudo apt-get update -qq && sudo apt-get install -y -qq --only-upgrade azure-cli
+            az webapp exec --help > /dev/null 2>&1 || {
+              echo "::error::The Azure CLI has no az webapp exec even after an upgrade."
+              exit 1
+            }
+          fi
+
+      # The query reads only the refusal's own line, whose client ID is a public URL, never personal information.
+      - name: Find Claude's client ID
+        id: client
+        run: |
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+          client=$CLIENT_ID
+          if [[ -z $client ]]; then
+            app_id=$(az resource show --resource-group "$RESOURCE_GROUP" --name "$APP_INSIGHTS" \
+                       --resource-type Microsoft.Insights/components --query properties.AppId -o tsv --only-show-errors)
+            [[ -n $app_id ]] || fail "Application Insights $APP_INSIGHTS was not found."
+            echo "::add-mask::$app_id"
+            query='traces
+              | where timestamp > ago(1d) and message startswith "Refused an authorisation request from client "
+              | extend client = tostring(customDimensions.ClientId)
+              | extend client = iif(isempty(client), extract(@"from client (\S+): ", 1, message), client)
+              | where client startswith "https://claude.ai/" and client != "https://claude.ai/oauth/claude-code-client-metadata"
+              | summarize last = max(timestamp), attempts = count() by client
+              | top 1 by last desc'
+            body=$(jq -n --arg q "$query" '{query: $q}')
+            rows=$(az rest --method post --url "https://api.applicationinsights.io/v1/apps/$app_id/query" \
+                     --resource https://api.applicationinsights.io --body "$body" --only-show-errors) \
+              || fail "Application Insights could not be queried."
+            client=$(jq -r '.tables[0].rows[0][0] // empty' <<< "$rows")
+            [[ -n $client ]] || fail "No refused sign-in from a claude.ai client in the last day. In Claude, press \
+          Connect on the Grow2Notes connector, wait for 'There is a problem with Grow2Notes', allow a few minutes for \
+          the log, then run this again."
+            echo "Found $client in the log: $(jq -r '.tables[0].rows[0] | "\(.[2]) refusal(s), the last at \(.[1])"' <<< "$rows")."
+          fi
+          [[ ${#client} -le 100 && $client =~ ^https://claude\.ai/[A-Za-z0-9._~/-]+$ ]] \
+            || fail "The client ID must be an https://claude.ai/ address of at most 100 characters."
+          document=$(curl -fsS --max-time 30 --max-filesize 65536 "$client") || fail "$client could not be fetched."
+          jq -e --arg id "$client" --arg uri "$REDIRECT_URI" \
+            '.client_id == $id and (.redirect_uris | index($uri))' <<< "$document" > /dev/null \
+            || fail "$client is not a client ID metadata document for itself with the redirect URI $REDIRECT_URI."
+          echo "Client ID: $client"
+          echo "Its name: $(jq -r '.client_name' <<< "$document")"
+          echo "Its redirect URIs: $(jq -r '.redirect_uris | join(", ")' <<< "$document")"
+          echo "client=$client" >> "$GITHUB_OUTPUT"
+
+      # As register-claude-code.sh: the command's output is dropped and only its exit status and whole Refused: lines
+      # come back, through a result file under /home/LogFiles that Kudu's file API reads and then deletes.
+      - name: Register Claude
+        env:
+          CLIENT: ${{ steps.client.outputs.client }}
+        run: |
+          site=https://$WEB_APP.azurewebsites.net
+          result_url=https://$WEB_APP.scm.azurewebsites.net/api/vfs/LogFiles
+          run=$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')
+          result=grow2notes-admin-$run.result
+          # Anthropic's privacy centre, read on 9 November 2026, as register-claude-code.sh.
+          where='stored in the United States, and processed there or in Europe, Asia or Australia'
+
+          remote="t=/tmp/grow2notes-admin-$run; trap 'rm -f \$t.err' EXIT; "
+          remote+="dotnet Grow2Notes.Web.dll admin mcp-client add --metadata-url '$CLIENT' "
+          remote+="--name Claude --company Anthropic --data-location '$where' >/dev/null 2>\$t.err; s=\$?; "
+          remote+="f=/home/LogFiles/grow2notes-admin-$run; "
+          remote+="{ echo \$s; grep -x 'Refused: .*' \$t.err || true; } >\$f.part && mv \$f.part \$f.result"
+
+          deadline=$((SECONDS + 120))
+          until [[ $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$site/healthz/ready") == 200 ]]; do
+            if ((SECONDS >= deadline)); then
+              echo "::error::The app did not answer at /healthz/ready within 2 minutes, so Claude was not approved."
+              exit 1
+            fi
+            sleep 5
+          done
+
+          az webapp exec -g "$RESOURCE_GROUP" -n "$WEB_APP" --mode execute --shell /bin/sh \
+            --working-directory /home/site/wwwroot --shell-command "$remote" --only-show-errors -o none \
+            || { echo "::error::Azure did not start the command, so Claude was not approved."; exit 1; }
+
+          deadline=$((SECONDS + 180))
+          while ((SECONDS < deadline)); do
+            sleep 5
+            body=$(az rest --method get --url "$result_url/$result" --resource https://management.core.windows.net/ \
+                     --only-show-errors 2> /dev/null | tr -d '\r')
+            status=$(head -n 1 <<< "$body")
+            [[ $status =~ ^[0-9]+$ ]] || continue
+            az rest --method delete --url "$result_url/$result" --resource https://management.core.windows.net/ \
+              --headers 'If-Match=*' --only-show-errors > /dev/null 2>&1
+            if ((status == 0)); then
+              echo "Claude is approved to connect to $ENVIRONMENT. Press Connect on the connector again."
+              exit 0
+            fi
+            grep -x 'Refused: .*' <<< "$body" || true
+            echo "::error::Claude was not approved (exit code $status)."
+            exit 1
+          done
+          echo "::error::No result from the command, so it is not known whether Claude was approved."
+          exit 1
