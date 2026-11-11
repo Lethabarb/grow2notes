@@ -51,7 +51,7 @@ internal sealed record DailyReportModel(
         DateTime asAtUtc,
         CancellationToken cancellationToken)
     {
-        var rows = await ReadNotesAsync(db, SubmittedOn(db, noteDate), everyGroup: true, cancellationToken);
+        var rows = await ReadNotesAsync(db, SubmittedOn(db, noteDate), cancellationToken);
         if (rows.Count == 0)
         {
             return null;
@@ -68,16 +68,15 @@ internal sealed record DailyReportModel(
     /// <summary>
     /// Every note in <paramref name="submitted"/>, which holds submitted notes only, as the file shows it, ordered by
     /// date, then participant by given name, family name and ID (A160). A report of one day and a record of one
-    /// participant each have one order to keep, and this one serves both. With <paramref name="everyGroup"/>, which
-    /// only the daily report asks for, each note carries every group with an item, picked or not (D104); without it,
-    /// the groups the note shows (D47).
+    /// participant each have one order to keep, and this one serves both. Each note carries the groups it shows (D47,
+    /// D106).
     /// </summary>
     /// <remarks>
     /// A past-day note is one started on a later day than its own date, so each row is compared with its own
     /// <see cref="ReportNoteRead.NoteDate"/>.
     /// </remarks>
     public static async Task<IReadOnlyList<ReportNoteRead>> ReadNotesAsync(
-        Grow2NotesDbContext db, IQueryable<Note> submitted, bool everyGroup, CancellationToken cancellationToken)
+        Grow2NotesDbContext db, IQueryable<Note> submitted, CancellationToken cancellationToken)
     {
         var rows = await (
             from n in submitted
@@ -122,7 +121,7 @@ internal sealed record DailyReportModel(
                     row.AuthorUserId,
                     pastDayWrittenAtUtc,
                     row.FirstSubmittedAtUtc,
-                    NoteReadVersion.Of(row.CurrentVersionNumber, content, everyGroup),
+                    NoteReadVersion.Of(row.CurrentVersionNumber, content),
                     lastEdit,
                     await FlagOfAsync(db, row.Id, row.FlagStatus, row.FlagReason, cancellationToken))));
         }
