@@ -1907,8 +1907,9 @@ with the story and the assumed default it confirms.
      Late Notice, a Medium or Long term goal, a Medication line, a ticked "Other" item with details, and a group the
      note did not pick. Print both on a black-and-white printer, or set the print dialog to greyscale. Look for: every
      ☑ and ☐ told apart without colour, each NAME block starting its own page, the attendance boxes in a row under the
-     name, the unpicked group with every box empty, and the "Details:" line after the ticked item. This step holds
-     nothing open. (S04.01.07; A153, A161.)
+     name, the group the note did not pick not appearing at all, a picked group with nothing ticked showing its
+     empty boxes, and the "Details:" line after the ticked item. This step holds nothing open. (S04.01.07; A153,
+     D106.)
 224. Curly quotes and the en dash. Write a note whose Daily Support Notes hold two paragraphs with curly quotes
      (“like this”), an apostrophe (it’s) and a line break, and whose Medication holds the same. Download Week A in
      both formats. Look for: the quotes and apostrophes drawn as typed and the paragraphs kept in the Word file and
@@ -1919,10 +1920,10 @@ with the story and the assumed default it confirms.
      Word days beside them. Compare: the title, DATE and STAFF rows, the Participants index, one participant to a page,
      the order (by first name), the position of the attendance row against the Word template's NAME row, and the page
      count. Time each download from the click to the saved file, and write down the time and the page count; each
-     must be under 10 seconds. Do this again after step 229 has entered the Word-template set-up list, because the
-     report prints every group of it for every participant. Write down every difference; the attendance row's place is
-     the deliberate one in A153, and the owner decides whether it stays. This step holds nothing open. (S04.01.07;
-     A153, A155, A160, A161.)
+     must be under 10 seconds. Do this again after step 229 has entered the Word-template set-up list, with each
+     note picking only the groups that applied that day, because the report prints the picked groups only (D106).
+     Write down every difference; the attendance row's place is the deliberate one in A153, and the owner decides
+     whether it stays. This step holds nothing open. (S04.01.07; A153, A155, A160, D106.)
 226. The index numbers in Word. Open the Word file from step 225 in desktop Word. Look for: Word asking whether to
      update the fields; choose Yes, and look for each index page number to equal the page where that participant's
      block starts. Open the same file in Word on the web, and on a phone if you can, and look for a dash where a
@@ -1943,6 +1944,6 @@ with the story and the assumed default it confirms.
      [word-template-setup.md](word-template-setup.md) says), enter the list in
      [word-template-setup.md](word-template-setup.md): each group and its items in the order given, with the items
      marked "needs detail" set to ask for details. Write a note for a pretend day that ticks items in three of the
-     groups, download the report, and compare it with a Word day. Write down every wording marked "Wording to confirm
-     against the Word template" that you could not match, and give the list to the owner. This step holds nothing open.
+     groups, download the report, and compare it with a Word day. Write down any group or item whose wording does not
+     match the Word day, and give the list to the owner. This step holds nothing open.
      (S04.01.09, S07.03.09, S01.03.09; A145, A146, A147.)

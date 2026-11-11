@@ -95,7 +95,7 @@ public sealed partial class ParticipantExportTextMatchTests(Grow2NotesFactory fa
         ];
 
         // Three versions, whose picked groups differ: the current one shows Every note and both groups. The record
-        // keeps the groups a note shows (D47), as it did before the daily report printed every group.
+        // shows the groups a note shows (D47), as the daily report does (D106).
         string[] editedCurrent =
         [
             $"Tuesday 29{Nb}September 2026",

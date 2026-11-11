@@ -156,7 +156,7 @@ public sealed class ReportLayoutTests
     }
 
     // The Word template's order: attendance, goals by term, Medication, each group, Daily Support Notes, then who wrote
-    // it. An unpicked group is in the daily report, with its items unticked, and a detail follows its item.
+    // it. A picked group with nothing ticked prints its empty box, and a detail follows its item.
     [Fact]
     public void A_note_reads_in_the_word_template_s_order()
     {
@@ -180,7 +180,7 @@ public sealed class ReportLayoutTests
                 "[ ] Bus",
                 "[x] Other (staff to complete if different from above)",
                 "Line: Details: Went by taxi",
-                "Heading2: Unpicked group",
+                "Heading2: Personal care",
                 "[ ] Haircut",
                 "Heading2: Daily Support Notes",
                 "Line: First paragraph.\nSecond paragraph.",
@@ -497,8 +497,8 @@ public sealed class ReportLayoutTests
 
     private static string Box(bool isTicked) => isTicked ? "[x]" : "[ ]";
 
-    // Two goals of each term; the Every note group, a picked group whose last item asked for details, and a group that
-    // was not picked, whose item is unticked. The Medication has two paragraphs and curly quotes.
+    // Two goals of each term; the Every note group, a picked group whose last item asked for details, and a picked
+    // group with nothing ticked, whose item prints its empty box. The Medication has two paragraphs and curly quotes.
     private static NoteReadVersion FullVersion() => new(
         1,
         "First paragraph.\nSecond paragraph.",
@@ -518,7 +518,7 @@ public sealed class ReportLayoutTests
                     new("Bus", false),
                     new("Other (staff to complete if different from above)", true, "Went by taxi"),
                 ]),
-            new("Unpicked group", false, [new("Haircut", false)]),
+            new("Personal care", false, [new("Haircut", false)]),
         ],
         IsNotIn: false,
         IsLateNotice: true,

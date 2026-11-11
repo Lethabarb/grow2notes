@@ -94,7 +94,7 @@ public sealed class DailyReportTextMatchTests(Grow2NotesFactory factory) : IClas
                 + $"Submitted Fri 2{Nb}Oct, 8:20{Nb}am",
 
             // Submitted the next morning, but started on the note's own day, so it is not a past-day note. The two
-            // groups that were not picked print too, with their items unticked.
+            // groups that were not picked do not print (D106).
             "NAME: LIAM NGUYEN",
             noBoxes,
             "Short term goals",
@@ -102,10 +102,6 @@ public sealed class DailyReportTextMatchTests(Grow2NotesFactory factory) : IClas
             "Every note",
             "☐ Medication prompted",
             "☑ Meal prepared",
-            "Community outing",
-            "☐ Travelled by bus or train",
-            "Personal care",
-            "☐ Showered with prompting",
             "Daily Support Notes",
             "Liam walked to the shops.\nHe bought bread.",
             $"Note written by: Priya Nair · Submitted Fri 2{Nb}Oct, 8:05{Nb}am",
@@ -146,8 +142,8 @@ public sealed class DailyReportTextMatchTests(Grow2NotesFactory factory) : IClas
             "Flagged for manager: \"Mentioned pain in his left knee after the walk.\"",
             "To review",
 
-            // Every note and the two picked groups show with the group that was not picked, unticked, and Jo's pending
-            // edit, flagged, adds neither a flag line nor an Edited line.
+            // Every note and the two picked groups show and the group that was not picked does not (D106), and Jo's
+            // pending edit, flagged, adds neither a flag line nor an Edited line.
             "NAME: ZOË ADAMS",
             noBoxes,
             "Short term goals",
@@ -161,8 +157,6 @@ public sealed class DailyReportTextMatchTests(Grow2NotesFactory factory) : IClas
             "☐ Paid for own purchases",
             "Personal care",
             "☑ Showered with prompting",
-            "Unpicked group",
-            "☐ Unpicked item",
             "Daily Support Notes",
             ZoeNarrative,
             $"Note written by: Priya Nair · Submitted Thu 1{Nb}Oct, 4:42{Nb}pm",

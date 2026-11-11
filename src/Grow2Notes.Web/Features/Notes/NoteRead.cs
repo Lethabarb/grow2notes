@@ -97,10 +97,9 @@ internal sealed record NoteReadVersion(
 
     /// <summary>
     /// The version or working copy that <paramref name="content"/> makes: every goal in the snapshot's order, with its
-    /// term, and the groups it shows (D47), or, with <paramref name="everyGroup"/>, every group with an item, picked
-    /// or not (D104), which only the daily report asks for.
+    /// term, and the groups it shows (D47, D106).
     /// </summary>
-    public static NoteReadVersion Of(int? versionNumber, NoteVersionContent content, bool everyGroup) =>
+    public static NoteReadVersion Of(int? versionNumber, NoteVersionContent content) =>
         new(
             versionNumber,
             content.Narrative,
@@ -110,7 +109,7 @@ internal sealed record NoteReadVersion(
                 .. content.Snapshot.Goals.Select(
                     goal => new NoteReadGoal(goal.Text, goal.IsTicked, goal.IsMediumOrLongTerm is true)),
             ],
-            everyGroup ? content.Snapshot.PrintedGroups : content.Snapshot.ShownGroups,
+            content.Snapshot.ShownGroups,
             content.IsNotIn,
             content.IsLateNotice,
             content.IsSick,

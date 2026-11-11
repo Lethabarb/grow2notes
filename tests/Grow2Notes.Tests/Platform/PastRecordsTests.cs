@@ -281,7 +281,8 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
                         false,
                         true,
                         [new(wash.Id, "Wash the dishes", true), new(dry.Id, "Dry the dishes", false)]),
-                    new(laundry.Id, "Laundry", false, false, [new(fold.Id, "Fold clothes", false)]),
+                    // Picked, so the files print it (D106): an unpicked group leaves no trace.
+                    new(laundry.Id, "Laundry", false, true, [new(fold.Id, "Fold clothes", false)]),
                 ]));
         using var manager = app.CreateHttpsClient().SignInAs(org.ManagerId);
         var version = await BodyAsync(manager, $"{NotePath(participant.Id, first)}/versions/1");

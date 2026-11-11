@@ -21,7 +21,10 @@ T44, added on 10 November 2026 (D104), is a Release 1 task in lane A with 13 new
 template becomes the report layout, with attendance, goal terms, a Medication line and text for Other items. It
 depends on T43.
 
-With T40 to T44 there are 44 tasks, and the 5 new stories of T40 to T43 and the 13 of T44 take the stories the tasks
+T45, added on 11 November 2026 (D106), is a small Release 1 task in lane A with no new story: the daily report prints
+only the groups picked on each note, as the Word documents do. It depends on T44.
+
+With T40 to T45 there are 45 tasks, and the 5 new stories of T40 to T43 and the 13 of T44 take the stories the tasks
 absorb to 156.
 
 - **The stories are the acceptance criteria.** An absorbed story keeps its section in its epic folder: its criteria
@@ -50,7 +53,8 @@ absorb to 156.
 Up to four lanes run at once, each one task at a time:
 
 - **A:** T01, T04, T11, T16, T19, T24 for Release 1, then T30 to T38, then T41, then T39, one after another, because
-  each MCP tool edits the shared `tools/list` snapshot and tool matrix. T43 follows T41, and T44 follows T43.
+  each MCP tool edits the shared `tools/list` snapshot and tool matrix. T43 follows T41, T44 follows T43, and T45
+  follows T44.
 - **B:** T02, T05, T06, T07, T15, T17, T21, T25, then T29 beside T30, then T42.
 - **C:** T03, T08, T09, T10, T12, T13, T14, T18, T20, T26. The note form is one hot spot, so its tasks run back to
   back.
@@ -8314,9 +8318,10 @@ stories: [S01.02.09, S01.02.10, S01.03.09, S02.02.09, S02.02.10, S02.02.11, S02.
 
 The provider's five daily Word support-note documents are what Grow2Notes is based on. A manager downloads the day's
 report in Word or PDF laid out like those documents: the title, DATE and STAFF rows, a Participants index, and each
-participant on a new page with NAME, attendance, goals by term, Medication, every group, Daily Support Notes and Note
-written by. Workers tick Not In, Late Notice and Sick, write a Medication line where a manager switched it on, and
-fill in details for an "Other" item. One feature branch, one PR into main (owner, 10 November 2026).
+participant on a new page with NAME, attendance, goals by term, Medication, every group (the picked groups only since
+T45, D106), Daily Support Notes and Note written by. Workers tick Not In, Late Notice and Sick, write a Medication line
+where a manager switched it on, and fill in details for an "Other" item. One feature branch, one PR into main (owner, 10
+November 2026).
 
 ### Absorbs
 
@@ -8347,8 +8352,8 @@ fill in details for an "Other" item. One feature branch, one PR into main (owner
 - **Domain.** `Goal.IsMediumOrLongTerm`, `CommonItem.NeedsDetail` and `Participant.HasMedicationLine` (bit, default 0).
   `NoteDraft` and `NoteVersion` gain `IsNotIn`, `IsLateNotice`, `IsSick` and a nullable `Medication` (null means no
   line). `NoteVersionItem` gains the term, `NeedsDetail` and `Detail`. `Limits.ItemDetail` 200 and `Limits.Medication`
-  1000. `NoteSnapshot` gains `HasMedicationLine`, `PrintedGroups` (report only, reverses D47 there) and the detail and
-  medication rules.
+  1000. `NoteSnapshot` gains `HasMedicationLine`, `PrintedGroups` (report only, reverses D47 there; removed by T45,
+  D106) and the detail and medication rules.
 - **Reuse.** `ListsVersion` (new inputs only when set, so existing hashes hold), `ConfigurationChanges.SaveAsync` and
   If-Match for set-up, the seven MCP tools extended in place (28 tools, no note content), `ReportLayout` and both
   renderers with new `IndexEntry` and `TickRow` blocks, DejaVu Sans (nothing downloaded), `TickListField`,
@@ -8378,8 +8383,8 @@ fill in details for an "Other" item. One feature branch, one PR into main (owner
 
 - Owner request, 10 November 2026: "a web version of these and these reports can be downloaded after theyre done
   (filling out on app)", then "do all, using our normal dev workflow, 1 pr for all tasks". The answers (report
-  layout, attendance, goal terms, Medication, Other text, STAFF, week, unpicked groups as empty boxes) are D104. Not
-  chosen: frequency levels, a "Note checked by" line, co-authors, handover.
+  layout, attendance, goal terms, Medication, Other text, STAFF, week, unpicked groups as empty boxes) are D104; the
+  last was reversed by D106 (T45). Not chosen: frequency levels, a "Note checked by" line, co-authors, handover.
 - A new task, planned on 10 November 2026 against `origin/main` at `107fac6`. Open PRs #235 and #241 claim only D103
   and no A-number, step, story, task or migration; v0 rechecks the numbers before the final push.
 - Until it merges, this section, its stories and the plan are its spec. By-hand checks go on
@@ -8428,7 +8433,7 @@ fill in details for an "Other" item. One feature branch, one PR into main (owner
     Support Notes; "version history" means the version page.
   - A160: the report and its index sort by given name, family name, ID (amends A5 for the report only).
   - A161: the report prints every snapshot group that has an item, unpicked ones unticked (reverses D47 for the
-    report only).
+    report only). Amended by T45 (D106): superseded, the report prints the picked groups only.
   - A162: one `ReportStyle` for both files (T39).
   - A163: "No goals set" wins; the manager's empty copy says so (T38).
 
@@ -8439,6 +8444,48 @@ fill in details for an "Other" item. One feature branch, one PR into main (owner
 - [x] v2 Report and renderers
 - [x] v3 SPA and UX docs
 - [x] v4 Records, set-up list and by-hand checks
+
+---
+
+## T45 Print only the picked groups in the daily report, as the Word documents do
+
+```yaml
+id: T45
+status: done
+release: R1
+lane: A
+size: S
+depends_on: [T44]
+stories: []
+```
+
+### Outcome
+
+On 11 November 2026 the owner answered "follow the word docs" to "Should the daily report print only the groups picked
+on each note?". The daily report prints the Every note group and the groups picked on each note, each item ticked or
+not ticked, and a group not picked does not appear (D106). This restores D47 for the report, withdraws T44's printing
+of every snapshot group (D104 (5)(c), A161), and lets the provider enter every group of the Word template. One branch,
+`feat/report-picked-groups-only`, and one PR into main.
+
+### Absorbs
+
+- No new story. Amends, each with a dated Note: [S04.01.07][].
+
+### Notes
+
+- Evidence put to the owner: in the five Word documents each participant's page has 3 to 8 sections and about 70 tick
+  lines, and printing the 32-group set-up list in full would give about 435 tick lines per participant per day.
+- Server: `NoteSnapshot.PrintedGroups` and the `everyGroup` switch are removed, and `NoteRead.cs`, `DailyReportModel.cs`
+  and their callers read `ShownGroups`, as the read view and the record export do.
+- Tests: `NoteToReportTests`, `DailyReportTextMatchTests`, `DailyReportTimingTests`, `ReportLayoutTests` and
+  `ParticipantExportTextMatchTests`.
+- Docs: D106 in decisions.md (D47 and D104 marked); design.md §11.3, A4 and A161 (superseded); group-picker.md,
+  record-export.md, coverage.md row 17, F04.01, ops/word-template-setup.md and first-use steps 223 and 225.
+- D103 and D105 are claimed by open pull requests, so this task uses D106.
+
+### Steps
+
+- [x] Server, tests and docs on the feature branch, in one pull request
 
 ---
 

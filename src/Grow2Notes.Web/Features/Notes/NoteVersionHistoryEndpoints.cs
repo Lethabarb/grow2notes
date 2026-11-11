@@ -73,7 +73,7 @@ internal static class NoteVersionHistoryEndpoints
 
         var content = await NoteVersionContent.ReadAsync(db, note.Id, versionNumber, cancellationToken);
         return TypedResults.Ok(
-            NoteReadVersion.Of(versionNumber, content, everyGroup: false)
+            NoteReadVersion.Of(versionNumber, content)
             with
             {
                 CreatedBy = summary.CreatedBy,

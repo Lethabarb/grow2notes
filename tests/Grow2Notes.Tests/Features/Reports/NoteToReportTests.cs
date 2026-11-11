@@ -16,7 +16,7 @@ namespace Grow2Notes.Tests.Features.Reports;
 /// word for word, in the Word template's order. One note ticks and picks, with a detail on one item, an attendance
 /// tick and a two-paragraph Medication, and has a narrative of several paragraphs with curly quotes and apostrophes;
 /// one picks nothing and ticks nothing; one picks both groups and ticks only some. The groups that a note did not pick
-/// are in the report with their items unticked (D104).
+/// are left out of the report, as in the Word documents (D106).
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class NoteToReportTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
@@ -36,7 +36,7 @@ public sealed class NoteToReportTests(Grow2NotesFactory factory) : IClassFixture
     private static readonly DateOnly NoteDate = new(2026, 10, 2);
 
     [Fact]
-    public async Task The_files_say_what_the_notes_saved_with_the_unpicked_groups_unticked()
+    public async Task The_files_say_what_the_notes_saved_with_only_the_picked_groups()
     {
         var organisation = await factory.Services.AddOrganisationAsync();
         var priya = await factory.Services.AddUserAsync(organisation, UserRole.Worker, "Priya Nair");
@@ -126,25 +126,17 @@ public sealed class NoteToReportTests(Grow2NotesFactory factory) : IClassFixture
             "☐ Paid for own purchases",
             "☑ Other (outing)",
             "Details: Tram “86”",
-            "Personal care",
-            "☐ Showered with prompting",
             "Daily Support Notes",
             Narrative,
             $"Note written by: Priya Nair · {submitted}",
 
-            // Nothing picked and nothing ticked: every group is still there, unticked, and there is no Medication box.
+            // Nothing picked and nothing ticked: Every note alone, unticked, and there is no Medication box.
             "NAME: BOB BETA",
             "☐ Not In  ☐ Late Notice  ☐ Sick",
             "No goals set",
             "Every note",
             "☐ Medication prompted",
             $"☐ {OtherEveryNote}",
-            "Community outing",
-            "☐ Travelled by bus",
-            "☐ Paid for own purchases",
-            "☐ Other (outing)",
-            "Personal care",
-            "☐ Showered with prompting",
             "Daily Support Notes",
             "Bob's day was quiet.",
             $"Note written by: Alex Pham · {submitted}",
