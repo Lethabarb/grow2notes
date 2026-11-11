@@ -179,6 +179,46 @@ az deployment group create --resource-group rg-grow2notes-<env>-ause --name grow
 Running it again changes nothing. To delete or rename the database on purpose, remove the lock first, as Owner, and run
 the command again afterwards.
 
+## Test on the free plan (once, D105)
+
+Test's App Service plan is F1, the free tier (`appServicePlanSku = 'F1'` in `test.bicepparam`). Azure will not move a
+plan to F1 while its app has Always On or VNet integration, and a deploy updates the plan before the app, so the first
+test deploy after the change needs both turned off first. Run this right after merging, while `main`'s CI runs (or
+before merging):
+
+```shell
+az webapp config set --resource-group rg-grow2notes-test-ause --name app-grow2notes-test --always-on false
+az webapp vnet-integration remove --resource-group rg-grow2notes-test-ause --name app-grow2notes-test
+```
+
+From then until the deploy finishes, test's app cannot reach its database or vault, which still accept only the
+subnet, so test is down for that time. If the deploy ran first and failed at the plan, run the two commands and re-run
+the deploy. The deploy then makes the plan F1, gives the SQL server one rule for each outbound address of the app's
+App Service stamp (`app-outbound-0` onwards, `modules/sql-app-firewall.bicep`) and opens the vault to every network.
+
+The smoke test proves only the addresses its own connections happened to use, so once, after that deploy, check that
+every address has its rule:
+
+```shell
+az webapp show --resource-group rg-grow2notes-test-ause --name app-grow2notes-test \
+  --query possibleOutboundIpAddresses --output tsv | tr ',' '\n' | grep -v ':' | sort
+az sql server firewall-rule list --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test \
+  --query "[?starts_with(name, 'app-outbound-')].startIpAddress" --output tsv | sort
+```
+
+A rule whose address App Service later stops using stays until it is deleted by hand.
+
+To put test back as production is, set `appServicePlanSku = 'B1'` and deploy: the app rejoins the subnet and the vault
+goes back to the subnet only. Then delete the `app-outbound-*` rules:
+
+```shell
+for rule in $(az sql server firewall-rule list --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test \
+    --query "[?starts_with(name, 'app-outbound-')].name" --output tsv); do
+  az sql server firewall-rule delete --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test \
+    --name "$rule"
+done
+```
+
 ## Email through Resend
 
 The app sends one kind of email, the setup link, through Resend's HTTP API (D92, D94). The owner sets two secrets on

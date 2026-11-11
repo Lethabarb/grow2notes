@@ -14,7 +14,17 @@ param tags object = resourceGroup().tags
 @description('The resource ID of the app identity, id-grow2notes-<env>-app, which bootstrap.bicep creates.')
 param appIdentityId string
 
-@description('The VNet integration subnet, from network.bicep.')
+// B1 in prod. F1, the free tier, in test (D105): it has no VNet integration and no Always On, so test's app reaches SQL
+// and Key Vault over their public endpoints and stops after about 20 idle minutes (design.md §10.3).
+@description('The App Service plan\'s SKU: B1 in prod, F1 (free) in test (D105).')
+param planSku 'B1' | 'F1'
+
+// From main.bicep, which also needs it for the SQL and Key Vault network rules. False on F1, which offers neither VNet
+// integration nor Always On, so an app on it must ask for neither.
+@description('Whether the app joins the subnet and stays always on: true on B1, false on F1.')
+param vnetIntegratedAndAlwaysOn bool
+
+@description('The VNet integration subnet, from network.bicep. Not joined on F1, which has no VNet integration.')
 param subnetId string
 
 @description('The path App Service probes: /healthz in test, /healthz/ready in prod (design.md §10.3, §10.8).')
@@ -41,7 +51,7 @@ resource plan 'Microsoft.Web/serverfarms@2025-03-01' = {
   tags: tags
   kind: 'linux'
   sku: {
-    name: 'B1'
+    name: planSku
     capacity: 1
   }
   properties: {
@@ -70,17 +80,19 @@ resource webApp 'Microsoft.Web/sites@2025-03-01' = {
     httpsOnly: true
     // design.md names only the session cookie, and one instance needs no affinity, so no ARRAffinity cookies.
     clientAffinityEnabled: false
-    virtualNetworkSubnetId: subnetId
+    virtualNetworkSubnetId: vnetIntegratedAndAlwaysOn ? subnetId : null
     // Only the traffic to SQL and Key Vault, through the subnet's service endpoints, goes into the VNet (design.md
     // §7.7); Entra ID, email and telemetry go out directly from App Service, so the subnet needs no NAT gateway.
     // Written out because the portal's VNet integration turns application traffic routing on, and a deploy resets it.
-    outboundVnetRouting: {
-      allTraffic: false
-      applicationTraffic: false
-    }
+    outboundVnetRouting: vnetIntegratedAndAlwaysOn
+      ? {
+          allTraffic: false
+          applicationTraffic: false
+        }
+      : null
     siteConfig: {
       linuxFxVersion: 'DOTNETCORE|10.0'
-      alwaysOn: true
+      alwaysOn: vnetIntegratedAndAlwaysOn
       http20Enabled: true
       // A minimum, so clients that support TLS 1.3 still get it (design.md §9.3).
       minTlsVersion: '1.2'
@@ -124,3 +136,11 @@ output webAppId string = webApp.id
 
 @description('The web app\'s default host name, <name>.azurewebsites.net, where it is reached and smoke-tested.')
 output defaultHostName string = webApp.properties.defaultHostName
+
+// Every address the app's outbound traffic can come from, IPv4 only, as the SQL firewall takes them. On F1 these are
+// what the SQL server lets in, because there is no subnet (main.bicep).
+@description('The IPv4 addresses the web app\'s outbound traffic can come from.')
+output outboundIpAddresses string[] = filter(
+  split(webApp.properties.possibleOutboundIpAddresses, ','),
+  ip => !empty(ip) && !contains(ip, ':')
+)

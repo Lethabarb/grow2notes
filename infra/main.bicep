@@ -55,6 +55,13 @@ param mcpEnabled bool = false
 @description('The size of the Key Vault key that wraps the key ring: 3072 in prod, 2048 in test (F-7, §10.3).')
 param dataProtectionKeySize 2048 | 3072
 
+// F1 has no VNet integration, so on F1 the SQL server admits the outbound addresses of the app's App Service stamp and
+// the vault every network (D105, design.md §10.3). Switching test back to B1 is this one value.
+@description('The App Service plan\'s SKU: B1 in prod, F1 (free) in test (D105).')
+param appServicePlanSku 'B1' | 'F1' = 'B1'
+
+var appVnetIntegrated = appServicePlanSku != 'F1'
+
 // bootstrap.bicep creates the identity and its roles; this file only reads it, by the name bootstrap.bicep gives it, so
 // no client ID has to be copied into the repository (D60).
 resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
@@ -98,6 +105,7 @@ module keyVault 'modules/keyvault.bicep' = {
   params: {
     environmentName: environmentName
     subnetId: network.outputs.subnetId
+    allowAllNetworks: !appVnetIntegrated
     dataProtectionKeySize: dataProtectionKeySize
     resendApiKey: resendApiKey
   }
@@ -122,6 +130,8 @@ module app 'modules/app.bicep' = {
   params: {
     environmentName: environmentName
     appIdentityId: appIdentity.id
+    planSku: appServicePlanSku
+    vnetIntegratedAndAlwaysOn: appVnetIntegrated
     subnetId: network.outputs.subnetId
     healthCheckPath: healthCheckPath
     // Written by app.bicep as Email:SenderAddress, the address on every email the app sends. Empty is written as it is
@@ -159,6 +169,18 @@ module app 'modules/app.bicep' = {
       WEBSITE_WARMUP_PATH: '/healthz'
       WEBSITE_WARMUP_STATUSES: '200'
     }
+  }
+}
+
+// An F1 app has no subnet for the SQL server's VNet rule, so the server lets in the addresses the app's outbound traffic
+// can come from (ops/security-review.md F-27). Deployed after the app, whose addresses are known only once it exists,
+// and so after the server the rules belong to: the app's connection string reads the sql module's outputs, and the
+// linter flags an explicit dependsOn on sql as unnecessary (no-unnecessary-dependson).
+module sqlAppFirewall 'modules/sql-app-firewall.bicep' = if (!appVnetIntegrated) {
+  name: 'sql-app-firewall'
+  params: {
+    environmentName: environmentName
+    ipAddresses: app.outputs.outboundIpAddresses
   }
 }
 

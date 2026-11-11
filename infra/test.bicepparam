@@ -9,6 +9,12 @@ param healthCheckPath = '/healthz'
 // The web app's default address, which App Service's own certificate covers (D62).
 param appOrigin = 'https://app-grow2notes-test.azurewebsites.net'
 
+// The free App Service plan, which keeps test's app at no cost (D105, design.md §10.2, §10.3). It has no VNet
+// integration and no Always On: the SQL server lets in the outbound addresses of the app's App Service stamp, the
+// vault takes every network, the app stops after about 20 idle minutes, and F1's CPU, memory and bandwidth quotas apply
+// (design.md §10.3). 'B1' puts test back as prod is; infra/README.md has the one-time steps.
+param appServicePlanSku = 'F1'
+
 // The Azure SQL free offer, which keeps test's database at no cost (design.md §10.2): a General Purpose serverless
 // database of at most 4 vCores (2 here, the offer's default) and at most 32 GB, with local backup storage and at most
 // 7 days of point-in-time restore. sql.bicep pauses it until the next month when the month's free amount is used up,

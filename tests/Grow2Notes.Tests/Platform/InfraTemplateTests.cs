@@ -48,6 +48,17 @@ public sealed partial class InfraTemplateTests
     }
 
     [Fact]
+    public void The_App_Service_plan_is_B1_unless_a_parameter_file_picks_the_free_tier_which_prod_never_does()
+    {
+        string Infra(string file) => File.ReadAllText(Path.Combine(Repository.Root(), "infra", file));
+
+        // Production keeps B1, with its subnet and Always On; only test is on the free tier (D105).
+        Assert.Matches(PlanSkuParameter(), Infra("main.bicep"));
+        Assert.Matches(PlanSkuFree(), Infra("test.bicepparam"));
+        Assert.DoesNotMatch(PlanSkuFree(), Infra("prod.bicepparam"));
+    }
+
+    [Fact]
     public void The_wrapping_key_is_3072_bits_in_prod_and_stays_2048_in_test()
     {
         string Infra(string file) => File.ReadAllText(Path.Combine(Repository.Root(), "infra", file));
@@ -171,4 +182,10 @@ public sealed partial class InfraTemplateTests
 
     [GeneratedRegex(@"^param dataProtectionKeySize = (?<bits>\d+)\s*$", RegexOptions.Multiline)]
     private static partial Regex KeySizeValue();
+
+    [GeneratedRegex(@"^param appServicePlanSku 'B1' \| 'F1' = 'B1'\s*$", RegexOptions.Multiline)]
+    private static partial Regex PlanSkuParameter();
+
+    [GeneratedRegex(@"^param appServicePlanSku\s*=\s*'F1'\s*$", RegexOptions.Multiline)]
+    private static partial Regex PlanSkuFree();
 }

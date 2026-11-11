@@ -14,8 +14,14 @@ param location string = resourceGroup().location
 @description('The tags for the vault. Defaults to the resource group\'s.')
 param tags object = resourceGroup().tags
 
-@description('The VNet integration subnet, from network.bicep: the only network the vault accepts.')
+@description('The VNet integration subnet, from network.bicep: the only network the vault accepts on B1.')
 param subnetId string
+
+// Test's app is on the free F1 plan, which has no VNet integration, so its vault takes every network and the app
+// identity's roles are its only lock (D105). The vault's network rules are part of the vault, which the app's settings
+// already depend on, so they cannot list the app's outbound addresses the way the SQL firewall does.
+@description('Whether the vault accepts every network, as test\'s does for its F1 app (D105).')
+param allowAllNetworks bool
 
 @description('The size of the key that wraps the key ring, from the environment\'s parameters file (F-7).')
 param dataProtectionKeySize 2048 | 3072
@@ -43,13 +49,15 @@ resource vault 'Microsoft.KeyVault/vaults@2026-02-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 90
     enablePurgeProtection: true
-    // The app reaches the vault through the subnet's Microsoft.KeyVault service endpoint (design.md §7.7); every other
-    // address is refused. ARM writes the key and the secret below through Key Vault's management plane. Bypass 'None'
-    // made the deploy fail with ForbiddenByFirewall when it created the key (seen 7 Oct 2026), so trusted Azure
-    // services bypass. The first deploy with the Resend key set is what shows that the secret's write is accepted too.
+    // A B1 app reaches the vault through the subnet's Microsoft.KeyVault service endpoint (design.md §7.7), and every
+    // other address is refused. With allowAllNetworks (test, D105), no address is refused.
+    //
+    // ARM writes the key and the secret below through Key Vault's management plane. Bypass 'None' made the deploy fail
+    // with ForbiddenByFirewall when it created the key (seen 7 Oct 2026), so trusted Azure services bypass. The first
+    // deploy with the Resend key set is what shows that the secret's write is accepted too.
     publicNetworkAccess: 'Enabled'
     networkAcls: {
-      defaultAction: 'Deny'
+      defaultAction: allowAllNetworks ? 'Allow' : 'Deny'
       bypass: 'AzureServices'
       virtualNetworkRules: [
         {
