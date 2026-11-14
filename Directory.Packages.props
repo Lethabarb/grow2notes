@@ -20,7 +20,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.14" />
     <!-- The 6.1 line that EF Core 10's SQL Server provider uses; it keeps managed-identity authentication built in
          (design.md §7.5, §9.4). -->
-    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.8" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.2" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
