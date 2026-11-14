@@ -49,7 +49,7 @@
 
   <ItemGroup Label="Tests">
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="11.0.0" />
     <!-- xUnit.net v3 without Microsoft Testing Platform, run through VSTest: the .NET 10 SDK's default dotnet test
          mode, which takes `dotnet test Grow2Notes.slnx` as written. The plain xunit.v3 package brings in Microsoft
          Testing Platform v2, which stops dotnet test in that mode. -->
